@@ -1,0 +1,56 @@
+---
+name: audienti
+description: Use when the user wants to operate Audienti through the production CLI, including account selection, plays, prospect imports, lists, message previews, or supported operator outcomes.
+---
+
+# Audienti CLI
+
+Use the installed `audienti` command as the production contract. Do not build a
+parallel wrapper or call undocumented API endpoints.
+
+## Setup
+
+1. Verify the command is installed:
+
+```bash
+audienti --help
+```
+
+2. If it is unavailable, install the public package:
+
+```bash
+npm install --global @audienti/cli
+```
+
+3. Authentication is explicit and per machine. Do not ask a user to paste a
+production token into chat, a repository file, an issue, or a CI secret. Use
+the existing `audienti auth token` flow only after the user supplies a token
+through an approved secure channel.
+
+4. Start with discovery, not mutation:
+
+```bash
+audienti auth status
+audienti accounts list --json
+audienti help agent-workflows
+```
+
+## Operating Rules
+
+- Use `--json` whenever another agent or tool will consume the response.
+- Use `audienti <resource> <action> help` before a mutation when the accepted
+  payload or behavior is unclear.
+- Inspect the current resource before a create, update, attach, delete, or
+  operator outcome writeback.
+- Treat the production API as the source of truth. Persist durable work in
+  Audienti rather than leaving it only in agent prose.
+- Keep current gaps explicit. Do not imply that unsupported actions execute.
+
+## Common Entry Points
+
+```bash
+audienti help agent-workflows
+audienti prospects list --query "name or company" --wide --json
+audienti lists create --name "Target list" --json
+audienti operator next --json
+```

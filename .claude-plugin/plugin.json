@@ -1,0 +1,18 @@
+{
+  "name": "audienti-cli",
+  "version": "0.1.0",
+  "description": "Use the Audienti production API through a local, agent-first CLI for Claude Code.",
+  "author": {
+    "name": "Audienti",
+    "email": "wflanagan@audienti.com"
+  },
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/audienti/cli",
+  "repository": "https://github.com/audienti/cli",
+  "keywords": [
+    "audienti",
+    "cli",
+    "agents",
+    "sales"
+  ]
+}

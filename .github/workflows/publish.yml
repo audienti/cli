@@ -1,0 +1,97 @@
+name: Publish Audienti CLI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    if: github.repository == 'audienti/cli'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Verify package metadata
+        run: npm run verify
+
+      - name: Run CLI tests
+        run: npm test
+
+      - name: Pack and smoke-test the published artifact
+        id: package
+        run: |
+          package_dir="$RUNNER_TEMP/audienti-cli-package"
+          smoke_dir="$RUNNER_TEMP/audienti-cli-smoke"
+          mkdir -p "$package_dir" "$smoke_dir"
+          npm pack --pack-destination "$package_dir"
+          tarball="$(find "$package_dir" -maxdepth 1 -name '*.tgz' -print -quit)"
+          test -n "$tarball"
+          npm install --ignore-scripts --prefix "$smoke_dir" "$tarball"
+          "$smoke_dir/node_modules/.bin/audienti" --help
+
+      - name: Read package version
+        id: version
+        run: echo "value=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether this version is already published
+        id: registry
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set +e
+          npm view "@audienti/cli@$VERSION" version --json \
+            > "$RUNNER_TEMP/npm-version.json" \
+            2> "$RUNNER_TEMP/npm-version.err"
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          elif grep -q "E404" "$RUNNER_TEMP/npm-version.err"; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            cat "$RUNNER_TEMP/npm-version.err" >&2
+            exit "$status"
+          fi
+
+      - name: Publish to npm
+        if: steps.registry.outputs.publish == 'true'
+        env:
+          # Required only for the initial publish. Remove it after npm trusted
+          # publishing is configured for this repository and workflow.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: npm publish --access public
+
+      - name: Build release notes from the versioned changelog
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: node scripts/release-notes.mjs "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Reconcile GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release edit "v$VERSION" \
+              --title "Audienti CLI v$VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "v$VERSION" \
+              --title "Audienti CLI v$VERSION" \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi

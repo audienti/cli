@@ -1,0 +1,40 @@
+{
+  "name": "audienti-cli",
+  "version": "0.1.0",
+  "description": "Use the Audienti production API through a local, agent-first CLI.",
+  "author": {
+    "name": "Audienti",
+    "email": "wflanagan@audienti.com",
+    "url": "https://audienti.com"
+  },
+  "license": "UNLICENSED",
+  "homepage": "https://github.com/audienti/cli",
+  "repository": "https://github.com/audienti/cli",
+  "keywords": [
+    "audienti",
+    "cli",
+    "agents",
+    "sales"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Audienti CLI",
+    "shortDescription": "Operate Audienti through its production CLI.",
+    "longDescription": "Install and use the Audienti production CLI for governed account, play, prospect, list, and operator workflows.",
+    "developerName": "Audienti",
+    "category": "Sales",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/audienti/cli",
+    "privacyPolicyURL": "https://audienti.com/policies/privacy/",
+    "termsOfServiceURL": "https://audienti.com/policies/terms-of-service/",
+    "defaultPrompt": [
+      "Set up the Audienti CLI for this machine.",
+      "Use Audienti to build a prospect list.",
+      "Show the next supported Audienti operator task."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

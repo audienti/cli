@@ -1,15 +1,42 @@
 {
-  "name": "audienti-cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@audienti/cli",
+  "version": "0.1.0",
+  "description": "Agent-first command-line client for Audienti.",
   "type": "module",
   "bin": {
     "audienti": "./bin/audienti.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "verify": "node scripts/verify-package.mjs",
+    "check": "npm run verify && npm test"
   },
   "engines": {
     "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audienti/cli.git"
+  },
+  "homepage": "https://github.com/audienti/cli#readme",
+  "bugs": {
+    "url": "https://github.com/audienti/cli/issues"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": [
+    "audienti",
+    "cli",
+    "agents",
+    "go-to-market"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }
