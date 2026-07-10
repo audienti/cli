@@ -17,6 +17,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti auth token <token>/);
   assert.match(stdout.output, /audienti help agent-workflows/);
   assert.match(stdout.output, /audienti operator next/);
+  assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
   assert.match(stdout.output, /Run `audienti <command> help`/);
   assert.equal(stderr.output, "");
 });
@@ -88,6 +89,8 @@ test("resource help lists child commands", async () => {
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
   assert.match(stdout.output, /audienti prospects message-types <prsp_id>/);
   assert.match(stdout.output, /audienti prospects write <prsp_id> --type <surface_key>/);
+  assert.match(stdout.output, /audienti prospects add-note <prsp_id> --message <text>/);
+  assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
   assert.match(stdout.output, /audienti prospects sequence-preview <prsp_id>/);
   assert.match(stdout.output, /audienti prospects import <linkedin_url>/);
   assert.match(stdout.output, /Filters:/);
@@ -198,6 +201,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "write", "help"],
       expected: [/Usage:\n  audienti prospects write <prsp_id> --type <surface_key>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/write_message\.json/]
+    },
+    {
+      args: ["prospects", "add-note", "help"],
+      expected: [/Usage:\n  audienti prospects add-note <prsp_id>/, /action\.meeting\.canceled/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/add_note\.json/]
+    },
+    {
+      args: ["prospects", "add-steer", "help"],
+      expected: [/Usage:\n  audienti prospects add-steer <prsp_id>/, /Always submits note_type=steer/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/add_note\.json/]
     },
     {
       args: ["prospects", "sequence-preview", "help"],
@@ -2231,6 +2242,155 @@ test("prospects write requests one surface-specific draft", async () => {
     assert.match(stdout.output, /Type: post_accept_message/);
     assert.match(stdout.output, /Message type: direct_message/);
     assert.match(stdout.output, /Body:\nHelpful draft body/);
+  });
+});
+
+test("prospects add-note records steer notes and tracked meeting-canceled notes", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/add_note.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        note_type: "steer",
+        message: "Meeting will not happen after procurement pushed it out.",
+        track_as_engagement: true,
+        engagement_key: "action.meeting.canceled"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        note: {
+          note_type: "steer",
+          message: "Meeting will not happen after procurement pushed it out.",
+          tracked_as_engagement: true,
+          engagement_key: "action.meeting.canceled",
+          engagement_label: "Meeting Canceled / No-show"
+        },
+        event: {
+          prefix_id: "evnt_one",
+          key: "action.meeting.canceled"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "add-note",
+      "prsp_one",
+      "--type",
+      "steer",
+      "--message",
+      "Meeting will not happen after procurement pushed it out.",
+      "--engagement-type",
+      "action.meeting.canceled"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Type: steer/);
+    assert.match(stdout.output, /Tracked as engagement: yes/);
+    assert.match(stdout.output, /Engagement: Meeting Canceled \/ No-show \(action\.meeting\.canceled\)/);
+    assert.match(stdout.output, /Event: evnt_one \(action\.meeting\.canceled\)/);
+  });
+});
+
+test("prospects add-steer records steer notes without requiring --type", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/add_note.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        note_type: "steer",
+        message: "Meeting is off after procurement pushed it out.",
+        track_as_engagement: true,
+        engagement_key: "action.meeting.canceled"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        note: {
+          note_type: "steer",
+          message: "Meeting is off after procurement pushed it out.",
+          tracked_as_engagement: true,
+          engagement_key: "action.meeting.canceled",
+          engagement_label: "Meeting Canceled / No-show"
+        },
+        event: {
+          prefix_id: "evnt_one",
+          key: "action.meeting.canceled"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "add-steer",
+      "prsp_one",
+      "--message",
+      "Meeting is off after procurement pushed it out.",
+      "--engagement-type",
+      "action.meeting.canceled"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Type: steer/);
+    assert.match(stdout.output, /Tracked as engagement: yes/);
+    assert.match(stdout.output, /Engagement: Meeting Canceled \/ No-show \(action\.meeting\.canceled\)/);
+    assert.match(stdout.output, /Event: evnt_one \(action\.meeting\.canceled\)/);
+  });
+});
+
+test("prospects add-steer rejects conflicting note types", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("conflicting add-steer input must not call the API");
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "add-steer",
+      "prsp_one",
+      "--type",
+      "note",
+      "--message",
+      "Wrong type"
+    ], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /This command only supports --type steer/);
   });
 });
 

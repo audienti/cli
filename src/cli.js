@@ -24,6 +24,8 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
   "email/profile"
 ];
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
+const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 
 export async function run(argv = process.argv.slice(2), deps = {}) {
   const context = {
@@ -85,6 +87,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "message-types") return prospectsMessageTypes(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "add-note") return prospectsAddNote(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "add-steer") return prospectsAddSteer(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "sequence-preview") return prospectsSequencePreview(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import") return prospectsImport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import-status") return prospectsImportStatus(rest, context, { accountOverride });
@@ -791,6 +795,44 @@ async function prospectsWrite(args, context, { accountOverride } = {}) {
   renderProspectMessage(payload, context);
 }
 
+async function prospectsAddNote(args, context, { accountOverride } = {}) {
+  return prospectNoteCommand(args, context, {
+    accountOverride,
+    usageText: PROSPECTS_ADD_NOTE_USAGE
+  });
+}
+
+async function prospectsAddSteer(args, context, { accountOverride } = {}) {
+  return prospectNoteCommand(args, context, {
+    accountOverride,
+    forcedType: "steer",
+    usageText: PROSPECTS_ADD_STEER_USAGE
+  });
+}
+
+async function prospectNoteCommand(args, context, { accountOverride, forcedType, usageText }) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    payload: { type: "string" },
+    message: { type: "string" },
+    type: { type: "string" },
+    "track-as-engagement": { type: "boolean" },
+    "engagement-type": { type: "string" },
+    "engagement-key": { type: "string" }
+  });
+
+  if (positionals.length !== 1) {
+    throw new CommandError(usageText);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await prospectNotePayload(values, { forcedType, usageText });
+  const response = await client.addProspectNote(accountId, positionals[0], payload);
+  if (values.json) return writeJson(context.stdout, response);
+
+  renderProspectNote(response, context);
+}
+
 async function prospectsSequencePreview(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -1038,6 +1080,52 @@ async function icpCreatePayload(values) {
     notes: values.notes,
     discovery_keyword: values["discovery-keyword"]
   });
+}
+
+async function prospectNotePayload(values, { forcedType, usageText } = {}) {
+  const engagementKey = values["engagement-type"] || values["engagement-key"];
+
+  if (values.payload) {
+    if (values.message || values.type || values["track-as-engagement"] || engagementKey) {
+      throw new CommandError("Choose one prospect note input mode: either --payload <file.json> or the simple --message/--type/--engagement-type flags.");
+    }
+
+    const payload = await readJsonPayload(values.payload);
+    return normalizeProspectNoteType(payload, forcedType);
+  }
+
+  if (!values.message) {
+    throw new CommandError(usageText || PROSPECTS_ADD_NOTE_USAGE);
+  }
+
+  if (values["track-as-engagement"] && !engagementKey) {
+    throw new CommandError("--track-as-engagement requires --engagement-type <key>.");
+  }
+
+  if (forcedType && values.type && values.type !== forcedType) {
+    throw new CommandError(`This command only supports --type ${forcedType}. Use \`audienti prospects add-note\` for other note types.`);
+  }
+
+  return compactObject({
+    note_type: forcedType || values.type || "note",
+    message: values.message,
+    track_as_engagement: values["track-as-engagement"] || Boolean(engagementKey),
+    engagement_key: engagementKey
+  });
+}
+
+function normalizeProspectNoteType(payload, forcedType) {
+  if (!forcedType) return payload;
+
+  const noteType = String(payload?.note_type || "").trim();
+  if (noteType && noteType !== forcedType) {
+    throw new CommandError(`Payload note_type must be ${forcedType} for this command. Use \`audienti prospects add-note\` for other note types.`);
+  }
+
+  return {
+    ...payload,
+    note_type: forcedType
+  };
 }
 
 async function fetchAllPages(fetchPage, baseQuery, { totalLimit = MAX_ALL_PROSPECTS } = {}) {
@@ -1421,6 +1509,25 @@ function renderProspectMessage(payload, context) {
   if (!surface.available && surface.missing_reason) writeLine(context.stdout, `Missing reason: ${surface.missing_reason}`);
 }
 
+function renderProspectNote(payload, context) {
+  const prospect = payload?.prospect || {};
+  const note = payload?.note || {};
+  const event = payload?.event || {};
+
+  writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  writeLine(context.stdout, `Type: ${display(note.note_type)}`);
+  writeLine(context.stdout, `Tracked as engagement: ${note.tracked_as_engagement ? "yes" : "no"}`);
+  if (note.engagement_key) {
+    const engagementLabel = note.engagement_label ? `${note.engagement_label} (${note.engagement_key})` : note.engagement_key;
+    writeLine(context.stdout, `Engagement: ${engagementLabel}`);
+  }
+  if (event.prefix_id) writeLine(context.stdout, `Event: ${event.prefix_id} (${display(event.key)})`);
+  if (note.message) {
+    writeLine(context.stdout, "Message:");
+    writeLine(context.stdout, note.message);
+  }
+}
+
 function renderProspectSequencePreview(payload, context) {
   const prospect = payload?.prospect || {};
   const report = payload?.report || {};
@@ -1791,6 +1898,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
+    "  audienti prospects add-note <prsp_id> --message <text> [--json]",
+    "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
@@ -2485,6 +2594,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
+    "  audienti prospects add-note <prsp_id> --message <text> [--json]",
+    "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
@@ -2608,6 +2719,65 @@ const HELP_TOPICS = new Map([
     "JSON body:",
     "  {",
     "    \"surface_key\": \"post_accept_message\"",
+    "  }"
+  ].join("\n")],
+
+  ["prospects add-note", [
+    "Usage:",
+    `  ${PROSPECTS_ADD_NOTE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Record an internal note, steer guidance, or manual outreach note through the same prospect note event seam the app uses.",
+    "",
+    "Input shape:",
+    "  prsp_id: prsp_ prefix id",
+    "  note_type: note | steer | voicemail_outreach | video_outreach",
+    "  message: string",
+    "  engagement_key: optional shared engagement key such as action.meeting.canceled",
+    "",
+    "Behavior:",
+    "  Passing --engagement-type tracks the note as an external engagement that already happened, which is how the UI records states like a meeting that will not happen.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/add_note.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"note_type\": \"steer\",",
+    "    \"message\": \"Meeting will not happen after procurement pushed it out.\",",
+    "    \"track_as_engagement\": true,",
+    "    \"engagement_key\": \"action.meeting.canceled\"",
+    "  }"
+  ].join("\n")],
+
+  ["prospects add-steer", [
+    "Usage:",
+    `  ${PROSPECTS_ADD_STEER_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Record a steer note through the same prospect note event seam the app uses without requiring --type steer.",
+    "",
+    "Input shape:",
+    "  prsp_id: prsp_ prefix id",
+    "  message: string",
+    "  engagement_key: optional shared engagement key such as action.meeting.canceled",
+    "",
+    "Behavior:",
+    "  Always submits note_type=steer. Passing --engagement-type tracks the steer as an external engagement that already happened.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/add_note.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"note_type\": \"steer\",",
+    "    \"message\": \"Meeting will not happen after procurement pushed it out.\",",
+    "    \"track_as_engagement\": true,",
+    "    \"engagement_key\": \"action.meeting.canceled\"",
     "  }"
   ].join("\n")],
 
@@ -2860,6 +3030,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects list --company-profile <prof_id>",
     "  audienti prospects show <prsp_id>",
     "  audienti prospects message-types <prsp_id>",
+    "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
     "  audienti prospects sequence-preview <prsp_id>",
     "",
     "5. Attach existing prospects without re-importing",

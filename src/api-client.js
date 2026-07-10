@@ -171,6 +171,13 @@ export class AudientiClient {
     });
   }
 
+  addProspectNote(accountId, prospectId, body) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "add_note"]), {
+      method: "POST",
+      body
+    });
+  }
+
   prospectImport(accountId, body) {
     return this.requestJson(accountPath(accountId, ["prospect_imports"]), {
       method: "POST",
