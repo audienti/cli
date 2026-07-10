@@ -45,7 +45,7 @@ jobs:
 
       - name: Read package version
         id: version
-        run: echo "value=$(node -p 'require(\"./package.json\").version')" >> "$GITHUB_OUTPUT"
+        run: echo "value=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
 
       - name: Check whether this version is already published
         id: registry
