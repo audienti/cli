@@ -4,6 +4,8 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-10
+
 ### Added
 
 - Add `audienti prospects timeline` for filtered prospect timeline reads.
