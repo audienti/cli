@@ -45,9 +45,29 @@ Common inspection commands:
 
 ```bash
 audienti operator next --plan
+audienti prospects show <prsp_id> --json
+audienti prospects list --profiles
 audienti analytics prospects --window 24h
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
+```
+
+To work the supported prospect operator queue from the CLI, inspect the next move
+and record the outcome against that same row:
+
+```bash
+audienti operator next --plan
+audienti operator next --done --note "Connection request sent."
+```
+
+To update a prospect's attached profile channels through the same paths used by
+the prospect show page:
+
+```bash
+audienti prospects add-profile <prsp_id> --url prospect@example.com
+audienti prospects add-profile <prsp_id> --url +12025550123
+audienti prospects add-profile <prsp_id> --url https://www.linkedin.com/in/example
+audienti prospects report-bad-profile <prsp_id> <prof_id>
 ```
 
 ## Compatibility

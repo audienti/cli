@@ -16,9 +16,10 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /Usage:/);
   assert.match(stdout.output, /audienti auth token <token>/);
   assert.match(stdout.output, /audienti help agent-workflows/);
-  assert.match(stdout.output, /audienti operator next \[--json\|--plan\]/);
+  assert.match(stdout.output, /audienti operator next \[--json\|--plan\|--done\|--skip\|--fail\|--return\]/);
   assert.match(stdout.output, /audienti analytics prospects \[--window 24h\]/);
   assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
+  assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
   assert.match(stdout.output, /Run `audienti <command> help`/);
   assert.equal(stderr.output, "");
 });
@@ -76,6 +77,8 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti motions create --payload <file\.json>/);
   assert.match(stdout.output, /audienti prospects import https:\/\/www\.linkedin\.com\/in\/example/);
   assert.match(stdout.output, /audienti motions add-prospects <motn_id> <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url prospect@example.com/);
+  assert.match(stdout.output, /audienti prospects report-bad-profile <prsp_id> <prof_id>/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti analytics prospects --window 24h/);
   assert.match(stdout.output, /audienti analytics visibility --window 24h --user me/);
@@ -97,6 +100,8 @@ test("resource help lists child commands", async () => {
   assert.match(stdout.output, /audienti prospects write <prsp_id> --type <surface_key>/);
   assert.match(stdout.output, /audienti prospects add-note <prsp_id> --message <text>/);
   assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
+  assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
+  assert.match(stdout.output, /audienti prospects report-bad-profile <prsp_id> <prof_id\|citation_id>/);
   assert.match(stdout.output, /audienti prospects sequence-preview <prsp_id>/);
   assert.match(stdout.output, /audienti prospects sequence-export <prsp_id>/);
   assert.match(stdout.output, /audienti prospects import <linkedin_url>/);
@@ -240,6 +245,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "add-steer", "help"],
       expected: [/Usage:\n  audienti prospects add-steer <prsp_id>/, /Always submits note_type=steer/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/add_note\.json/]
+    },
+    {
+      args: ["prospects", "add-profile", "help"],
+      expected: [/Usage:\n  audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/, /same add-profile path used by the prospect show page/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/profiles\.json/]
+    },
+    {
+      args: ["prospects", "report-bad-profile", "help"],
+      expected: [/Usage:\n  audienti prospects report-bad-profile <prsp_id> <prof_id\|citation_id>/, /same report action used by the prospect show page/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/report_bad_profile\.json/]
     },
     {
       args: ["prospects", "sequence-preview", "help"],
@@ -2525,6 +2538,110 @@ test("prospects add-steer rejects conflicting note types", async () => {
   });
 });
 
+test("prospects add-profile attaches a contact profile to the prospect", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/profiles.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        url: "pat@example.com"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        profile: {
+          prefix_id: "prof_email",
+          citation_id: "email/profile:pat@example.com",
+          identifier: "email/profile",
+          username: "pat@example.com",
+          url: "mailto:pat@example.com",
+          status: "queued"
+        },
+        status: "attached"
+      }, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "add-profile",
+      "prsp_one",
+      "--url",
+      "pat@example.com"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Added profile \(attached\)\./);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /Profile: email\/profile:pat@example.com/);
+    assert.match(stdout.output, /Type: email\/profile/);
+    assert.match(stdout.output, /URL: mailto:pat@example.com/);
+  });
+});
+
+test("prospects report-bad-profile reports a specific attached profile", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/report_bad_profile.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        profile_id: "prof_bad"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        profile: {
+          prefix_id: "prof_bad",
+          citation_id: "linkedin/profile:wrong-person",
+          identifier: "linkedin/profile",
+          username: "wrong-person",
+          url: "https://www.linkedin.com/in/wrong-person",
+          status: "enriched"
+        },
+        status: "reported"
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "report-bad-profile",
+      "prsp_one",
+      "prof_bad"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Reported profile \(reported\)\./);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /Profile: linkedin\/profile:wrong-person/);
+    assert.match(stdout.output, /Type: linkedin\/profile/);
+  });
+});
+
 test("prospects sequence-preview runs the report workflow and renders ordered steps", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -2926,6 +3043,156 @@ test("operator next rejects conflicting output format flags", async () => {
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
     assert.match(stderr.output, /Choose one output format/);
+  });
+});
+
+test("operator next rejects outcome detail flags without an outcome flag", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("outcome detail flags without an outcome must not call the API");
+    });
+
+    const exitCode = await run(["operator", "next", "--note", "left voicemail"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /--note and --occurred-at require an outcome flag/);
+  });
+});
+
+test("operator next can mark the current prospect move done", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      if (calls.length === 1) {
+        assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/next.json");
+        assert.equal(url.searchParams.get("writing_status"), "ready");
+        return jsonResponse({
+          next_move: {
+            id: 123,
+            fingerprint: "oprow_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            opportunity_kind: "prospect",
+            prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+            recommended_action_label: "Send connection request",
+            next_action: {
+              type: "connection_request",
+              message_mode: "linkedin_connection_request"
+            }
+          },
+          filters: {
+            principal_account_user_id: 42,
+            writing_status: "ready"
+          },
+          metrics: {}
+        });
+      }
+
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/outcome.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {
+        row_id: 123,
+        status: "done",
+        fingerprint: "oprow_v1_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        queue_filters: {
+          principal_account_user_id: 42,
+          writing_status: "ready"
+        },
+        note: "Sent the request.",
+        occurred_at: "2026-07-11T14:00:00Z"
+      });
+      return jsonResponse({
+        status: "ok",
+        row_id: "123",
+        operator_outcome: { status: "done", action_type: "connection_request" },
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        event: { prefix_id: "evnt_one", key: "action.profile.connect_request_sent" }
+      });
+    });
+
+    const exitCode = await run([
+      "operator",
+      "next",
+      "--done",
+      "--writing-status",
+      "ready",
+      "--note",
+      "Sent the request.",
+      "--occurred-at",
+      "2026-07-11T14:00:00Z"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 2);
+    assert.match(stdout.output, /Recorded done outcome for row 123/);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /Event: evnt_one/);
+  });
+});
+
+test("operator next lets the server reject visibility outcome shortcuts", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      if (calls.length === 1) {
+        assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/next.json");
+        return jsonResponse({
+          next_move: {
+            id: "motion_visibility_123",
+            fingerprint: "oprow_v1_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            opportunity_kind: "visibility",
+            recommended_action_label: "Comment on post",
+            next_action: { type: "create_post_comment" }
+          },
+          filters: { opportunity_kind: "visibility" },
+          metrics: {}
+        });
+      }
+
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/outcome.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        row_id: "motion_visibility_123",
+        status: "done",
+        fingerprint: "oprow_v1_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        queue_filters: { opportunity_kind: "visibility" }
+      });
+      return jsonResponse({ error: "Visibility operator outcomes are not supported by the API yet." }, { status: 422 });
+    });
+
+    const exitCode = await run(["operator", "next", "--done"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(fetch.calls.length, 2);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Visibility operator outcomes are not supported/);
   });
 });
 

@@ -189,6 +189,20 @@ export class AudientiClient {
     });
   }
 
+  addProspectProfile(accountId, prospectId, body) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "profiles"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  reportBadProspectProfile(accountId, prospectId, body) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "report_bad_profile"]), {
+      method: "POST",
+      body
+    });
+  }
+
   prospectImport(accountId, body) {
     return this.requestJson(accountPath(accountId, ["prospect_imports"]), {
       method: "POST",
@@ -306,6 +320,10 @@ function errorMessage(status, body) {
 
   if (status === 404) {
     return "The requested Audienti resource was not found.";
+  }
+
+  if (status === 409) {
+    return body?.error || "Audienti rejected the request because the resource changed. Re-fetch and try again.";
   }
 
   if (status === 422) {

@@ -26,6 +26,8 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
+const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const SEQUENCE_EXPORT_CSV_COLUMNS = [
   "prospect_id",
   "prospect_name",
@@ -114,6 +116,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "add-note") return prospectsAddNote(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "add-steer") return prospectsAddSteer(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "add-profile") return prospectsAddProfile(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "report-bad-profile") return prospectsReportBadProfile(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "sequence-preview") return prospectsSequencePreview(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "sequence-export") return prospectsSequenceExport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import") return prospectsImport(rest, context, { accountOverride });
@@ -861,6 +865,31 @@ async function prospectsAddSteer(args, context, { accountOverride } = {}) {
   });
 }
 
+async function prospectsAddProfile(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    url: { type: "string" }
+  });
+  if (positionals.length !== 1 || !values.url) throw new CommandError(PROSPECTS_ADD_PROFILE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const response = await client.addProspectProfile(accountId, positionals[0], { url: values.url });
+  if (values.json) return writeJson(context.stdout, response);
+
+  renderProspectProfileMutation(response, context, { action: "Added" });
+}
+
+async function prospectsReportBadProfile(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(PROSPECTS_REPORT_BAD_PROFILE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const response = await client.reportBadProspectProfile(accountId, positionals[0], { profile_id: positionals[1] });
+  if (values.json) return writeJson(context.stdout, response);
+
+  renderProspectProfileMutation(response, context, { action: "Reported" });
+}
+
 async function prospectNoteCommand(args, context, { accountOverride, forcedType, usageText }) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -1013,7 +1042,7 @@ async function toolsGet(args, context, { accountOverride } = {}) {
 }
 
 async function operatorQueue(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, operatorOptions());
+  const { values, positionals } = parseCommandArgs(args, operatorFilterOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti operator queue [--json] [filters] [--account <acct_id>]");
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -1024,12 +1053,28 @@ async function operatorQueue(args, context, { accountOverride } = {}) {
 }
 
 async function operatorNext(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, operatorOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti operator next [--json|--plan] [filters] [--account <acct_id>]");
+  const { values, positionals } = parseCommandArgs(args, operatorNextOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti operator next [--json|--plan|--done|--skip|--fail|--return] [filters] [--note <text>] [--account <acct_id>]");
   if (values.json && values.plan) throw new CommandError("Choose one output format: use either --json or --plan.");
+  const outcomeStatus = operatorNextOutcomeStatus(values);
+  if (values.plan && outcomeStatus) throw new CommandError("Choose one mode: use either --plan or an outcome flag.");
+  if (!outcomeStatus && (values.note !== undefined || values["occurred-at"] !== undefined)) {
+    throw new CommandError("--note and --occurred-at require an outcome flag: --done, --skip, --fail, or --return.");
+  }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await client.operatorNext(accountId, operatorQuery(values));
+  if (outcomeStatus) {
+    const response = await client.operatorOutcome(accountId, operatorNextOutcomePayload(payload?.next_move, {
+      status: outcomeStatus,
+      note: values.note,
+      occurredAt: values["occurred-at"],
+      filters: payload?.filters
+    }));
+    if (values.json) return writeJson(context.stdout, response);
+
+    return renderOperatorOutcome(response, context);
+  }
   if (values.json) return writeJson(context.stdout, payload);
   if (values.plan) return renderOperatorPlan(payload?.next_move, context);
 
@@ -1144,17 +1189,29 @@ function jsonOptions() {
   };
 }
 
-function operatorOptions() {
+function operatorFilterOptions(extra = {}) {
   return {
     ...jsonOptions(),
-    plan: { type: "boolean" },
     principal: { type: "string" },
     motion: { type: "string" },
     list: { type: "string" },
     stage: { type: "string" },
     "opportunity-kind": { type: "string" },
-    "writing-status": { type: "string" }
+    "writing-status": { type: "string" },
+    ...extra
   };
+}
+
+function operatorNextOptions() {
+  return operatorFilterOptions({
+    plan: { type: "boolean" },
+    done: { type: "boolean" },
+    skip: { type: "boolean" },
+    fail: { type: "boolean" },
+    return: { type: "boolean" },
+    note: { type: "string" },
+    "occurred-at": { type: "string" }
+  });
 }
 
 function operatorQuery(values) {
@@ -1165,6 +1222,33 @@ function operatorQuery(values) {
     stage: values.stage,
     opportunity_kind: values["opportunity-kind"],
     writing_status: values["writing-status"]
+  });
+}
+
+function operatorNextOutcomeStatus(values) {
+  const selected = [
+    values.done ? "done" : null,
+    values.skip ? "skipped" : null,
+    values.fail ? "failed" : null,
+    values.return ? "returned" : null
+  ].filter(Boolean);
+  if (selected.length > 1) throw new CommandError("Choose one outcome flag: --done, --skip, --fail, or --return.");
+
+  return selected[0];
+}
+
+function operatorNextOutcomePayload(row, { status, note, occurredAt, filters }) {
+  if (!row) throw new CommandError("No operator moves found.");
+  if (!row.id) throw new CommandError("The next operator move is missing a row id.");
+  if (!row.fingerprint) throw new CommandError("The next operator move is missing a fingerprint; update the server before using outcome shortcuts.");
+
+  return compactObject({
+    row_id: row.id,
+    status,
+    fingerprint: row.fingerprint,
+    queue_filters: filters,
+    note,
+    occurred_at: occurredAt
   });
 }
 
@@ -1674,6 +1758,19 @@ function renderProspectNote(payload, context) {
     writeLine(context.stdout, "Message:");
     writeLine(context.stdout, note.message);
   }
+}
+
+function renderProspectProfileMutation(payload, context, { action }) {
+  const prospect = payload?.prospect || {};
+  const profile = payload?.profile || {};
+  const status = payload?.status ? ` (${payload.status})` : "";
+
+  writeLine(context.stdout, `${action} profile${status}.`);
+  writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  writeLine(context.stdout, `Profile: ${display(profile.citation_id || profile.prefix_id)}`);
+  if (profile.identifier) writeLine(context.stdout, `Type: ${profile.identifier}`);
+  if (profile.username) writeLine(context.stdout, `Username: ${profile.username}`);
+  if (profile.url) writeLine(context.stdout, `URL: ${profile.url}`);
 }
 
 function renderProspectSequencePreview(payload, context) {
@@ -2269,12 +2366,14 @@ const HELP_TOPICS = new Map([
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
     "  audienti prospects add-note <prsp_id> --message <text> [--json]",
     "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
+    "  audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json]",
+    "  audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects sequence-export <prsp_id> [--csv]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
-    "  audienti operator next [--json|--plan]",
+    "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
     "  audienti operator queue [--json]",
     "  audienti operator outcome <row_id> --payload <file.json> [--json]",
     "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
@@ -2970,6 +3069,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
     "  audienti prospects add-note <prsp_id> --message <text> [--json]",
     "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
+    "  audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json]",
+    "  audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects sequence-export <prsp_id> [--csv]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
@@ -3181,6 +3282,60 @@ const HELP_TOPICS = new Map([
     "  }"
   ].join("\n")],
 
+  ["prospects add-profile", [
+    "Usage:",
+    `  ${PROSPECTS_ADD_PROFILE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add a profile, email address, or phone number to an existing prospect through the same add-profile path used by the prospect show page.",
+    "",
+    "Input shape:",
+    "  prsp_id: prsp_ prospect prefix id",
+    "  url: supported profile URL, plain email address, mailto: URL, plain phone number, or tel: URL",
+    "",
+    "Output shape:",
+    "  prospect: prospect summary",
+    "  profile: attached profile with prefix_id, citation_id, identifier, username, url, and status",
+    "  status: attached | already_attached",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/profiles.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"url\": \"prospect@example.com\"",
+    "  }"
+  ].join("\n")],
+
+  ["prospects report-bad-profile", [
+    "Usage:",
+    `  ${PROSPECTS_REPORT_BAD_PROFILE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Report one of a prospect's attached profiles as bad through the same report action used by the prospect show page.",
+    "",
+    "Input shape:",
+    "  prsp_id: prsp_ prospect prefix id",
+    "  prof_id: prof_ prefix id or citation id such as email/profile:name@example.com",
+    "",
+    "Output shape:",
+    "  prospect: prospect summary",
+    "  profile: reported profile",
+    "  status: reported",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/report_bad_profile.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"profile_id\": \"prof_abc123\"",
+    "  }"
+  ].join("\n")],
+
   ["prospects sequence-preview", [
     "Usage:",
     "  audienti prospects sequence-preview <prsp_id> [--json] [--connection-state <state>] [--account <acct_id>]",
@@ -3345,11 +3500,11 @@ const HELP_TOPICS = new Map([
 
   ["operator", [
     "Usage:",
-    "  audienti operator next [--json|--plan]",
+    "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
     "  audienti operator queue [--json]",
     "  audienti operator outcome <row_id> --payload <file.json>",
     "",
-    "Status: read commands and prospect outcome writeback implemented",
+    "Status: read commands and prospect next-move writeback implemented",
     "",
     "Filters:",
     "  --principal <account_user_id>",
@@ -3362,12 +3517,18 @@ const HELP_TOPICS = new Map([
 
   ["operator next", [
     "Usage:",
-    "  audienti operator next [--json|--plan] [filters] [--account <acct_id>]",
+    "  audienti operator next [--json|--plan|--done|--skip|--fail|--return] [filters] [--note <text>] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
     "Options:",
     "  --plan  Render a deterministic static plan from the existing next-action coach payload, CTA, and operator draft state",
+    "  --done  Mark the current next prospect move completed through the operator outcome API",
+    "  --skip  Mark the current next prospect move skipped through the operator outcome API",
+    "  --fail  Mark the current next prospect move failed through the operator outcome API",
+    "  --return  Mark the current next prospect move returned through the operator outcome API",
+    "  --note <text>  Optional outcome note used with --done, --skip, --fail, or --return",
+    "  --occurred-at <ISO8601>  Optional completion timestamp used with an outcome flag",
     "",
     "Output shape:",
     "  next_move.id: row id",
@@ -3380,7 +3541,8 @@ const HELP_TOPICS = new Map([
     "  metrics: queue-builder metrics",
     "",
     "API:",
-    "  GET /api/v1/accounts/:account_id/operator/next.json"
+    "  GET /api/v1/accounts/:account_id/operator/next.json",
+    "  POST /api/v1/accounts/:account_id/operator/outcome.json when an outcome flag is used"
   ].join("\n")],
 
   ["operator queue", [
@@ -3537,6 +3699,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects show <prsp_id>",
     "  audienti prospects timeline <prsp_id> --types post,comment,reaction --json",
     "  audienti prospects message-types <prsp_id>",
+    "  audienti prospects add-profile <prsp_id> --url prospect@example.com",
+    "  audienti prospects report-bad-profile <prsp_id> <prof_id>",
     "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
     "  audienti prospects sequence-preview <prsp_id>",
     "  audienti prospects sequence-export <prsp_id> --csv",
