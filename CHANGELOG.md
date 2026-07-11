@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-11
+
+### Changed
+
+- Track the admin-only announcement creation API contract.
+
 ## [0.1.2] - 2026-07-10
 
 ### Added
