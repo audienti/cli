@@ -26,6 +26,30 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const SEQUENCE_EXPORT_CSV_COLUMNS = [
+  "prospect_id",
+  "prospect_name",
+  "branch",
+  "branch_label",
+  "step_number",
+  "kind",
+  "key",
+  "stage",
+  "channel",
+  "scheduled_for",
+  "available",
+  "status",
+  "subject",
+  "body",
+  "warnings",
+  "writer_engine",
+  "rationale",
+  "guidance",
+  "transition_label",
+  "disposition",
+  "missing_reason",
+  "empty_body_reason"
+];
 
 export async function run(argv = process.argv.slice(2), deps = {}) {
   const context = {
@@ -85,11 +109,13 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "create") return motionsCreate(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "timeline") return prospectsTimeline(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "message-types") return prospectsMessageTypes(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "add-note") return prospectsAddNote(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "add-steer") return prospectsAddSteer(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "sequence-preview") return prospectsSequencePreview(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "sequence-export") return prospectsSequenceExport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import") return prospectsImport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import-status") return prospectsImportStatus(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
@@ -763,6 +789,28 @@ async function prospectsShow(args, context, { accountOverride } = {}) {
   renderProspect(prospect, context);
 }
 
+async function prospectsTimeline(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    limit: { type: "string" },
+    type: { type: "string" },
+    types: { type: "string" }
+  });
+  if (positionals.length !== 1) {
+    throw new CommandError("Usage: audienti prospects timeline <prsp_id> [--json] [--types <post,comment,reaction>] [--limit <n>] [--account <acct_id>]");
+  }
+  if (values.type && values.types) throw new CommandError("Choose one type filter: use either --type or --types.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.prospectTimeline(accountId, positionals[0], compactObject({
+    limit: values.limit,
+    types: values.types || values.type
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectTimeline(payload, context);
+}
+
 async function prospectsMessageTypes(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, jsonOptions());
   if (positionals.length !== 1) {
@@ -850,6 +898,31 @@ async function prospectsSequencePreview(args, context, { accountOverride } = {})
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectSequencePreview(payload, context);
+}
+
+async function prospectsSequenceExport(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    csv: { type: "boolean" },
+    branch: { type: "string" },
+    branches: { type: "string" },
+    "angle-index": { type: "string" }
+  });
+  if (positionals.length !== 1) {
+    throw new CommandError("Usage: audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--account <acct_id>]");
+  }
+  if (values.csv && values.json) throw new CommandError("Choose one output format: use either --csv or --json.");
+  if (values.branch && values.branches) throw new CommandError("Choose one branch filter: use either --branch or --branches.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.prospectSequenceExport(accountId, positionals[0], compactObject({
+    branches: values.branches || values.branch,
+    angle_index: values["angle-index"]
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+  if (values.csv) return writeLine(context.stdout, sequenceExportRowsToCsv(payload?.rows || []));
+
+  renderProspectSequenceExport(payload, context);
 }
 
 async function prospectsImport(args, context, { accountOverride } = {}) {
@@ -1463,6 +1536,27 @@ function renderProspect(prospect, context) {
   if (nextActionLabel(prospect?.queue)) writeLine(context.stdout, `Next action: ${nextActionLabel(prospect.queue)}`);
 }
 
+function renderProspectTimeline(payload, context) {
+  const prospect = payload?.prospect || {};
+  const timeline = Array.isArray(payload?.timeline) ? payload.timeline : [];
+
+  writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  if (timeline.length === 0) {
+    writeLine(context.stdout, "No timeline items found.");
+    return;
+  }
+
+  writeLine(context.stdout, "OCCURRED AT\tTYPE\tTEXT\tURL");
+  for (const item of timeline) {
+    writeLine(context.stdout, [
+      display(item.occurred_at),
+      display(item.type),
+      display(item.text),
+      display(item.url)
+    ].join("\t"));
+  }
+}
+
 function renderProspectMessageTypes(payload, context) {
   const surfaces = Array.isArray(payload?.message_surfaces) ? payload.message_surfaces : [];
   const prospect = payload?.prospect || {};
@@ -1572,6 +1666,40 @@ function renderProspectSequencePreview(payload, context) {
     if (step.empty_body_reason) writeLine(context.stdout, `   Empty body reason: ${step.empty_body_reason}`);
     if (step.missing_reason) writeLine(context.stdout, `   Missing reason: ${step.missing_reason}`);
   });
+}
+
+function renderProspectSequenceExport(payload, context) {
+  const prospect = payload?.prospect || {};
+  const branches = Array.isArray(payload?.branches) ? payload.branches : [];
+
+  writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  if (payload?.context?.source) writeLine(context.stdout, `Context: ${payload.context.source}`);
+  if (branches.length === 0) {
+    writeLine(context.stdout, "No sequence rows were generated.");
+    return;
+  }
+
+  for (const branch of branches) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `${display(branch.label)} (${display(branch.key)})`);
+    const rows = Array.isArray(branch.rows) ? branch.rows : [];
+    if (rows.length === 0) {
+      writeLine(context.stdout, "No rows.");
+      continue;
+    }
+
+    writeLine(context.stdout, "STEP\tKIND\tSTAGE\tCHANNEL\tSCHEDULED FOR\tBODY");
+    for (const row of rows) {
+      writeLine(context.stdout, [
+        display(row.step_number),
+        display(row.kind),
+        display(row.stage),
+        display(row.channel),
+        display(row.scheduled_for),
+        display(row.body || row.disposition || row.missing_reason)
+      ].join("\t"));
+    }
+  }
 }
 
 function renderProspectImportStarted(payload, context) {
@@ -1782,6 +1910,13 @@ function prospectsToCsv(prospects) {
   ].join("\n");
 }
 
+function sequenceExportRowsToCsv(rows) {
+  return [
+    SEQUENCE_EXPORT_CSV_COLUMNS.join(","),
+    ...rows.map((row) => SEQUENCE_EXPORT_CSV_COLUMNS.map((column) => csvField(row?.[column])).join(","))
+  ].join("\n");
+}
+
 function csvField(value) {
   const text = value === undefined || value === null ? "" : String(value);
   if (!/[",\n]/.test(text)) return text;
@@ -1896,11 +2031,13 @@ const HELP_TOPICS = new Map([
     "  audienti motions create --payload <file.json> [--json]",
     "  audienti prospects list [--json]",
     "  audienti prospects show <prsp_id> [--json]",
+    "  audienti prospects timeline <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
     "  audienti prospects add-note <prsp_id> --message <text> [--json]",
     "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
+    "  audienti prospects sequence-export <prsp_id> [--csv]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
@@ -2592,11 +2729,13 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti prospects list [--json] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
+    "  audienti prospects timeline <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
     "  audienti prospects add-note <prsp_id> --message <text> [--json]",
     "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
+    "  audienti prospects sequence-export <prsp_id> [--csv]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "",
@@ -2679,6 +2818,31 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/prospects/:id.json"
+  ].join("\n")],
+
+  ["prospects timeline", [
+    "Usage:",
+    "  audienti prospects timeline <prsp_id> [--json] [--types <post,comment,reaction>] [--limit <n>] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Read one prospect's visible timeline without running sequence preview or generation work.",
+    "",
+    "Input shape:",
+    "  prsp_id: prsp_ prefix id",
+    "  types: optional comma-separated filter. Supported: post, comment, action, message, reaction, provenance",
+    "  limit: optional max rows, capped by the API",
+    "",
+    "Output shape:",
+    "  timeline[].type: post | comment | action | message | reaction | provenance",
+    "  timeline[].occurred_at: ISO-8601 timestamp, newest first",
+    "  timeline[].url: source URL when available",
+    "  timeline[].text: normalized display text",
+    "  timeline[].profile.url: source profile URL when available",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/prospects/:id/timeline.json"
   ].join("\n")],
 
   ["prospects message-types", [
@@ -2801,6 +2965,31 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_preview.json"
+  ].join("\n")],
+
+  ["prospects sequence-export", [
+    "Usage:",
+    "  audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--angle-index <n>] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Generate the full no-reply path for spreadsheet review without opening or updating a report workspace.",
+    "",
+    "Branches:",
+    "  both: default. Runs no_accept and accepted branches",
+    "  no-accept: no reply and no accepted connection request",
+    "  accepted: connection request accepted, then no reply otherwise",
+    "",
+    "Output shape:",
+    "  rows[].prospect_id: prsp_",
+    "  rows[].branch: no_accept | accepted",
+    "  rows[].step_number: spreadsheet row order within the branch",
+    "  rows[].kind: message | wait | action | terminal",
+    "  rows[].stage/channel/scheduled_for/body: sequence details for spreadsheet columns",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_export.json"
   ].join("\n")],
 
   ["prospects import", [
@@ -3029,9 +3218,11 @@ const HELP_TOPICS = new Map([
     "  audienti companies search --query \"Honeywell\"",
     "  audienti prospects list --company-profile <prof_id>",
     "  audienti prospects show <prsp_id>",
+    "  audienti prospects timeline <prsp_id> --types post,comment,reaction --json",
     "  audienti prospects message-types <prsp_id>",
     "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
     "  audienti prospects sequence-preview <prsp_id>",
+    "  audienti prospects sequence-export <prsp_id> --csv",
     "",
     "5. Attach existing prospects without re-importing",
     "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...]",

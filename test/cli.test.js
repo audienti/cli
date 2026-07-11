@@ -87,11 +87,13 @@ test("resource help lists child commands", async () => {
   assert.equal(exitCode, 0);
   assert.match(stdout.output, /audienti prospects list/);
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects timeline <prsp_id>/);
   assert.match(stdout.output, /audienti prospects message-types <prsp_id>/);
   assert.match(stdout.output, /audienti prospects write <prsp_id> --type <surface_key>/);
   assert.match(stdout.output, /audienti prospects add-note <prsp_id> --message <text>/);
   assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
   assert.match(stdout.output, /audienti prospects sequence-preview <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects sequence-export <prsp_id>/);
   assert.match(stdout.output, /audienti prospects import <linkedin_url>/);
   assert.match(stdout.output, /Filters:/);
 });
@@ -199,6 +201,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti prospects message-types <prsp_id>/, /message_surfaces\[\]\.key/]
     },
     {
+      args: ["prospects", "timeline", "help"],
+      expected: [/Usage:\n  audienti prospects timeline <prsp_id>/, /timeline\[\]\.occurred_at/, /GET \/api\/v1\/accounts\/:account_id\/prospects\/:id\/timeline\.json/]
+    },
+    {
       args: ["prospects", "write", "help"],
       expected: [/Usage:\n  audienti prospects write <prsp_id> --type <surface_key>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/write_message\.json/]
     },
@@ -213,6 +219,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "sequence-preview", "help"],
       expected: [/Usage:\n  audienti prospects sequence-preview <prsp_id>/, /report\.steps\[\]/]
+    },
+    {
+      args: ["prospects", "sequence-export", "help"],
+      expected: [/Usage:\n  audienti prospects sequence-export <prsp_id>/, /rows\[\]\.branch/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/sequence_export\.json/]
     },
     {
       args: ["lists", "add-prospects", "help"],
@@ -2202,6 +2212,102 @@ test("prospects message-types lists per-prospect surface keys", async () => {
   });
 });
 
+test("prospects timeline requests filtered timeline items and renders readable rows", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/timeline.json");
+      assert.equal(url.searchParams.get("types"), "post,comment,reaction");
+      assert.equal(url.searchParams.get("limit"), "25");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        timeline: [
+          {
+            prefix_id: "post_one",
+            type: "post",
+            occurred_at: "2026-07-09T14:20:00Z",
+            url: "https://www.linkedin.com/feed/update/one",
+            text: "A recent post",
+            profile: {
+              url: "https://www.linkedin.com/in/pat-prospect"
+            }
+          }
+        ],
+        meta: {
+          limit: 25,
+          returned_count: 1,
+          types: ["post", "comment", "reaction"],
+          sort: "occurred_at_desc"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "timeline",
+      "prsp_one",
+      "--types",
+      "post,comment,reaction",
+      "--limit",
+      "25"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /OCCURRED AT\tTYPE\tTEXT\tURL/);
+    assert.match(stdout.output, /2026-07-09T14:20:00Z\tpost\tA recent post\thttps:\/\/www\.linkedin\.com\/feed\/update\/one/);
+  });
+});
+
+test("prospects timeline supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prospect: {
+        prefix_id: "prsp_one",
+        display_name: "Pat Prospect"
+      },
+      timeline: [],
+      meta: {
+        limit: 50,
+        returned_count: 0,
+        types: ["post"],
+        sort: "occurred_at_desc"
+      }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/timeline.json?types=post");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["prospects", "timeline", "prsp_one", "--type", "post", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
 test("prospects write requests one surface-specific draft", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -2466,6 +2572,168 @@ test("prospects sequence-preview runs the report workflow and renders ordered st
     assert.match(stdout.output, /1\. MESSAGE \| Connection request \| LinkedIn/);
     assert.match(stdout.output, /Body: Connect request body/);
     assert.match(stdout.output, /2\. WAIT \| Wait 7 calendar days \| Timeline \[scheduled 2026-07-16\]/);
+  });
+});
+
+test("prospects sequence-export posts branch selection and renders spreadsheet rows", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        branches: "accepted",
+        angle_index: "2"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        context: {
+          source: "motion"
+        },
+        branches: [{
+          key: "accepted",
+          label: "Connection accepted / no reply",
+          rows: [{
+            prospect_id: "prsp_one",
+            prospect_name: "Pat Prospect",
+            branch: "accepted",
+            branch_label: "Connection accepted / no reply",
+            step_number: 1,
+            kind: "message",
+            key: "post_accept_message",
+            stage: "First direct message",
+            channel: "LinkedIn",
+            scheduled_for: "2026-07-13T14:00:00Z",
+            available: true,
+            body: "Accepted branch draft"
+          }]
+        }],
+        rows: [{
+          prospect_id: "prsp_one",
+          prospect_name: "Pat Prospect",
+          branch: "accepted",
+          branch_label: "Connection accepted / no reply",
+          step_number: 1,
+          kind: "message",
+          key: "post_accept_message",
+          stage: "First direct message",
+          channel: "LinkedIn",
+          scheduled_for: "2026-07-13T14:00:00Z",
+          available: true,
+          body: "Accepted branch draft"
+        }],
+        meta: {
+          branch_keys: ["accepted"],
+          row_count: 1
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "sequence-export",
+      "prsp_one",
+      "--branch",
+      "accepted",
+      "--angle-index",
+      "2"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /Context: motion/);
+    assert.match(stdout.output, /Connection accepted \/ no reply \(accepted\)/);
+    assert.match(stdout.output, /STEP\tKIND\tSTAGE\tCHANNEL\tSCHEDULED FOR\tBODY/);
+    assert.match(stdout.output, /1\tmessage\tFirst direct message\tLinkedIn\t2026-07-13T14:00:00Z\tAccepted branch draft/);
+  });
+});
+
+test("prospects sequence-export supports csv output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
+      assert.deepEqual(JSON.parse(options.body), {});
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        rows: [{
+          prospect_id: "prsp_one",
+          prospect_name: "Pat Prospect",
+          branch: "no_accept",
+          branch_label: "No accept / no reply",
+          step_number: 1,
+          kind: "message",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          available: true,
+          status: "success",
+          warnings: ["sample_warning"],
+          writer_engine: "sequence_preview_test",
+          body: "Line one, with comma\nLine two"
+        }]
+      });
+    });
+
+    const exitCode = await run(["prospects", "sequence-export", "prsp_one", "--csv"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /^prospect_id,prospect_name,branch,branch_label,step_number,kind,key,stage,channel,scheduled_for,available,status,subject,body,warnings,writer_engine,/);
+    assert.match(stdout.output, /prsp_one,Pat Prospect,no_accept,No accept \/ no reply,1,message,connection_request,Connection request,LinkedIn,,true,success,,"Line one, with comma\nLine two",sample_warning,sequence_preview_test/);
+  });
+});
+
+test("prospects sequence-export supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prospect: {
+        prefix_id: "prsp_one",
+        display_name: "Pat Prospect"
+      },
+      branches: [],
+      rows: [],
+      meta: {
+        branch_keys: [],
+        row_count: 0
+      }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse(responseBody));
+
+    const exitCode = await run(["prospects", "sequence-export", "prsp_one", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
   });
 });
 

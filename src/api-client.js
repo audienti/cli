@@ -153,6 +153,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId]));
   }
 
+  prospectTimeline(accountId, prospectId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "timeline"], query));
+  }
+
   prospectMessageTypes(accountId, prospectId) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "message_types"]));
   }
@@ -166,6 +170,13 @@ export class AudientiClient {
 
   prospectSequencePreview(accountId, prospectId, body = {}) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sequence_preview"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  prospectSequenceExport(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sequence_export"]), {
       method: "POST",
       body
     });
