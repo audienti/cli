@@ -41,6 +41,15 @@ Use `--json` whenever another program or agent will consume the result. Inspect
 the target state before mutations, and use the command-specific help before
 creating, changing, or deleting data.
 
+Common inspection commands:
+
+```bash
+audienti operator next --plan
+audienti analytics prospects --window 24h
+audienti analytics visibility --window 24h --user me
+audienti analytics content --window week
+```
+
 ## Compatibility
 
 The CLI talks to the versioned Audienti `/api/v1` contract at

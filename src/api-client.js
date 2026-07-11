@@ -215,6 +215,18 @@ export class AudientiClient {
     });
   }
 
+  analyticsProspects(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "prospects"], query));
+  }
+
+  analyticsVisibility(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "visibility"], query));
+  }
+
+  analyticsContent(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "content"], query));
+  }
+
   async requestJson(path, { method = "GET", body } = {}) {
     const response = await this.fetchImpl(new URL(path, `${this.host}/`), {
       method,

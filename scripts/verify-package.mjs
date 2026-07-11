@@ -41,6 +41,10 @@ if (packageJson.bin?.audienti !== "./bin/audienti.js") {
   errors.push("package must expose the audienti binary");
 }
 
+if (!Array.isArray(packageJson.files) || !packageJson.files.includes("skills/")) {
+  errors.push('package files must include "skills/" so the agent-facing CLI contract ships');
+}
+
 if (!changelog.includes(`## [${packageJson.version}]`)) {
   errors.push(`CHANGELOG.md must contain a release section for v${packageJson.version}`);
 }

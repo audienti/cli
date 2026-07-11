@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-11
+
+### Added
+
+- Add `audienti operator next --plan` for deterministic next-action plan output.
+- Add `audienti analytics prospects`, `audienti analytics visibility`, and `audienti analytics content` for account-scoped operational analytics.
+
 ## [0.1.3] - 2026-07-11
 
 ### Changed

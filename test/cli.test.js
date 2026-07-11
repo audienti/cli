@@ -16,7 +16,8 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /Usage:/);
   assert.match(stdout.output, /audienti auth token <token>/);
   assert.match(stdout.output, /audienti help agent-workflows/);
-  assert.match(stdout.output, /audienti operator next/);
+  assert.match(stdout.output, /audienti operator next \[--json\|--plan\]/);
+  assert.match(stdout.output, /audienti analytics prospects \[--window 24h\]/);
   assert.match(stdout.output, /audienti prospects add-steer <prsp_id> --message <text>/);
   assert.match(stdout.output, /Run `audienti <command> help`/);
   assert.equal(stderr.output, "");
@@ -75,6 +76,10 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti motions create --payload <file\.json>/);
   assert.match(stdout.output, /audienti prospects import https:\/\/www\.linkedin\.com\/in\/example/);
   assert.match(stdout.output, /audienti motions add-prospects <motn_id> <prsp_id>/);
+  assert.match(stdout.output, /audienti operator next --plan/);
+  assert.match(stdout.output, /audienti analytics prospects --window 24h/);
+  assert.match(stdout.output, /audienti analytics visibility --window 24h --user me/);
+  assert.match(stdout.output, /audienti analytics content --window week/);
   assert.match(stdout.output, /Current gaps to plan around:/);
   assert.doesNotMatch(stdout.output, /Motion creation still lacks a live CLI mutation/);
 });
@@ -187,6 +192,26 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["operator", "next", "help"],
       expected: [/Usage:\n  audienti operator next/, /next_move\.next_action/]
+    },
+    {
+      args: ["analytics", "help"],
+      expected: [/audienti analytics prospects/, /audienti analytics visops/, /--window <24h\|7d\|1w\|day\|week>/, /--user <account_user_id\|email\|name\|me>/]
+    },
+    {
+      args: ["analytics", "prospects", "help"],
+      expected: [/Usage:\n  audienti analytics prospects/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/prospects\.json/]
+    },
+    {
+      args: ["analytics", "visibility", "help"],
+      expected: [/Usage:\n  audienti analytics visibility/, /unique_people_engaged_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/visibility\.json/]
+    },
+    {
+      args: ["analytics", "visops", "help"],
+      expected: [/Alias for `audienti analytics visibility`/]
+    },
+    {
+      args: ["analytics", "content", "help"],
+      expected: [/Usage:\n  audienti analytics content/, /published_posts_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/content\.json/]
     },
     {
       args: ["prospects", "import", "help"],
@@ -2798,6 +2823,240 @@ test("operator next sends filters and supports account override without mutating
       accountId: "acct_one",
       accountName: "One"
     });
+  });
+});
+
+test("operator next renders a static plan with coach guidance and draft state", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/next.json");
+      assert.equal(url.searchParams.get("writing_status"), "ready");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        next_move: {
+          id: "operator-row-123",
+          opportunity_kind: "prospect",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          motion: { prefix_id: "motn_one", name: "Motion One" },
+          pipeline_stage: "identified",
+          plan_state: "ready",
+          status_label: "Ready",
+          due_label: "Now",
+          recommended_action_label: "Send connection request",
+          rationale: "The prospect matches the play and has a relevant LinkedIn profile.",
+          guidance: "Keep the note specific and do not ask for a meeting yet.",
+          next_action: {
+            type: "connection_request",
+            label: "Send connection request",
+            request_mode: "signal_note",
+            timing: {
+              mode: "now",
+              scheduled_for: "2026-07-11T14:00:00Z"
+            },
+            target: {
+              platform: "linkedin",
+              profile_url: "https://www.linkedin.com/in/pat-prospect"
+            }
+          },
+          cta: {
+            label: "Send connection request",
+            action: "connect_request",
+            platform: "linkedin",
+            disabled: false
+          },
+          operator_draft: {
+            required: true,
+            ready: true,
+            state: "ready",
+            subject: "",
+            body: "Pat, noticed your team is tightening vendor governance before renewals.",
+            writer_path: "outreach/linkedin_connection_request"
+          }
+        },
+        filters: {},
+        metrics: {}
+      });
+    });
+
+    const exitCode = await run(["operator", "next", "--plan", "--writing-status", "ready"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Static operator plan/);
+    assert.match(stdout.output, /Move: operator-row-123/);
+    assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
+    assert.match(stdout.output, /Motion: Motion One \(motn_one\)/);
+    assert.match(stdout.output, /Next action: Send connection request \(connection_request\)/);
+    assert.match(stdout.output, /Timing: now, scheduled for 2026-07-11T14:00:00Z/);
+    assert.match(stdout.output, /CTA: Send connection request \(connect_request on linkedin\)/);
+    assert.match(stdout.output, /Draft: ready, ready/);
+    assert.match(stdout.output, /Writer: outreach\/linkedin_connection_request/);
+    assert.match(stdout.output, /Body:\nPat, noticed your team is tightening vendor governance before renewals\./);
+    assert.match(stdout.output, /Rationale:\nThe prospect matches the play and has a relevant LinkedIn profile\./);
+    assert.match(stdout.output, /Guidance:\nKeep the note specific and do not ask for a meeting yet\./);
+  });
+});
+
+test("operator next rejects conflicting output format flags", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("conflicting output flags must not call the API");
+    });
+
+    const exitCode = await run(["operator", "next", "--json", "--plan"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Choose one output format/);
+  });
+});
+
+test("analytics prospects sends window and renders account-scoped summary", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/prospects.json");
+      assert.equal(url.searchParams.get("window"), "24h");
+      assert.equal(url.searchParams.get("account_user_id"), null);
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        kind: "prospects",
+        account_user: null,
+        window: {
+          key: "24h",
+          started_at: "2026-07-10T14:00:00Z",
+          ended_at: "2026-07-11T14:00:00Z"
+        },
+        prospects_added_count: 12,
+        actions: {
+          total_count: 8,
+          automated_count: 6,
+          automated_percentage: 75.0,
+          breakdown: [
+            { key: "action.profile.connect_request_sent", label: "Profile connect request sent", count: 5, automated_count: 5, automated_percentage: 100.0 },
+            { key: "action.profile.follow", label: "Profile follow", count: 3, automated_count: 1, automated_percentage: 33.3 }
+          ]
+        },
+        queue_stages: [
+          { key: "pre_connect", label: "Pre connect", count: 9 },
+          { key: "connected", label: "Connected", count: 3 }
+        ]
+      });
+    });
+
+    const exitCode = await run(["analytics", "prospects", "--window", "24h"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Prospect analytics \(24h: 2026-07-10T14:00:00Z to 2026-07-11T14:00:00Z\)/);
+    assert.match(stdout.output, /User: all account users/);
+    assert.match(stdout.output, /Prospects added: 12/);
+    assert.match(stdout.output, /Actions: 8 \(automated 6, 75%\)/);
+    assert.match(stdout.output, /Profile connect request sent\t5\t5\t100%/);
+    assert.match(stdout.output, /Pre connect\t9/);
+  });
+});
+
+test("analytics visibility supports visops alias and json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      kind: "visibility",
+      account_user: { id: 42, name: "User One", email: "one@example.com" },
+      window: { key: "7d" },
+      unique_people_engaged_count: 4,
+      engagements: {
+        total_count: 5,
+        automated_count: 2,
+        automated_percentage: 40.0,
+        breakdown: []
+      }
+    };
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/visibility.json");
+      assert.equal(url.searchParams.get("window"), "7d");
+      assert.equal(url.searchParams.get("account_user_id"), "one@example.com");
+      return jsonResponse(responseBody);
+    });
+    const stdout = captureStream();
+
+    const exitCode = await run(["analytics", "visops", "--window", "7d", "--user", "one@example.com", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("analytics content sends week window and renders publishing summary", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/content.json");
+      assert.equal(url.searchParams.get("window"), "week");
+      assert.equal(url.searchParams.get("account_user_id"), "42");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        kind: "content",
+        account_user: { id: 42, name: "User One", email: "one@example.com" },
+        window: { key: "7d" },
+        published_posts_count: 3,
+        stage_breakdown: [
+          { key: "posted", label: "Posted", count: 3 },
+          { key: "scheduled", label: "Scheduled", count: 2 }
+        ],
+        execution_status_breakdown: [
+          { key: "completed", label: "Completed", count: 3 },
+          { key: "waiting", label: "Waiting", count: 2 }
+        ]
+      });
+    });
+    const stdout = captureStream();
+
+    const exitCode = await run(["analytics", "content", "--window", "week", "--user", "42"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Content analytics \(7d\)/);
+    assert.match(stdout.output, /User: User One \(42\)/);
+    assert.match(stdout.output, /Published posts: 3/);
+    assert.match(stdout.output, /Posted\t3/);
+    assert.match(stdout.output, /Waiting\t2/);
   });
 });
 

@@ -53,4 +53,8 @@ audienti help agent-workflows
 audienti prospects list --query "name or company" --wide --json
 audienti lists create --name "Target list" --json
 audienti operator next --json
+audienti operator next --plan
+audienti analytics prospects --window 24h --json
+audienti analytics visibility --window 24h --user me --json
+audienti analytics content --window week --json
 ```

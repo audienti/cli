@@ -122,6 +122,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["prospects", "prospect"].includes(action)) return analyticsProspects(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
 
   throw new CommandError(usage(), { exitCode: resource ? 1 : 0 });
 }
@@ -1022,11 +1025,13 @@ async function operatorQueue(args, context, { accountOverride } = {}) {
 
 async function operatorNext(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, operatorOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti operator next [--json] [filters] [--account <acct_id>]");
+  if (positionals.length > 0) throw new CommandError("Usage: audienti operator next [--json|--plan] [filters] [--account <acct_id>]");
+  if (values.json && values.plan) throw new CommandError("Choose one output format: use either --json or --plan.");
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await client.operatorNext(accountId, operatorQuery(values));
   if (values.json) return writeJson(context.stdout, payload);
+  if (values.plan) return renderOperatorPlan(payload?.next_move, context);
 
   renderOperatorNext(payload?.next_move, context);
 }
@@ -1049,6 +1054,39 @@ async function operatorOutcome(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, response);
 
   renderOperatorOutcome(response, context);
+}
+
+async function analyticsProspects(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsProspects(accountId, analyticsQuery(values));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsProspects(payload, context);
+}
+
+async function analyticsVisibility(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsVisibility(accountId, analyticsQuery(values));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsVisibility(payload, context);
+}
+
+async function analyticsContent(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsContent(accountId, analyticsQuery(values));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsContent(payload, context);
 }
 
 function parseCommandArgs(args, options) {
@@ -1109,6 +1147,7 @@ function jsonOptions() {
 function operatorOptions() {
   return {
     ...jsonOptions(),
+    plan: { type: "boolean" },
     principal: { type: "string" },
     motion: { type: "string" },
     list: { type: "string" },
@@ -1126,6 +1165,21 @@ function operatorQuery(values) {
     stage: values.stage,
     opportunity_kind: values["opportunity-kind"],
     writing_status: values["writing-status"]
+  });
+}
+
+function analyticsOptions() {
+  return {
+    ...jsonOptions(),
+    window: { type: "string" },
+    user: { type: "string" }
+  };
+}
+
+function analyticsQuery(values) {
+  return compactObject({
+    window: values.window,
+    account_user_id: values.user
   });
 }
 
@@ -1761,6 +1815,60 @@ function renderOperatorNext(row, context) {
   writeLine(context.stdout, operatorRowLine(row));
 }
 
+function renderOperatorPlan(row, context) {
+  if (!row) return writeLine(context.stdout, "No operator moves found.");
+
+  const nextAction = row.next_action || {};
+  const cta = row.cta || {};
+  const draft = row.operator_draft || {};
+
+  writeLine(context.stdout, "Static operator plan");
+  writeLine(context.stdout, `Move: ${display(row.id)}`);
+  writeLine(context.stdout, `Kind: ${display(row.opportunity_kind)}`);
+  writeLine(context.stdout, `Prospect: ${entityLabel(row.prospect)}`);
+  if (row.motion) writeLine(context.stdout, `Motion: ${entityLabel(row.motion)}`);
+  if (row.pipeline_stage || row.plan_state || row.status_label) {
+    writeLine(context.stdout, `State: ${compactText([row.pipeline_stage, row.plan_state, row.status_label]).join(", ")}`);
+  }
+  if (row.due_label) writeLine(context.stdout, `Due: ${row.due_label}`);
+
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, `Next action: ${display(nextActionLabel(row), "Unknown")} (${display(nextAction.type, "unknown")})`);
+  if (nextAction.request_mode) writeLine(context.stdout, `Request mode: ${nextAction.request_mode}`);
+  const timing = timingLabel(nextAction, row);
+  if (timing) writeLine(context.stdout, `Timing: ${timing}`);
+  const target = targetLabel(nextAction);
+  if (target) writeLine(context.stdout, `Target: ${target}`);
+
+  if (Object.keys(cta).length > 0) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `CTA: ${ctaLabel(cta)}`);
+  }
+
+  if (Object.keys(draft).length > 0) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `Draft: ${draftLabel(draft)}`);
+    if (draft.writer_path) writeLine(context.stdout, `Writer: ${draft.writer_path}`);
+    if (draft.subject) writeLine(context.stdout, `Subject: ${draft.subject}`);
+    const body = draft.body || draft.text;
+    if (body) {
+      writeLine(context.stdout, "Body:");
+      writeLine(context.stdout, body);
+    }
+  }
+
+  if (row.rationale) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, "Rationale:");
+    writeLine(context.stdout, row.rationale);
+  }
+  if (row.guidance) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, "Guidance:");
+    writeLine(context.stdout, row.guidance);
+  }
+}
+
 function renderOperatorOutcome(payload, context) {
   const outcome = payload?.operator_outcome || {};
   const rowId = payload?.row_id || outcome.row_id;
@@ -1772,6 +1880,84 @@ function renderOperatorOutcome(payload, context) {
   if (payload?.event?.prefix_id) {
     writeLine(context.stdout, `Event: ${payload.event.prefix_id} (${display(payload.event.key)})`);
   }
+}
+
+function renderAnalyticsProspects(payload, context) {
+  writeLine(context.stdout, `Prospect analytics (${analyticsWindowLabel(payload)})`);
+  writeAnalyticsScope(payload, context);
+  writeLine(context.stdout, `Prospects added: ${display(payload?.prospects_added_count, 0)}`);
+  writeAnalyticsActionSummary(payload?.actions, context, "Actions");
+  writeCountTable(context, "Action breakdown", payload?.actions?.breakdown, ["ACTION", "COUNT", "AUTOMATED", "AUTO %"], actionBreakdownRow);
+  writeCountTable(context, "Queue stages", payload?.queue_stages, ["STAGE", "COUNT"], countRow);
+}
+
+function renderAnalyticsVisibility(payload, context) {
+  writeLine(context.stdout, `Visibility analytics (${analyticsWindowLabel(payload)})`);
+  writeAnalyticsScope(payload, context);
+  writeLine(context.stdout, `Unique people engaged: ${display(payload?.unique_people_engaged_count, 0)}`);
+  writeAnalyticsActionSummary(payload?.engagements, context, "Engagements");
+  writeCountTable(context, "Engagement breakdown", payload?.engagements?.breakdown, ["ACTION", "COUNT", "AUTOMATED", "AUTO %"], actionBreakdownRow);
+}
+
+function renderAnalyticsContent(payload, context) {
+  writeLine(context.stdout, `Content analytics (${analyticsWindowLabel(payload)})`);
+  writeAnalyticsScope(payload, context);
+  writeLine(context.stdout, `Published posts: ${display(payload?.published_posts_count, 0)}`);
+  writeCountTable(context, "Stages", payload?.stage_breakdown, ["STAGE", "COUNT"], countRow);
+  writeCountTable(context, "Execution statuses", payload?.execution_status_breakdown, ["STATUS", "COUNT"], countRow);
+}
+
+function writeAnalyticsScope(payload, context) {
+  if (payload?.account_user) {
+    writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
+  } else {
+    writeLine(context.stdout, "User: all account users");
+  }
+}
+
+function writeAnalyticsActionSummary(actions, context, label) {
+  const total = display(actions?.total_count, 0);
+  const automated = display(actions?.automated_count, 0);
+  const percentage = percentageLabel(actions?.automated_percentage);
+  writeLine(context.stdout, `${label}: ${total} (automated ${automated}, ${percentage})`);
+}
+
+function writeCountTable(context, title, rows, headers, mapRow) {
+  const list = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, title);
+  if (list.length === 0) return writeLine(context.stdout, "None");
+
+  writeLine(context.stdout, headers.join("\t"));
+  for (const row of list) writeLine(context.stdout, mapRow(row).join("\t"));
+}
+
+function actionBreakdownRow(row) {
+  return [
+    display(row?.label || row?.key),
+    display(row?.count, 0),
+    display(row?.automated_count, 0),
+    percentageLabel(row?.automated_percentage)
+  ];
+}
+
+function countRow(row) {
+  return [
+    display(row?.label || row?.key),
+    display(row?.count, 0)
+  ];
+}
+
+function analyticsWindowLabel(payload) {
+  const window = payload?.window || {};
+  const key = display(window.key, "24h");
+  if (!window.started_at || !window.ended_at) return key;
+
+  return `${key}: ${window.started_at} to ${window.ended_at}`;
+}
+
+function percentageLabel(value) {
+  return value === undefined || value === null || value === "" ? "n/a" : `${value}%`;
 }
 
 function operatorRowLine(row) {
@@ -1786,6 +1972,53 @@ function operatorRowLine(row) {
 
 function nextActionLabel(source) {
   return source?.recommended_action_label || source?.next_action?.label || source?.cta?.label;
+}
+
+function entityLabel(entity) {
+  if (!entity) return "";
+
+  const name = entity.display_name || entity.name || entity.prefix_id || entity.id;
+  const id = entity.prefix_id || entity.id;
+  return id && id !== name ? `${display(name)} (${display(id)})` : display(name);
+}
+
+function timingLabel(nextAction, row) {
+  const timing = nextAction.timing || {};
+  const mode = timing.mode || row.timing_mode;
+  const scheduledFor = timing.scheduled_for || row.scheduled_for;
+  const parts = compactText([
+    mode,
+    scheduledFor ? `scheduled for ${scheduledFor}` : null
+  ]);
+
+  return parts.join(", ");
+}
+
+function targetLabel(nextAction) {
+  const target = nextAction.target || {};
+  return compactText([
+    target.platform,
+    target.profile_url,
+    target.post_url,
+    target.message_event_id ? `message ${target.message_event_id}` : null,
+    target.post_id ? `post ${target.post_id}` : null
+  ]).join(" | ");
+}
+
+function ctaLabel(cta) {
+  const action = compactText([cta.action || cta.type, cta.platform ? `on ${cta.platform}` : null]).join(" ");
+  const disabled = cta.disabled ? "disabled" : "enabled";
+  return `${display(cta.label, "Unnamed CTA")}${action ? ` (${action})` : ""}${cta.disabled === undefined ? "" : `, ${disabled}`}`;
+}
+
+function draftLabel(draft) {
+  const required = draft.required === true ? "required" : draft.required === false ? "not required" : null;
+  const ready = draft.ready === true ? "ready" : draft.ready === false ? "not ready" : null;
+  return compactText([draft.state, ready, required]).join(", ") || "unknown";
+}
+
+function compactText(values) {
+  return values.map((value) => String(value || "").trim()).filter(Boolean);
 }
 
 function successCount(payload) {
@@ -2041,9 +2274,12 @@ const HELP_TOPICS = new Map([
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
-    "  audienti operator next [--json]",
+    "  audienti operator next [--json|--plan]",
     "  audienti operator queue [--json]",
     "  audienti operator outcome <row_id> --payload <file.json> [--json]",
+    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
     "",
     "Planned submit-shape help topics:",
     "  audienti prospects disposition help",
@@ -3109,7 +3345,7 @@ const HELP_TOPICS = new Map([
 
   ["operator", [
     "Usage:",
-    "  audienti operator next [--json]",
+    "  audienti operator next [--json|--plan]",
     "  audienti operator queue [--json]",
     "  audienti operator outcome <row_id> --payload <file.json>",
     "",
@@ -3126,9 +3362,12 @@ const HELP_TOPICS = new Map([
 
   ["operator next", [
     "Usage:",
-    "  audienti operator next [--json] [filters] [--account <acct_id>]",
+    "  audienti operator next [--json|--plan] [filters] [--account <acct_id>]",
     "",
     "Status: implemented",
+    "",
+    "Options:",
+    "  --plan  Render a deterministic static plan from the existing next-action coach payload, CTA, and operator draft state",
     "",
     "Output shape:",
     "  next_move.id: row id",
@@ -3187,6 +3426,84 @@ const HELP_TOPICS = new Map([
     "  POST /api/v1/accounts/:account_id/operator/outcome.json"
   ].join("\n")],
 
+  ["analytics", [
+    "Usage:",
+    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics visops [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Window:",
+    "  --window <24h|7d|1w|day|week>",
+    "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. Email/name partials are accepted when they match exactly one account user.",
+    "",
+    "Output:",
+    "  Account-scoped analytics for prospects, visibility engagement, and ContentOps publishing."
+  ].join("\n")],
+
+  ["analytics prospects", [
+    "Usage:",
+    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Output shape:",
+    "  prospects_added_count: account prospects added in the window",
+    "  account_user: selected account user when --user is provided, otherwise null",
+    "  actions: outbound action totals, type breakdown, and automated percentage",
+    "  queue_stages[]: current account prospect stage counts",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/prospects.json"
+  ].join("\n")],
+
+  ["analytics prospect", [
+    "Usage:",
+    "  audienti analytics prospect [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "",
+    "Alias for `audienti analytics prospects`."
+  ].join("\n")],
+
+  ["analytics visibility", [
+    "Usage:",
+    "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Output shape:",
+    "  unique_people_engaged_count: unique prospects or profiles touched by visibility actions in the window",
+    "  account_user: selected account user when --user is provided, otherwise null",
+    "  engagements: visibility action totals, type breakdown, and automated percentage",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/visibility.json"
+  ].join("\n")],
+
+  ["analytics visops", [
+    "Usage:",
+    "  audienti analytics visops [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "",
+    "Alias for `audienti analytics visibility`."
+  ].join("\n")],
+
+  ["analytics content", [
+    "Usage:",
+    "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Output shape:",
+    "  account_user: selected account user when --user is provided, otherwise null",
+    "  published_posts_count: ContentOps work items published in the window",
+    "  stage_breakdown[]: current ContentOps work item stage counts",
+    "  execution_status_breakdown[]: current ContentOps execution status counts",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/content.json"
+  ].join("\n")],
+
   ["agent-workflows", [
     "Usage:",
     "  audienti help agent-workflows",
@@ -3230,8 +3547,14 @@ const HELP_TOPICS = new Map([
     "",
     "6. Work the operator queue",
     "  audienti operator next",
+    "  audienti operator next --plan",
     "  audienti operator queue --json",
     "  audienti operator outcome <row_id> --payload <file.json>",
+    "",
+    "7. Inspect account analytics",
+    "  audienti analytics prospects --window 24h",
+    "  audienti analytics visibility --window 24h --user me",
+    "  audienti analytics content --window week",
     "",
     "Good defaults:",
     "  Use --json when another tool or agent will parse the result.",
