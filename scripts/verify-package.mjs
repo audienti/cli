@@ -1,3 +1,4 @@
+import { constants } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,11 +46,18 @@ if (!Array.isArray(packageJson.files) || !packageJson.files.includes("skills/"))
   errors.push('package files must include "skills/" so the agent-facing CLI contract ships');
 }
 
+if (!Array.isArray(packageJson.files) || !packageJson.files.includes("install")) {
+  errors.push('package files must include "install" so the curl installer ships');
+}
+
 if (!changelog.includes(`## [${packageJson.version}]`)) {
   errors.push(`CHANGELOG.md must contain a release section for v${packageJson.version}`);
 }
 
 await requireFile("bin/audienti.js");
+await requireExecutableFile("install");
+await requireTextFile("CNAME", "cli.audienti.com");
+await requireFile(".nojekyll");
 await requireFile("LICENSE");
 await requireFile("README.md");
 await requireFile("skills/audienti/SKILL.md");
@@ -72,6 +80,25 @@ async function readText(relativePath) {
 async function requireFile(relativePath) {
   try {
     await access(join(packageRoot, relativePath));
+  } catch {
+    errors.push(`missing required file: ${relativePath}`);
+  }
+}
+
+async function requireExecutableFile(relativePath) {
+  try {
+    await access(join(packageRoot, relativePath), constants.X_OK);
+  } catch {
+    errors.push(`missing executable file: ${relativePath}`);
+  }
+}
+
+async function requireTextFile(relativePath, expectedText) {
+  try {
+    const text = (await readText(relativePath)).trim();
+    if (text !== expectedText) {
+      errors.push(`${relativePath} must contain ${expectedText}`);
+    }
   } catch {
     errors.push(`missing required file: ${relativePath}`);
   }

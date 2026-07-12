@@ -19,7 +19,7 @@ audienti --help
 2. If it is unavailable, install the public package:
 
 ```bash
-npm install --global @audienti/cli
+curl -fsSL https://cli.audienti.com/install | bash
 ```
 
 3. Authentication is explicit and per machine. Do not ask a user to paste a

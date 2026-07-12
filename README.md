@@ -9,6 +9,13 @@ manage plays, import prospects, build lists, and work supported operator flows.
 Requires Node.js 20 or newer.
 
 ```bash
+curl -fsSL https://cli.audienti.com/install | bash
+audienti --help
+```
+
+Or install directly through npm:
+
+```bash
 npm install --global @audienti/cli
 audienti --help
 ```

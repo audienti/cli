@@ -4,8 +4,11 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-07-11
+
 ### Added
 
+- Add the `https://cli.audienti.com/install` curl installer backed by the public CLI mirror and npm package.
 - Add `audienti operator next --done|--skip|--fail|--return` shortcuts for recording the current prospect next-move outcome without hand-building a payload file.
 - Add `audienti prospects add-profile` and `audienti prospects report-bad-profile` for updating prospect profile channels through the same server paths used by the prospect show page.
 

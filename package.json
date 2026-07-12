@@ -1,6 +1,6 @@
 {
   "name": "@audienti/cli",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Agent-first command-line client for Audienti.",
   "type": "module",
   "bin": {
@@ -10,6 +10,7 @@
     "bin/",
     "src/",
     "skills/",
+    "install",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"

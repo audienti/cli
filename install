@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+package="@audienti/cli"
+binary="audienti"
+minimum_node_major=20
+
+say() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  printf 'Audienti CLI install failed: %s\n' "$*" >&2
+  exit 1
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    fail "$2"
+  fi
+}
+
+require_command node "Node.js ${minimum_node_major} or newer is required. Install Node.js, then rerun this script."
+require_command npm "npm is required. Install Node.js ${minimum_node_major} or newer with npm, then rerun this script."
+
+node_major="$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || true)"
+case "$node_major" in
+  ''|*[!0-9]*)
+    fail "could not determine the installed Node.js version."
+    ;;
+esac
+
+if [ "$node_major" -lt "$minimum_node_major" ]; then
+  fail "Node.js ${minimum_node_major} or newer is required. Current version: $(node --version)."
+fi
+
+say "Installing ${package}..."
+npm install --global --no-audit --no-fund "$package"
+
+global_prefix="$(npm prefix --global 2>/dev/null || true)"
+if [ -n "$global_prefix" ] && [ -d "$global_prefix/bin" ]; then
+  export PATH="$global_prefix/bin:$PATH"
+fi
+
+if ! command -v "$binary" >/dev/null 2>&1; then
+  if [ -n "$global_prefix" ] && [ -x "$global_prefix/bin/$binary" ]; then
+    fail "${binary} installed at ${global_prefix}/bin/${binary}, but that directory is not on PATH."
+  fi
+
+  fail "${binary} was not found on PATH after installation."
+fi
+
+"$binary" --help >/dev/null
+
+cat <<'NEXT'
+Audienti CLI installed.
+
+Next:
+  audienti auth token <token>
+  audienti accounts list --json
+  audienti accounts select <acct_id>
+NEXT
