@@ -52,9 +52,12 @@ Common inspection commands:
 
 ```bash
 audienti operator next --plan
+audienti writer test-run <prsp_id>
+audienti motions analytics <motn_id>
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti analytics prospects --window 24h
+audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
 ```
@@ -65,6 +68,52 @@ and record the outcome against that same row:
 ```bash
 audienti operator next --plan
 audienti operator next --done --note "Connection request sent."
+```
+
+To inspect activity for prospects that entered the account during a specific
+cohort while keeping a separate activity window:
+
+```bash
+audienti analytics prospects --cohort-start 2026-07-01 --cohort-end 2026-07-07 --window 7d
+```
+
+To compare recent weekly prospect cohorts by their current pipeline stages:
+
+```bash
+audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>
+```
+
+To see whether one motion is producing prospects by day, and where each
+produced-day cohort currently sits in the funnel:
+
+```bash
+audienti motions analytics <motn_id>
+```
+
+To audit one account user's outbound actions, optionally narrowed to one motion
+and one AccountProspect.created_at cohort:
+
+```bash
+audienti analytics users --user me --start 2026-07-01 --end 2026-07-07 --cohort-start 2026-06-01 --cohort-end 2026-06-30 --motion <motn_id>
+```
+
+To run a writer campaign test for one prospect, including the no-reply path,
+planned actions, channel changes, and drafted messages:
+
+```bash
+audienti writer test-run <prsp_id>
+```
+
+For fast simulator work, plan the branches without drafting every message:
+
+```bash
+audienti writer test-run <prsp_id> --mode plan
+```
+
+For writer debugging, draft only one selected timeline row on one branch:
+
+```bash
+audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3
 ```
 
 To update a prospect's attached profile channels through the same paths used by

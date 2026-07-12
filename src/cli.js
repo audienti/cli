@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
 import { configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
 
@@ -28,6 +29,28 @@ const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
+const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
+const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
+const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
+const COHORT_STAGE_ORDER = [
+  "identified",
+  "pre_connect",
+  "connect_request",
+  "connected",
+  "engaged",
+  "meeting_requested",
+  "meeting_outcome_accepted",
+  "meeting_outcome_declined",
+  "nurture",
+  "non_responsive",
+  "delayed",
+  "rejected",
+  "cancel"
+];
+const DAY_OF_WEEK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WRITER_TEST_RUN_CACHE_VERSION = 1;
 const SEQUENCE_EXPORT_CSV_COLUMNS = [
   "prospect_id",
   "prospect_name",
@@ -56,7 +79,9 @@ const SEQUENCE_EXPORT_CSV_COLUMNS = [
 export async function run(argv = process.argv.slice(2), deps = {}) {
   const context = {
     env: deps.env || process.env,
+    cwd: deps.cwd || process.cwd(),
     fetchImpl: deps.fetch || globalThis.fetch,
+    now: deps.now || (() => new Date()),
     sleep: deps.sleep || sleep,
     stdout: deps.stdout || process.stdout,
     stderr: deps.stderr || process.stderr
@@ -106,6 +131,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "list") return motionsList(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "show") return motionsShow(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "analytics") return motionsAnalytics(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "prospects") return motionsProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "create") return motionsCreate(rest, context, { accountOverride });
@@ -122,11 +148,13 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "sequence-export") return prospectsSequenceExport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import") return prospectsImport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import-status") return prospectsImportStatus(rest, context, { accountOverride });
+  if (normalizedResource === "writer" && action === "test-run") return writerTestRun(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["prospects", "prospect"].includes(action)) return analyticsProspects(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["users", "user"].includes(action)) return analyticsUsers(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
 
@@ -172,11 +200,13 @@ function helpTopicFromArgs(args) {
 function normalizeTopicParts(parts) {
   if (parts[0] === "plays") return ["motions", ...parts.slice(1)];
   if (parts[0] === "principals") return ["users", ...parts.slice(1)];
+  if (parts[0] === "writers") return ["writer", ...parts.slice(1)];
   return parts;
 }
 
 function normalizeResource(resource) {
   if (resource === "principals") return "users";
+  if (resource === "writers") return "writer";
   return resource === "plays" ? "motions" : resource;
 }
 
@@ -655,6 +685,23 @@ async function motionsStatus(args, context, { accountOverride } = {}) {
   renderMotionStatus(status, context);
 }
 
+async function motionsAnalytics(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    window: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(MOTIONS_ANALYTICS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsProspects(accountId, {
+    motion_id: positionals[0],
+    window: values.window || "30d"
+  });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderMotionAnalytics(payload, context);
+}
+
 async function motionsProspects(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -914,13 +961,63 @@ async function prospectNoteCommand(args, context, { accountOverride, forcedType,
 }
 
 async function prospectsSequencePreview(args, context, { accountOverride } = {}) {
+  return runSequencePreviewCommand(args, context, {
+    accountOverride,
+    usageText: "Usage: audienti prospects sequence-preview <prsp_id> [--json] [--connection-state <state>] [--account <acct_id>]",
+    title: "Sequence preview"
+  });
+}
+
+async function writerTestRun(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    branch: { type: "string" },
+    branches: { type: "string" },
+    mode: { type: "string" },
+    step: { type: "string" },
+    "angle-index": { type: "string" },
+    "no-cache": { type: "boolean" },
+    "clear-cache": { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError(WRITER_TEST_RUN_USAGE);
+  if (values.branch && values.branches) throw new CommandError("Choose one branch filter: use either --branch or --branches.");
+  const draftMode = normalizeWriterTestRunMode(values.mode);
+  if (draftMode === "target" && !values.step) throw new CommandError("Step mode requires --step <step_key|row_number>.");
+  if (draftMode === "target" && !values.branch && !values.branches) throw new CommandError("Step mode requires --branch <no-accept|accepted>.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const prospectId = positionals[0];
+  const branchFilter = values.branches || values.branch || "both";
+  const useCache = ["plan", "target"].includes(draftMode) && !values["no-cache"];
+  if (useCache && values["clear-cache"]) await clearWriterTestRunCache(context, { accountId, prospectId });
+  const cache = useCache ? await loadWriterTestRunCache(context, { accountId, prospectId }) : emptyWriterTestRunCache(context, { accountId, prospectId });
+  const cachedDrafts = useCache ? writerCachedDraftsForRequest(cache, branchFilter) : [];
+
+  const payload = await client.prospectSequenceExport(accountId, prospectId, compactObject({
+    branches: branchFilter,
+    angle_index: values["angle-index"],
+    draft_mode: draftMode,
+    target_step: values.step,
+    cached_drafts: cachedDrafts.length ? cachedDrafts : undefined
+  }));
+  if (useCache) {
+    payload.meta ||= {};
+    payload.meta.cache = writerCacheMeta(cache, cachedDrafts);
+    await persistWriterDraftsFromPayload(context, { cache, payload });
+  }
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderWriterTestRun(payload, context);
+}
+
+async function runSequencePreviewCommand(args, context, { accountOverride, usageText, title }) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     "connection-state": { type: "string" }
   });
 
   if (positionals.length !== 1) {
-    throw new CommandError("Usage: audienti prospects sequence-preview <prsp_id> [--json] [--connection-state <state>] [--account <acct_id>]");
+    throw new CommandError(usageText);
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -929,7 +1026,7 @@ async function prospectsSequencePreview(args, context, { accountOverride } = {})
   }));
   if (values.json) return writeJson(context.stdout, payload);
 
-  renderProspectSequencePreview(payload, context);
+  renderProspectSequencePreview(payload, context, { title });
 }
 
 async function prospectsSequenceExport(args, context, { accountOverride } = {}) {
@@ -938,10 +1035,12 @@ async function prospectsSequenceExport(args, context, { accountOverride } = {}) 
     csv: { type: "boolean" },
     branch: { type: "string" },
     branches: { type: "string" },
+    "draft-mode": { type: "string" },
+    "target-step": { type: "string" },
     "angle-index": { type: "string" }
   });
   if (positionals.length !== 1) {
-    throw new CommandError("Usage: audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--draft-mode <all|plan|target>] [--target-step <step_key|row_number>] [--account <acct_id>]");
   }
   if (values.csv && values.json) throw new CommandError("Choose one output format: use either --csv or --json.");
   if (values.branch && values.branches) throw new CommandError("Choose one branch filter: use either --branch or --branches.");
@@ -949,12 +1048,168 @@ async function prospectsSequenceExport(args, context, { accountOverride } = {}) 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await client.prospectSequenceExport(accountId, positionals[0], compactObject({
     branches: values.branches || values.branch,
-    angle_index: values["angle-index"]
+    angle_index: values["angle-index"],
+    draft_mode: values["draft-mode"],
+    target_step: values["target-step"]
   }));
   if (values.json) return writeJson(context.stdout, payload);
   if (values.csv) return writeLine(context.stdout, sequenceExportRowsToCsv(payload?.rows || []));
 
   renderProspectSequenceExport(payload, context);
+}
+
+function normalizeWriterTestRunMode(value) {
+  const normalized = String(value || "report").trim().toLowerCase();
+  if (["report", "draft", "drafts", "all", "full"].includes(normalized)) return "all";
+  if (normalized === "plan") return "plan";
+  if (["step", "target"].includes(normalized)) return "target";
+
+  throw new CommandError("Unsupported writer test-run mode. Use report, plan, or step.");
+}
+
+function emptyWriterTestRunCache(context, { accountId, prospectId }) {
+  return {
+    version: WRITER_TEST_RUN_CACHE_VERSION,
+    account_id: accountId,
+    prospect_id: prospectId,
+    path: writerTestRunCachePath(context, { accountId, prospectId }),
+    entries: {}
+  };
+}
+
+async function loadWriterTestRunCache(context, { accountId, prospectId }) {
+  const cache = emptyWriterTestRunCache(context, { accountId, prospectId });
+
+  try {
+    const parsed = JSON.parse(await readFile(cache.path, "utf8"));
+    if (parsed?.version !== WRITER_TEST_RUN_CACHE_VERSION) return cache;
+
+    return {
+      ...cache,
+      entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {}
+    };
+  } catch (error) {
+    if (error.code === "ENOENT") return cache;
+    if (error instanceof SyntaxError) return cache;
+
+    throw error;
+  }
+}
+
+async function clearWriterTestRunCache(context, { accountId, prospectId }) {
+  await rm(writerTestRunCachePath(context, { accountId, prospectId }), { force: true });
+}
+
+function writerTestRunCachePath(context, { accountId, prospectId }) {
+  const dir = context.env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR || join(context.cwd, "tmp", "writer-test-run-cache");
+  return join(dir, `${safeCacheSegment(accountId)}-${safeCacheSegment(prospectId)}.json`);
+}
+
+function safeCacheSegment(value) {
+  return String(value || "unknown").replace(/[^a-zA-Z0-9_.-]/g, "_");
+}
+
+function writerCachedDraftsForRequest(cache, branchFilter) {
+  const branchKeys = writerRequestedBranchKeys(branchFilter);
+  return Object.values(cache.entries || {})
+    .filter((entry) => branchKeys.includes(entry.branch))
+    .filter((entry) => entry.key && (entry.body || entry.text || entry.subject))
+    .map((entry) => compactObject({
+      branch: entry.branch,
+      key: entry.key,
+      stage: entry.stage,
+      channel: entry.channel,
+      platform: entry.platform,
+      message_mode: entry.message_mode,
+      subject: entry.subject,
+      body: entry.body,
+      text: entry.text,
+      status: entry.status,
+      generated_at: entry.generated_at,
+      writer_engine: entry.writer_engine,
+      target: entry.target,
+      metadata: entry.metadata
+    }));
+}
+
+function writerRequestedBranchKeys(branchFilter) {
+  const values = String(branchFilter || "both").split(",").map((value) => value.trim()).filter(Boolean);
+  if (values.length === 0 || values.includes("both")) return ["no_accept", "accepted"];
+
+  return values.map((value) => {
+    const normalized = value.replaceAll("-", "_");
+    if (["default", "no_accept", "not_connected"].includes(normalized)) return "no_accept";
+    if (normalized === "accepted") return "accepted";
+    return normalized;
+  });
+}
+
+function writerCacheMeta(cache, cachedDrafts) {
+  return {
+    enabled: true,
+    path: cache.path,
+    entry_count: Object.keys(cache.entries || {}).length,
+    sent_draft_count: cachedDrafts.length
+  };
+}
+
+async function persistWriterDraftsFromPayload(context, { cache, payload }) {
+  const entries = { ...(cache.entries || {}) };
+  let changed = false;
+
+  for (const branch of Array.isArray(payload?.branches) ? payload.branches : []) {
+    const branchKey = String(branch?.key || "").trim();
+    if (!branchKey) continue;
+
+    for (const step of Array.isArray(branch?.steps) ? branch.steps : []) {
+      const entry = writerCacheEntryFromStep(step, { branchKey, generatedAt: branch.generated_at || payload?.generated_at });
+      if (!entry) continue;
+
+      entries[writerCacheEntryKey(entry)] = entry;
+      changed = true;
+    }
+  }
+
+  if (!changed) return;
+
+  const nextCache = {
+    version: WRITER_TEST_RUN_CACHE_VERSION,
+    account_id: cache.account_id,
+    prospect_id: cache.prospect_id,
+    updated_at: new Date().toISOString(),
+    entries
+  };
+  await mkdir(dirname(cache.path), { recursive: true });
+  await writeFile(cache.path, `${JSON.stringify(nextCache, null, 2)}\n`, "utf8");
+  cache.entries = entries;
+}
+
+function writerCacheEntryFromStep(step, { branchKey, generatedAt }) {
+  if (step?.kind !== "message") return null;
+  if (!step.key) return null;
+  if (!(step.body || step.text || step.subject)) return null;
+  if (step.status === "planned" || step.status === "unavailable" || step.status === "error") return null;
+
+  return compactObject({
+    branch: branchKey,
+    key: step.key,
+    stage: step.stage,
+    channel: step.channel,
+    platform: step.platform,
+    message_mode: step.message_mode,
+    subject: step.subject,
+    body: step.body,
+    text: step.text,
+    status: step.status,
+    generated_at: step.generated_at || generatedAt || new Date().toISOString(),
+    writer_engine: step?.metadata?.writer_engine,
+    target: step.target,
+    metadata: step.metadata
+  });
+}
+
+function writerCacheEntryKey(entry) {
+  return `${entry.branch}:${entry.key}`;
 }
 
 async function prospectsImport(args, context, { accountOverride } = {}) {
@@ -1102,14 +1357,73 @@ async function operatorOutcome(args, context, { accountOverride } = {}) {
 }
 
 async function analyticsProspects(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, analyticsOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
+  if (args[0] === "cohort-analysis") {
+    return analyticsProspectsCohortAnalysis(args.slice(1), context, { accountOverride });
+  }
+
+  const { values, positionals } = parseCommandArgs(args, analyticsProspectsOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_PROSPECTS_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await client.analyticsProspects(accountId, analyticsQuery(values));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsProspects(payload, context);
+}
+
+async function analyticsProspectsCohortAnalysis(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    weeks: { type: "string" },
+    window: { type: "string" },
+    motion: { type: "string" },
+    provenance: { type: "string" },
+    user: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE);
+
+  const weeks = normalizedCohortAnalysisWeeks(values.weeks);
+  const cohorts = weeklyCohorts({ weeks, now: currentDate(context) });
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const rows = [];
+
+  for (const cohort of cohorts) {
+    const payload = await client.analyticsProspects(accountId, compactObject({
+      window: values.window,
+      account_user_id: values.user,
+      motion_id: values.motion,
+      provenance: values.provenance,
+      cohort_start: cohort.start_date,
+      cohort_end: cohort.end_date
+    }));
+    rows.push(cohortAnalysisRow(payload, cohort));
+  }
+
+  const payload = {
+    kind: "prospect_cohort_analysis",
+    weeks,
+    window: values.window || "24h",
+    motion: rows.find((row) => row.motion)?.motion || motionPayload(values.motion),
+    provenance: rows.find((row) => row.provenance)?.provenance || provenancePayload(values.provenance),
+    account_user: rows.find((row) => row.account_user)?.account_user || null,
+    cohorts: rows
+  };
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsProspectCohortAnalysis(payload, context);
+}
+
+async function analyticsUsers(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsUsersOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_USERS_USAGE);
+  validateDatePair(values.start, values.end, "--start", "--end");
+  validateDatePair(values["cohort-start"], values["cohort-end"], "--cohort-start", "--cohort-end");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsUsers(accountId, analyticsUsersQuery(values));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsUsers(payload, context);
 }
 
 async function analyticsVisibility(args, context, { accountOverride } = {}) {
@@ -1260,11 +1574,159 @@ function analyticsOptions() {
   };
 }
 
+function analyticsProspectsOptions() {
+  return {
+    ...analyticsOptions(),
+    "cohort-start": { type: "string" },
+    "cohort-end": { type: "string" },
+    motion: { type: "string" },
+    provenance: { type: "string" }
+  };
+}
+
+function analyticsUsersOptions() {
+  return {
+    ...jsonOptions(),
+    user: { type: "string" },
+    window: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+    "cohort-start": { type: "string" },
+    "cohort-end": { type: "string" },
+    motion: { type: "string" },
+    provenance: { type: "string" },
+    platform: { type: "string" },
+    channel: { type: "string" }
+  };
+}
+
 function analyticsQuery(values) {
   return compactObject({
     window: values.window,
+    cohort_start: values["cohort-start"],
+    cohort_end: values["cohort-end"],
+    motion_id: values.motion,
+    provenance: values.provenance,
     account_user_id: values.user
   });
+}
+
+function analyticsUsersQuery(values) {
+  const hasDateRange = Boolean(values.start || values.end);
+  return compactObject({
+    account_user_id: values.user || "me",
+    window: hasDateRange ? undefined : (values.window || "30d"),
+    start_date: values.start,
+    end_date: values.end,
+    cohort_start: values["cohort-start"],
+    cohort_end: values["cohort-end"],
+    motion_id: values.motion,
+    provenance: values.provenance,
+    platform: values.platform || values.channel
+  });
+}
+
+function validateDatePair(start, end, startFlag, endFlag) {
+  if ((start && !end) || (!start && end)) {
+    throw new CommandError(`${startFlag} and ${endFlag} must be provided together.`);
+  }
+}
+
+function normalizedCohortAnalysisWeeks(rawValue) {
+  const weeks = Number.parseInt(rawValue || "4", 10);
+  if (!Number.isInteger(weeks) || weeks <= 0) {
+    throw new CommandError("--weeks must be a positive integer.");
+  }
+  if (weeks > 26) {
+    throw new CommandError("--weeks must be 26 or less.");
+  }
+
+  return weeks;
+}
+
+function currentDate(context) {
+  const raw = typeof context.now === "function" ? context.now() : context.now;
+  const date = raw instanceof Date ? raw : new Date(raw || Date.now());
+  if (Number.isNaN(date.getTime())) return utcDateOnly(new Date());
+
+  return utcDateOnly(date);
+}
+
+function weeklyCohorts({ weeks, now }) {
+  const currentWeekStart = startOfUtcWeek(now);
+  const rows = [];
+
+  for (let offset = weeks - 1; offset >= 0; offset -= 1) {
+    const start = addUtcDays(currentWeekStart, offset * -7);
+    const plannedEnd = addUtcDays(start, 6);
+    const end = plannedEnd > now ? now : plannedEnd;
+    rows.push({
+      start_date: isoDate(start),
+      end_date: isoDate(end)
+    });
+  }
+
+  return rows;
+}
+
+function startOfUtcWeek(date) {
+  const day = date.getUTCDay();
+  const mondayOffset = (day + 6) % 7;
+  return addUtcDays(date, -mondayOffset);
+}
+
+function utcDateOnly(date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addUtcDays(date, days) {
+  const next = new Date(date.getTime());
+  next.setUTCDate(next.getUTCDate() + days);
+  return utcDateOnly(next);
+}
+
+function isoDate(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function cohortAnalysisRow(payload, fallbackCohort) {
+  const cohort = payload?.cohort || fallbackCohort;
+  const stages = {};
+  const stageLabels = {};
+  for (const row of Array.isArray(payload?.queue_stages) ? payload.queue_stages : []) {
+    const key = String(row?.key || "").trim();
+    if (!key) continue;
+
+    stages[key] = row?.count || 0;
+    stageLabels[key] = row?.label || key;
+  }
+
+  return {
+    cohort,
+    label: `${display(cohort.start_date)} to ${display(cohort.end_date)}`,
+    total_count: payload?.cohort_prospects_count ?? payload?.prospects_added_count ?? 0,
+    motion: payload?.motion || null,
+    provenance: payload?.provenance || null,
+    account_user: payload?.account_user || null,
+    stages,
+    stage_labels: stageLabels
+  };
+}
+
+function motionPayload(motionId) {
+  if (!motionId) return null;
+
+  return { prefix_id: motionId, name: motionId };
+}
+
+function provenancePayload(provenance) {
+  if (!provenance) return null;
+
+  return {
+    key: provenance,
+    label: humanize(provenance),
+    field: "account_prospects.intake_source"
+  };
 }
 
 function compactObject(object) {
@@ -1585,10 +2047,16 @@ function renderBulkMutationResult(payload, context, { successLabel, zeroSuccessL
 function renderMotions(motions, context) {
   if (!Array.isArray(motions) || motions.length === 0) return writeLine(context.stdout, "No motions found.");
 
-  writeLine(context.stdout, "MOTION ID\tSTATUS\tKIND\tNAME");
-  for (const motion of motions) {
-    writeLine(context.stdout, `${display(motion.prefix_id)}\t${display(motion.status)}\t${display(motion.kind)}\t${display(motion.name)}`);
-  }
+  writeAlignedTable(context, ["MOTION ID", "STATUS", "KIND", "NAME"], motions.map(motionTableRow));
+}
+
+function motionTableRow(motion) {
+  return [
+    display(motion?.prefix_id),
+    display(motion?.status),
+    display(motion?.kind),
+    display(motion?.name)
+  ];
 }
 
 function renderMotion(motion, context) {
@@ -1773,7 +2241,7 @@ function renderProspectProfileMutation(payload, context, { action }) {
   if (profile.url) writeLine(context.stdout, `URL: ${profile.url}`);
 }
 
-function renderProspectSequencePreview(payload, context) {
+function renderProspectSequencePreview(payload, context, { title = "Sequence preview" } = {}) {
   const prospect = payload?.prospect || {};
   const report = payload?.report || {};
   const preview = report?.last_preview || {};
@@ -1782,6 +2250,7 @@ function renderProspectSequencePreview(payload, context) {
   const steps = Array.isArray(report?.steps) ? report.steps : [];
   const contextInfo = payload?.context || {};
 
+  writeLine(context.stdout, title);
   writeLine(context.stdout, `Prospect: ${display(prospect.display_name || selected.prospect_name)} (${display(prospect.prefix_id || selected.prospect_id)})`);
   if (contextInfo.source) writeLine(context.stdout, `Context: ${contextInfo.source}`);
   if (contextInfo.message) writeLine(context.stdout, contextInfo.message);
@@ -1802,21 +2271,176 @@ function renderProspectSequencePreview(payload, context) {
   writeLine(context.stdout, "");
   writeLine(context.stdout, "Sequence:");
 
-  steps.forEach((step, index) => {
-    const kind = display(step.kind).toUpperCase();
-    const stage = display(step.stage);
-    const channel = display(step.channel);
-    const timing = step?.timing?.mode === "scheduled" ? ` [scheduled ${display(step?.timing?.scheduled_for)}]` : "";
-    writeLine(context.stdout, `${index + 1}. ${kind} | ${stage} | ${channel}${timing}`);
+  steps.forEach((step, index) => renderSequenceStep(step, index, context));
+}
 
-    if (step.disposition) writeLine(context.stdout, `   Disposition: ${step.disposition}`);
-    if (step.transition_label) writeLine(context.stdout, `   Transition: ${step.transition_label}`);
-    if (step.rationale) writeLine(context.stdout, `   Why: ${step.rationale}`);
-    if (step.guidance) writeLine(context.stdout, `   Guidance: ${step.guidance}`);
-    if (step.body) writeLine(context.stdout, `   Body: ${step.body}`);
-    if (step.empty_body_reason) writeLine(context.stdout, `   Empty body reason: ${step.empty_body_reason}`);
-    if (step.missing_reason) writeLine(context.stdout, `   Missing reason: ${step.missing_reason}`);
-  });
+function renderWriterTestRun(payload, context) {
+  const prospect = payload?.prospect || {};
+  const branches = Array.isArray(payload?.branches) ? payload.branches : [];
+  const draftMode = payload?.meta?.draft_mode || "all";
+  const targetStep = payload?.meta?.target_step;
+
+  writeLine(context.stdout, "Writer campaign simulator");
+  writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  if (payload?.context?.source) writeLine(context.stdout, `Context: ${payload.context.source}`);
+  if (payload?.context?.message) writeLine(context.stdout, payload.context.message);
+  if (payload?.context?.motion_name) writeLine(context.stdout, `Motion: ${payload.context.motion_name}`);
+  if (payload?.context?.agent_name) writeLine(context.stdout, `Agent: ${payload.context.agent_name}`);
+  if (payload?.context?.offer_name) writeLine(context.stdout, `Offer: ${payload.context.offer_name}`);
+  writeLine(context.stdout, `Mode: ${display(draftMode)}`);
+  if (targetStep) writeLine(context.stdout, `Target step: ${display(targetStep)}`);
+  if (payload?.meta?.cache?.enabled) {
+    writeLine(context.stdout, `Cache: ${display(payload.meta.cache.path)}`);
+    writeLine(context.stdout, `Cached drafts sent: ${display(payload.meta.cache.sent_draft_count || 0)}`);
+  }
+  writeLine(context.stdout, `Start: ${isoDate(currentDate(context))}`);
+  writeLine(context.stdout, "DATE: step execution date; for WAIT rows, the wait clears on that date.");
+  writeLine(context.stdout, "Scenario: simulate the full path if the prospect does not reply.");
+  if (draftMode === "plan") {
+    writeLine(context.stdout, "Drafts are skipped; this run only plans the path and context.");
+  } else if (draftMode === "target") {
+    writeLine(context.stdout, "Only the target step is drafted; later steps are omitted.");
+  } else {
+    writeLine(context.stdout, "This can take a while because the writer drafts every message step.");
+  }
+
+  if (branches.length === 0) {
+    writeLine(context.stdout, "No simulator branches were generated.");
+    return;
+  }
+
+  for (const branch of branches) {
+    const steps = Array.isArray(branch.steps) ? branch.steps : [];
+    const summary = branch.summary || {};
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `${display(branch.label)} (${display(branch.key)})`);
+    if (summary.channel_sequence?.length) writeLine(context.stdout, `Channels: ${summary.channel_sequence.join(" -> ")}`);
+    if (summary.total_duration_days !== undefined) writeLine(context.stdout, `Duration days: ${summary.total_duration_days}`);
+    if (summary.terminal_disposition) writeLine(context.stdout, `Terminal disposition: ${summary.terminal_disposition}`);
+
+    if (steps.length === 0) {
+      writeLine(context.stdout, "No steps.");
+      continue;
+    }
+
+    renderWriterStepTable(steps, context);
+    if (draftMode === "target") renderWriterTargetDraft(branch, context);
+  }
+}
+
+function renderWriterStepTable(steps, context) {
+  writeLine(context.stdout, "#   DATE        DOW  TYPE  ACTION                                      CH       STATUS");
+  writeLine(context.stdout, "--  ----------  ---  ----  ------------------------------------------  -------  ---------");
+  steps.forEach((step, index) => renderWriterStepRow(step, index, context));
+}
+
+function renderWriterStepRow(step, index, context) {
+  const stepDate = writerStepDate(step, context);
+  const row = [
+    fixedWidth(index + 1, 2, { align: "right" }),
+    fixedWidth(stepDate, 10),
+    fixedWidth(writerStepDow(stepDate), 3),
+    fixedWidth(compactKindLabel(step.kind), 4),
+    fixedWidth(writerStepAction(step), 42),
+    fixedWidth(compactChannelLabel(step.channel), 7),
+    fixedWidth(display(step.status), 9)
+  ].join("  ");
+  writeLine(context.stdout, row);
+}
+
+function renderWriterTargetDraft(branch, context) {
+  const steps = Array.isArray(branch.steps) ? branch.steps : [];
+  const resolvedTargetStep = String(branch.resolved_target_step || "").trim();
+  const draftedStep = steps.find((step) => step?.kind === "message" && step?.key === resolvedTargetStep) ||
+    [...steps].reverse().find((step) => step?.kind === "message" && (step.body || step.text || step.subject));
+  if (!draftedStep) return;
+
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, `Drafted copy: ${display(draftedStep.stage)}${branch.resolved_target_step ? ` (${branch.resolved_target_step})` : ""}`);
+  const targetUrl = writerDraftTargetUrl(draftedStep);
+  if (targetUrl) writeLine(context.stdout, `Replying to: ${targetUrl}`);
+  if (draftedStep.subject) writeLine(context.stdout, `Subject: ${draftedStep.subject}`);
+  writeLine(context.stdout, display(draftedStep.body || draftedStep.text || draftedStep.empty_body_reason || ""));
+}
+
+function writerDraftTargetUrl(step) {
+  const target = step?.target || {};
+  return target.post_url || target.comment_url || target.url || null;
+}
+
+function writerStepDate(step, context) {
+  if (step?.timing?.mode === "scheduled") return dateOnlyLabel(step?.timing?.scheduled_for);
+  return String(display(step.kind)).toLowerCase() === "terminal" ? "after" : isoDate(currentDate(context));
+}
+
+function writerStepDow(dateLabel) {
+  const date = parseDateOnlyLabel(dateLabel);
+  return date ? DAY_OF_WEEK_LABELS[date.getUTCDay()] : "";
+}
+
+function dateOnlyLabel(value) {
+  const raw = String(display(value)).trim();
+  return raw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] || raw;
+}
+
+function parseDateOnlyLabel(value) {
+  const match = String(display(value)).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+}
+
+function writerStepAction(step) {
+  return display(step.stage || step.key);
+}
+
+function compactKindLabel(kind) {
+  const value = String(display(kind)).toLowerCase();
+  if (value === "message") return "MSG";
+  if (value === "action") return "ACT";
+  if (value === "event") return "EVT";
+  if (value === "terminal") return "END";
+  if (value === "wait") return "WAIT";
+  return display(kind).toUpperCase();
+}
+
+function compactChannelLabel(channel) {
+  const value = String(display(channel));
+  if (value === "LinkedIn") return "LI";
+  if (value === "LinkedIn InMail") return "InMail";
+  if (value === "Timeline") return "Wait";
+  if (value === "Disposition") return "Done";
+  return value;
+}
+
+function fixedWidth(value, width, options = {}) {
+  const text = truncateCliText(value, width);
+  return options.align === "right" ? text.padStart(width) : text.padEnd(width);
+}
+
+function truncateCliText(value, maxLength) {
+  const text = String(display(value)).replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function renderSequenceStep(step, index, context) {
+  const kind = display(step.kind).toUpperCase();
+  const stage = display(step.stage);
+  const channel = display(step.channel);
+  const timing = step?.timing?.mode === "scheduled" ? ` [scheduled ${display(step?.timing?.scheduled_for)}]` : "";
+  writeLine(context.stdout, `${index + 1}. ${kind} | ${stage} | ${channel}${timing}`);
+
+  if (step.disposition) writeLine(context.stdout, `   Disposition: ${step.disposition}`);
+  if (step.status) writeLine(context.stdout, `   Status: ${step.status}`);
+  if (step.transition_label) writeLine(context.stdout, `   Transition: ${step.transition_label}`);
+  if (step.rationale) writeLine(context.stdout, `   Why: ${step.rationale}`);
+  if (step.guidance) writeLine(context.stdout, `   Guidance: ${step.guidance}`);
+  if (step.subject) writeLine(context.stdout, `   Subject: ${step.subject}`);
+  if (step.body) writeLine(context.stdout, `   Body: ${step.body}`);
+  if (step.empty_body_reason) writeLine(context.stdout, `   Empty body reason: ${step.empty_body_reason}`);
+  if (step.missing_reason) writeLine(context.stdout, `   Missing reason: ${step.missing_reason}`);
 }
 
 function renderProspectSequenceExport(payload, context) {
@@ -1899,17 +2523,13 @@ function renderOperatorQueue(payload, context) {
     return;
   }
 
-  writeLine(context.stdout, "MOVE ID\tKIND\tPROSPECT\tMOTION\tNEXT ACTION");
-  for (const row of queue) {
-    writeLine(context.stdout, operatorRowLine(row));
-  }
+  writeOperatorRows(context, queue);
 }
 
 function renderOperatorNext(row, context) {
   if (!row) return writeLine(context.stdout, "No operator moves found.");
 
-  writeLine(context.stdout, "MOVE ID\tKIND\tPROSPECT\tMOTION\tNEXT ACTION");
-  writeLine(context.stdout, operatorRowLine(row));
+  writeOperatorRows(context, [row]);
 }
 
 function renderOperatorPlan(row, context) {
@@ -1981,11 +2601,72 @@ function renderOperatorOutcome(payload, context) {
 
 function renderAnalyticsProspects(payload, context) {
   writeLine(context.stdout, `Prospect analytics (${analyticsWindowLabel(payload)})`);
+  writeAnalyticsCohort(payload, context);
   writeAnalyticsScope(payload, context);
-  writeLine(context.stdout, `Prospects added: ${display(payload?.prospects_added_count, 0)}`);
+  if (payload?.cohort) {
+    writeLine(context.stdout, `Cohort prospects: ${display(payload?.cohort_prospects_count, payload?.prospects_added_count || 0)}`);
+  } else {
+    writeLine(context.stdout, `Prospects added: ${display(payload?.prospects_added_count, 0)}`);
+  }
   writeAnalyticsActionSummary(payload?.actions, context, "Actions");
   writeCountTable(context, "Action breakdown", payload?.actions?.breakdown, ["ACTION", "COUNT", "AUTOMATED", "AUTO %"], actionBreakdownRow);
-  writeCountTable(context, "Queue stages", payload?.queue_stages, ["STAGE", "COUNT"], countRow);
+  writeCountTable(context, payload?.cohort ? "Current cohort stages" : "Queue stages", payload?.queue_stages, ["STAGE", "COUNT"], countRow);
+}
+
+function renderMotionAnalytics(payload, context) {
+  writeLine(context.stdout, `Motion analytics (${analyticsWindowLabel(payload)})`);
+  writeAnalyticsMotion(payload, context);
+  if (payload?.motion?.created_at) writeLine(context.stdout, `Created: ${payload.motion.created_at}`);
+  writeLine(context.stdout, `Prospects produced: ${display(payload?.prospects_added_count, 0)}`);
+  writeCountTable(context, "Prospect cohorts by produced day", payload?.prospects_by_day, ["DATE", "PRODUCED", "ACTIVE", "ACTIVE %", "INACTIVE", "STAGES"], dailyProspectRow);
+}
+
+function renderAnalyticsProspectCohortAnalysis(payload, context) {
+  const cohorts = Array.isArray(payload?.cohorts) ? payload.cohorts : [];
+  writeLine(context.stdout, `Prospect cohort analysis (${display(payload?.weeks, cohorts.length)} weeks)`);
+  writeLine(context.stdout, `Activity window: ${display(payload?.window, "24h")}`);
+  writeLine(context.stdout, "Cohorts: account_prospects.created_at, calendar weeks, oldest first");
+  writeAnalyticsMotion(payload, context);
+  writeAnalyticsProvenance(payload, context);
+  if (payload?.account_user) {
+    writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
+  } else {
+    writeLine(context.stdout, "User: all account users");
+  }
+
+  if (cohorts.length === 0) {
+    writeLine(context.stdout, "No cohorts generated.");
+    return;
+  }
+
+  const stageColumns = cohortAnalysisStageColumns(cohorts);
+  const headers = ["COHORT", "TOTAL", ...stageColumns.map((column) => column.label)];
+  const rows = cohorts.map((row) => [
+    row.label,
+    row.total_count,
+    ...stageColumns.map((column) => row.stages?.[column.key] || 0)
+  ]);
+
+  writeLine(context.stdout, "");
+  writeAlignedTable(context, headers, rows, {
+    numericColumns: headers.map((_, index) => index > 0)
+  });
+}
+
+function renderAnalyticsUsers(payload, context) {
+  writeLine(context.stdout, `User analytics (${analyticsActivityLabel(payload)})`);
+  writeAnalyticsCohort(payload, context);
+  writeAnalyticsScope(payload, context);
+  writeAnalyticsPlatform(payload, context);
+
+  const summary = payload?.summary || {};
+  writeLine(context.stdout, `Actions: ${display(summary.total_count, 0)}`);
+  writeLine(context.stdout, `Performed by you: ${display(summary.performed_by_user_count, 0)} (${percentageLabel(summary.performed_by_user_percentage)})`);
+  writeLine(context.stdout, `Other humans: ${display(summary.performed_by_others_count, 0)} (${percentageLabel(summary.performed_by_others_percentage)})`);
+  writeLine(context.stdout, `Agent: ${display(summary.agentic_count, 0)} (${percentageLabel(summary.agentic_percentage)})`);
+  writeAnalyticsDailyActions(payload, context);
+  writeCountTable(context, "Action mix", payload?.action_mix, ["ACTION", "COUNT", "%"], mixRow);
+  writeCountTable(context, "Platform mix", payload?.platform_mix, ["PLATFORM", "COUNT", "%"], mixRow);
 }
 
 function renderAnalyticsVisibility(payload, context) {
@@ -2005,11 +2686,120 @@ function renderAnalyticsContent(payload, context) {
 }
 
 function writeAnalyticsScope(payload, context) {
+  writeAnalyticsMotion(payload, context);
+  writeAnalyticsProvenance(payload, context);
   if (payload?.account_user) {
     writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
   } else {
     writeLine(context.stdout, "User: all account users");
   }
+}
+
+function writeAnalyticsPlatform(payload, context) {
+  if (!payload?.platform) return;
+
+  const label = display(payload.platform.label, payload.platform.key);
+  const values = Array.isArray(payload.platform.values) ? payload.platform.values.filter(Boolean).join(", ") : display(payload.platform.key);
+  writeLine(context.stdout, `Platform: ${label} (${display(payload.platform.field, "events.platform")}: ${values})`);
+}
+
+function writeAnalyticsMotion(payload, context) {
+  if (!payload?.motion) return;
+
+  writeLine(context.stdout, `Motion: ${entityLabel(payload.motion)}`);
+}
+
+function writeAnalyticsProvenance(payload, context) {
+  if (!payload?.provenance) return;
+
+  writeLine(context.stdout, `Provenance: ${display(payload.provenance.label, payload.provenance.key)} (${display(payload.provenance.field, "account_prospects.intake_source")})`);
+}
+
+function writeAnalyticsCohort(payload, context) {
+  const cohort = payload?.cohort;
+  if (!cohort) return;
+
+  writeLine(context.stdout, `Cohort: ${display(cohort.start_date)} to ${display(cohort.end_date)} (${display(cohort.field, "account_prospects.created_at")})`);
+}
+
+function writeAnalyticsDailyActions(payload, context) {
+  const dailyRows = Array.isArray(payload?.daily_actions) ? payload.daily_actions : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Actions by day");
+  if (dailyRows.length === 0) return writeLine(context.stdout, "None");
+
+  const actionColumns = dailyActionColumns(dailyRows, payload?.action_mix);
+  const headers = ["DATE", "TOTAL", ...actionColumns.map((column) => column.label)];
+  const rows = dailyRows.map((row) => [
+    row?.date,
+    row?.total_count || 0,
+    ...actionColumns.map((column) => row?.actions?.[column.key] || 0)
+  ]);
+
+  writeAlignedTable(context, headers, rows, {
+    numericColumns: headers.map((_, index) => index > 0)
+  });
+}
+
+function dailyActionColumns(dailyRows, actionMix) {
+  const labels = {};
+  const keys = [];
+  for (const row of Array.isArray(actionMix) ? actionMix : []) {
+    const key = String(row?.key || "").trim();
+    if (!key) continue;
+    if (!keys.includes(key)) keys.push(key);
+    labels[key] = row?.label || key;
+  }
+
+  for (const row of dailyRows) {
+    for (const key of Object.keys(row?.actions || {})) {
+      if (!keys.includes(key)) keys.push(key);
+      labels[key] ||= key;
+    }
+  }
+
+  return keys.slice(0, 6).map((key) => ({ key, label: compactActionLabel(key, labels[key] || key) }));
+}
+
+function compactActionLabel(key, label) {
+  const labels = {
+    "action.profile.connect_request_sent": "Connect sent",
+    "action.profile.withdraw_connection": "Withdraw",
+    "action.profile.follow": "Follow",
+    "action.profile.view": "View",
+    "action.profile.in_mail_message": "InMail",
+    "action.post.comment": "Comment",
+    "action.post.like": "Like",
+    "messaging.message_sent": "Message",
+    "messaging.email_sent": "Email",
+    "action.meeting.requested": "Meeting req",
+    "action.prospect.nurtured": "Nurtured",
+    "action.prospect.motion_completed_no_outcome": "No outcome"
+  };
+  if (labels[key]) return labels[key];
+
+  const words = String(label || key).split(/\s+/).filter(Boolean);
+  return words.length <= 2 ? words.join(" ") : words.slice(0, 2).join(" ");
+}
+
+function cohortAnalysisStageColumns(cohorts) {
+  const labels = {};
+  const keys = [];
+  for (const cohort of cohorts) {
+    for (const [key, label] of Object.entries(cohort.stage_labels || {})) {
+      if (!keys.includes(key)) keys.push(key);
+      labels[key] ||= label;
+    }
+  }
+
+  return keys
+    .sort((left, right) => cohortStageRank(left) - cohortStageRank(right) || left.localeCompare(right))
+    .map((key) => ({ key, label: labels[key] || key }));
+}
+
+function cohortStageRank(key) {
+  const index = COHORT_STAGE_ORDER.indexOf(String(key));
+  return index === -1 ? COHORT_STAGE_ORDER.length : index;
 }
 
 function writeAnalyticsActionSummary(actions, context, label) {
@@ -2025,8 +2815,32 @@ function writeCountTable(context, title, rows, headers, mapRow) {
   writeLine(context.stdout, title);
   if (list.length === 0) return writeLine(context.stdout, "None");
 
-  writeLine(context.stdout, headers.join("\t"));
-  for (const row of list) writeLine(context.stdout, mapRow(row).join("\t"));
+  writeAlignedTable(context, headers, list.map(mapRow));
+}
+
+function writeAlignedTable(context, headers, rows, options = {}) {
+  const tableRows = [headers, ...rows].map((row) => row.map((value) => display(value)));
+  const widths = headers.map((_, index) => Math.max(...tableRows.map((row) => visibleLength(row[index] || ""))));
+  const numericColumns = options.numericColumns || headers.map((header, index) => index > 0 && numericHeader(header));
+
+  writeLine(context.stdout, formatAlignedRow(headers, widths, numericColumns));
+  writeLine(context.stdout, widths.map((width) => "-".repeat(width)).join("  "));
+  for (const row of rows) writeLine(context.stdout, formatAlignedRow(row, widths, numericColumns));
+}
+
+function numericHeader(header) {
+  return ["COUNT", "AUTOMATED", "AUTO %", "TOTAL", "%", "PRODUCED", "ACTIVE", "ACTIVE %", "INACTIVE"].includes(String(header || "").toUpperCase());
+}
+
+function formatAlignedRow(row, widths, numericColumns) {
+  return row.map((value, index) => {
+    const text = String(display(value));
+    return numericColumns[index] ? text.padStart(widths[index]) : text.padEnd(widths[index]);
+  }).join("  ");
+}
+
+function visibleLength(value) {
+  return String(display(value)).length;
 }
 
 function actionBreakdownRow(row) {
@@ -2045,6 +2859,37 @@ function countRow(row) {
   ];
 }
 
+function dailyProspectRow(row) {
+  const count = Number(row?.count || 0);
+  return [
+    display(row?.date),
+    countDash(row?.count),
+    countDash(row?.active_count),
+    count > 0 ? percentageLabel(row?.active_percentage) : "-",
+    countDash(row?.inactive_count),
+    stageSummary(row?.queue_stages)
+  ];
+}
+
+function countDash(value) {
+  return Number(value || 0) === 0 ? "-" : display(value, 0);
+}
+
+function stageSummary(rows) {
+  const stages = Array.isArray(rows) ? rows.filter((row) => Number(row?.count || 0) > 0) : [];
+  if (stages.length === 0) return "-";
+
+  return stages.map((row) => `${display(row?.label || row?.key)} ${display(row?.count, 0)}`).join(" | ");
+}
+
+function mixRow(row) {
+  return [
+    display(row?.label || row?.key),
+    display(row?.count, 0),
+    percentageLabel(row?.percentage)
+  ];
+}
+
 function analyticsWindowLabel(payload) {
   const window = payload?.window || {};
   const key = display(window.key, "24h");
@@ -2053,18 +2898,67 @@ function analyticsWindowLabel(payload) {
   return `${key}: ${window.started_at} to ${window.ended_at}`;
 }
 
+function analyticsActivityLabel(payload) {
+  const range = payload?.date_range;
+  if (range?.start_date && range?.end_date) {
+    return `${range.start_date} to ${range.end_date}`;
+  }
+
+  return analyticsWindowLabel(payload);
+}
+
 function percentageLabel(value) {
   return value === undefined || value === null || value === "" ? "n/a" : `${value}%`;
 }
 
-function operatorRowLine(row) {
+function humanize(value) {
+  const words = String(value || "").trim().replaceAll("-", "_").split("_").filter(Boolean);
+  if (words.length === 0) return "-";
+
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+function writeOperatorRows(context, rows) {
+  writeAlignedTable(context, ["MOVE ID", "WORK TYPE", "SUBJECT", "MOTION", "NEXT ACTION"], rows.map(operatorTableRow));
+}
+
+function operatorTableRow(row) {
   return [
     display(row?.id),
-    display(row?.opportunity_kind),
-    display(row?.prospect?.display_name || row?.prospect?.name || row?.profile?.display_name),
-    display(row?.motion?.name),
+    operatorWorkTypeLabel(row),
+    operatorSubjectLabel(row),
+    operatorMotionLabel(row),
     display(nextActionLabel(row))
-  ].join("\t");
+  ];
+}
+
+function operatorWorkTypeLabel(row) {
+  return humanize(row?.opportunity_kind || row?.source_kind);
+}
+
+function operatorSubjectLabel(row) {
+  return display(
+    row?.prospect?.display_name ||
+      row?.prospect?.name ||
+      row?.profile?.display_name ||
+      row?.profile?.username ||
+      postLabel(row?.post) ||
+      row?.display_name ||
+      row?.name
+  );
+}
+
+function operatorMotionLabel(row) {
+  return display(row?.motion?.name || row?.motion?.display_name || row?.motion?.prefix_id || row?.motion?.id);
+}
+
+function postLabel(post) {
+  if (!post) return "";
+
+  const body = String(post.body || "").trim().replace(/\s+/g, " ");
+  if (body) return body.length > 48 ? `${body.slice(0, 45)}...` : body;
+
+  return post.url || (post.id ? `Post ${post.id}` : "");
 }
 
 function nextActionLabel(source) {
@@ -2329,65 +3223,77 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti <command> [options]",
     "",
-    "Start here for local agents:",
-    "  audienti help agent-workflows",
+    "Start:",
+    "  audienti auth token <token>         Save an API token",
+    "  audienti accounts list             See accounts available to this token",
+    "  audienti accounts select <acct_id>  Use one account by default",
+    "  audienti help agent-workflows       Common agent/operator paths",
     "",
-    "Implemented commands:",
-    "  audienti auth token <token> [--host <url>]",
-    "  audienti auth status",
-    "  audienti auth logout",
-    "  audienti config list [--json]",
-    "  audienti accounts list [--json]",
-    "  audienti accounts select <acct_id>",
-    "  audienti users list [--json]",
-    "  audienti offers list [--json]",
-    "  audienti offers create --name <text> [--json]",
-    "  audienti icps list [--json]",
-    "  audienti icps create (--name <text> | --payload <file.json>) [--json]",
-    "  audienti companies search --query <text> [--json]",
-    "  audienti lists list [--json]",
-    "  audienti lists create --name <text> [--json]",
-    "  audienti lists show <list_id> [--json]",
-    "  audienti lists update <list_id> [--json]",
-    "  audienti lists delete <list_id> --confirm <yes|true|Y|y> [--json]",
-    "  audienti lists prospects <list_id> [--json]",
-    "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
-    "  audienti lists remove-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
-    "  audienti motions list [--json]",
-    "  audienti motions show <motn_id> [--json]",
-    "  audienti motions status <motn_id> [--json]",
-    "  audienti motions prospects <motn_id> [--json]",
-    "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
-    "  audienti motions create --payload <file.json> [--json]",
-    "  audienti prospects list [--json]",
-    "  audienti prospects show <prsp_id> [--json]",
-    "  audienti prospects timeline <prsp_id> [--json]",
-    "  audienti prospects message-types <prsp_id> [--json]",
-    "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
-    "  audienti prospects add-note <prsp_id> --message <text> [--json]",
-    "  audienti prospects add-steer <prsp_id> --message <text> [--json]",
-    "  audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json]",
-    "  audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json]",
-    "  audienti prospects sequence-preview <prsp_id> [--json]",
-    "  audienti prospects sequence-export <prsp_id> [--csv]",
-    "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
-    "  audienti prospects import-status <primp_id> [--json]",
-    "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
-    "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
-    "  audienti operator queue [--json]",
-    "  audienti operator outcome <row_id> --payload <file.json> [--json]",
-    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
-    "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
-    "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "Work areas:",
+    "  Setup & identity",
+    "    audienti auth status",
+    "    audienti config list",
+    "    audienti users list",
     "",
-    "Planned submit-shape help topics:",
-    "  audienti prospects disposition help",
+    "  Motions / plays",
+    "    audienti motions list",
+    "    audienti motions show <motn_id>",
+    "    audienti motions analytics <motn_id>",
+    "    audienti motions prospects <motn_id>",
+    "    audienti motions create --payload <file.json>",
+    "    Tip: `plays` is accepted anywhere `motions` is accepted.",
+    "",
+    "  Prospects",
+    "    audienti prospects list [filters]",
+    "    audienti prospects show <prsp_id>",
+    "    audienti prospects timeline <prsp_id>",
+    "    audienti prospects import <linkedin_url> [--motion <motn_id>]",
+    "    audienti prospects add-note <prsp_id> --message <text>",
+    "    audienti prospects add-profile <prsp_id> --url <profile_url|email|phone>",
+    "",
+    "  Lists & targeting inputs",
+    "    audienti lists list",
+    "    audienti lists prospects <list_id>",
+    "    audienti offers list",
+    "    audienti icps list",
+    "    audienti companies search --query <text>",
+    "",
+    "  Writer",
+    "    audienti writer test-run <prsp_id>",
+    "    audienti prospects write <prsp_id> --type <surface_key>",
+    "    audienti prospects sequence-export <prsp_id>",
+    "",
+    "  Operator queue",
+    "    audienti operator next --plan",
+    "    audienti operator next --done --note <text>",
+    "    audienti operator queue",
+    "",
+    "  Analytics",
+    "    audienti analytics prospects --window 24h",
+    "    audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>",
+    "    audienti analytics users --user me --window 30d",
+    "    audienti analytics visibility --window 24h --user me",
+    "    audienti analytics content --window week",
+    "",
+    "  Utilities",
+    "    audienti tools get email --url <linkedin_url>",
+    "    audienti tools get phone --url <linkedin_url>",
+    "",
+    "Common flows:",
+    "  Work the next move:  audienti operator next --plan",
+    "  Inspect a prospect:  audienti prospects show <prsp_id> --json",
+    "  Preview a campaign:  audienti writer test-run <prsp_id>",
+    "  Analyze one motion:  audienti motions analytics <motn_id>",
+    "  Audit your work:     audienti analytics users --user me --window 30d",
     "",
     "Global options:",
     "  --account <acct_id>  Use an account for one command without saving it",
     "  --help, -h           Show help",
     "",
-    "Run `audienti <command> help` for accepted options, examples, and payload shapes."
+    "More help:",
+    "  audienti <area> help            Example: audienti prospects help",
+    "  audienti <area> <command> help  Example: audienti analytics prospects help",
+    "  Use --json when another program or agent will consume the output."
   ].join("\n")],
 
   ["auth", [
@@ -2903,6 +3809,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions list [--json]",
     "  audienti motions show <motn_id> [--json]",
     "  audienti motions status <motn_id> [--json]",
+    "  audienti motions analytics <motn_id> [--window 30d] [--json]",
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
@@ -2969,6 +3876,27 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/motions/:id/status.json"
+  ].join("\n")],
+
+  ["motions analytics", [
+    "Usage:",
+    `  ${MOTIONS_ANALYTICS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show whether one motion is producing prospect output by day.",
+    "",
+    "Options:",
+    "  --window <w>  AccountProspect.created_at window to inspect. Defaults to 30d. Maximum 90d.",
+    "",
+    "Output shape:",
+    "  motion: selected motion/play, including created_at",
+    "  prospects_added_count: prospects produced inside the window",
+    "  prospects_by_day[]: date, count, active/inactive counts, and current queue_stages for that produced-day cohort",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/prospects.json?motion_id=:motion_id"
   ].join("\n")],
 
   ["motions prospects", [
@@ -3358,9 +4286,54 @@ const HELP_TOPICS = new Map([
     "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_preview.json"
   ].join("\n")],
 
+  ["writer", [
+    "Usage:",
+    `  ${WRITER_TEST_RUN_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Run a writer campaign test for one prospect: resolve their current context, simulate the full no-reply path, and draft each message step.",
+    "",
+    "Commands:",
+    "  audienti writer test-run <prsp_id>",
+    "",
+    "Alias:",
+    "  audienti writers test-run <prsp_id>"
+  ].join("\n")],
+
+  ["writer test-run", [
+    "Usage:",
+    `  ${WRITER_TEST_RUN_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Run the prospect-scoped writer test run for a single prospect.",
+    "",
+    "Behavior:",
+    "  Uses the same Prospects::SequencePreview simulator as the app, resolves the prospect's motion/agent/ICP/offer context, runs no-reply branches, and returns the full campaign path with actions, waits, channel changes, drafted message bodies, and terminal disposition.",
+    "",
+    "Options:",
+    "  --mode <mode>    report drafts every message, plan skips drafting, step drafts one selected step",
+    "  --branch <branch>  Optional branch filter: both | no-accept | accepted",
+    "  --step <step_key|row_number>  Required with --mode step. Row numbers come from the # column.",
+    "  --no-cache       Plan/step modes ignore locally cached simulator drafts",
+    "  --clear-cache    Plan/step modes clear locally cached simulator drafts before running",
+    "",
+    "Output shape:",
+    "  branches[].key: no_accept | accepted",
+    "  branches[].steps[]: ordered wait/action/message/terminal steps for that simulated path",
+    "  branches[].steps[].body: draft copy for message steps when the writer can generate one",
+    "  branches[].summary: channel sequence, touch counts, duration, terminal disposition",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_export.json"
+  ].join("\n")],
+
   ["prospects sequence-export", [
     "Usage:",
-    "  audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--angle-index <n>] [--account <acct_id>]",
+    "  audienti prospects sequence-export <prsp_id> [--json|--csv] [--branch <both|no-accept|accepted>] [--draft-mode <all|plan|target>] [--target-step <step_key|row_number>] [--angle-index <n>] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
@@ -3371,6 +4344,11 @@ const HELP_TOPICS = new Map([
     "  both: default. Runs no_accept and accepted branches",
     "  no-accept: no reply and no accepted connection request",
     "  accepted: connection request accepted, then no reply otherwise",
+    "",
+    "Draft modes:",
+    "  all: default. Draft every message step",
+    "  plan: build the timeline without drafting message bodies",
+    "  target: draft only --target-step and return the branch prefix through that step. Row numbers use rows[].step_number.",
     "",
     "Output shape:",
     "  rows[].prospect_id: prsp_",
@@ -3590,7 +4568,9 @@ const HELP_TOPICS = new Map([
 
   ["analytics", [
     "Usage:",
-    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--platform <linkedin|email|gmail>] [--json]",
     "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics visops [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
@@ -3599,23 +4579,56 @@ const HELP_TOPICS = new Map([
     "",
     "Window:",
     "  --window <24h|7d|1w|day|week>",
-    "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. Email/name partials are accepted when they match exactly one account user.",
+    "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  For user analytics, select the events.created_at activity range instead of --window.",
+    "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort while --window or --start/--end selects the activity period.",
+    "  --motion <motn_id>  For prospect and user analytics, filter AccountProspect.motion_id to one motion/play.",
+    "  --provenance <source>  Optional lower-level AccountProspect.intake_source filter.",
+    "  --platform <linkedin|email|gmail>  For user analytics, filter events.platform. --channel is accepted as an alias.",
+    "  cohort-analysis loops over recent weekly AccountProspect.created_at cohorts and compares their current stages.",
+    "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. For prospect analytics, this means prospects assigned to that account user. Email/name partials are accepted when they match exactly one account user.",
     "",
     "Output:",
-    "  Account-scoped analytics for prospects, visibility engagement, and ContentOps publishing."
+    "  Account-scoped analytics for prospects, users, visibility engagement, and ContentOps publishing."
   ].join("\n")],
 
   ["analytics prospects", [
     "Usage:",
-    "  audienti analytics prospects [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
     "Output shape:",
-    "  prospects_added_count: account prospects added in the window",
+    "  window: activity/event period for actions",
+    "  cohort: selected AccountProspect.created_at cohort when cohort dates are provided",
+    "  motion: selected motion/play when --motion is provided",
+    "  provenance: selected AccountProspect.intake_source when --provenance is provided",
+    "  prospects_added_count: account prospects added in the window, or cohort size when cohort dates are provided",
+    "  cohort_prospects_count: selected AccountProspect.created_at cohort size when cohort dates are provided",
     "  account_user: selected account user when --user is provided, otherwise null",
-    "  actions: outbound action totals, type breakdown, and automated percentage",
-    "  queue_stages[]: current account prospect stage counts",
+    "  --user filters AccountProspect.assigned_to_account_user_id, so `--user me` reports prospects assigned to you",
+    "  actions: outbound action totals in the window, narrowed to cohort prospects when cohort dates are provided",
+    "  queue_stages[]: current account prospect stage counts, narrowed to the selected cohort when cohort dates are provided",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/prospects.json"
+  ].join("\n")],
+
+  ["analytics prospects cohort-analysis", [
+    "Usage:",
+    `  ${ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Calls the prospect analytics endpoint once per weekly AccountProspect.created_at cohort, then renders current pipeline-stage counts side by side so older cohorts can be compared against newer cohorts.",
+    "",
+    "Options:",
+    "  --weeks <n>   Number of calendar-week cohorts to inspect. Defaults to 4. Maximum 26.",
+    "  --window <w>  Activity window passed through to each analytics call. Defaults to 24h.",
+    "  --motion <motn_id>  Optional motion/play filter.",
+    "  --provenance <source>  Optional AccountProspect.intake_source filter.",
+    "  --user <id>   Optional account-user filter.",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/analytics/prospects.json"
@@ -3626,6 +4639,43 @@ const HELP_TOPICS = new Map([
     "  audienti analytics prospect [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
     "",
     "Alias for `audienti analytics prospects`."
+  ].join("\n")],
+
+  ["analytics users", [
+    "Usage:",
+    `  ${ANALYTICS_USERS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Audit one account user's outbound action history with the same actor semantics used by the Operations user analytics page.",
+    "",
+    "Options:",
+    "  --user <account_user_id|email|name|me>  Defaults to me.",
+    "  --window <w>                            Activity window. Defaults to 30d when --start/--end are not provided.",
+    "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  Explicit events.created_at activity range.",
+    "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Optional AccountProspect.created_at cohort filter.",
+    "  --motion <motn_id>                      Optional motion/play filter.",
+    "  --provenance <source>                   Optional AccountProspect.intake_source filter.",
+    "  --platform <linkedin|email|gmail>        Optional events.platform filter. `email` includes email and gmail rows; --channel is an alias.",
+    "",
+    "Output shape:",
+    "  account_user: selected account user",
+    "  summary: performed-by-user totals and performed-by-others comparison",
+    "  daily_actions[]: action counts by events.created_at date",
+    "  action_mix[]: action type counts and percentages",
+    "  platform: selected platform/channel filter when --platform or --channel is provided",
+    "  platform_mix[]: platform counts and percentages",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/users.json"
+  ].join("\n")],
+
+  ["analytics user", [
+    "Usage:",
+    "  audienti analytics user [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--json] [--account <acct_id>]",
+    "",
+    "Alias for `audienti analytics users`."
   ].join("\n")],
 
   ["analytics visibility", [
@@ -3703,6 +4753,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects report-bad-profile <prsp_id> <prof_id>",
     "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
     "  audienti prospects sequence-preview <prsp_id>",
+    "  audienti writer test-run <prsp_id>",
     "  audienti prospects sequence-export <prsp_id> --csv",
     "",
     "5. Attach existing prospects without re-importing",
@@ -3717,6 +4768,7 @@ const HELP_TOPICS = new Map([
     "",
     "7. Inspect account analytics",
     "  audienti analytics prospects --window 24h",
+    "  audienti analytics users --user me --window 30d",
     "  audienti analytics visibility --window 24h --user me",
     "  audienti analytics content --window week",
     "",

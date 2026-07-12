@@ -4,6 +4,22 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-07-12
+
+### Added
+
+- Add `audienti writer test-run <prsp_id>` for a single-prospect campaign preview with the no-reply path, planned actions, channel changes, and drafted messages, plus `--mode plan` and `--mode step --step <step_key|row_number>` for fast simulator and targeted writer-debug runs.
+- Add `audienti analytics prospects --cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD` to inspect prospects by the `AccountProspect.created_at` cohort while keeping `--window` for activity counts.
+- Add `audienti analytics prospects cohort-analysis --weeks <n>` to compare recent weekly prospect cohorts by current pipeline-stage counts.
+- Add `--motion <motn_id>` to prospect analytics so cohorts can be narrowed to one motion/play.
+- Add `--provenance <source>` to prospect analytics for lower-level intake source filters.
+- Add `audienti analytics users --user me` for account-user action audit analytics with date-range, cohort, motion, and provenance filters.
+- Add `audienti motions analytics <motn_id>` to inspect one motion's produced-day prospect cohorts, current active/inactive mix, and funnel stages from `AccountProspect.created_at`.
+
+### Changed
+
+- Group root help by work area and common workflow so `audienti help` is easier to scan.
+
 ## [0.1.5] - 2026-07-11
 
 ### Added
