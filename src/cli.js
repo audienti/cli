@@ -1113,7 +1113,7 @@ function writerCachedDraftsForRequest(cache, branchFilter) {
   const branchKeys = writerRequestedBranchKeys(branchFilter);
   return Object.values(cache.entries || {})
     .filter((entry) => branchKeys.includes(entry.branch))
-    .filter((entry) => entry.key && (entry.body || entry.text || entry.subject))
+    .filter((entry) => entry.key && (entry.body || entry.text || entry.subject || writerCacheQualityFailure(entry)))
     .map((entry) => compactObject({
       branch: entry.branch,
       key: entry.key,
@@ -1125,6 +1125,9 @@ function writerCachedDraftsForRequest(cache, branchFilter) {
       body: entry.body,
       text: entry.text,
       status: entry.status,
+      quality_codes: entry.quality_codes,
+      blank_reason: entry.blank_reason,
+      writer_path: entry.writer_path,
       generated_at: entry.generated_at,
       writer_engine: entry.writer_engine,
       target: entry.target,
@@ -1187,7 +1190,7 @@ async function persistWriterDraftsFromPayload(context, { cache, payload }) {
 function writerCacheEntryFromStep(step, { branchKey, generatedAt }) {
   if (step?.kind !== "message") return null;
   if (!step.key) return null;
-  if (!(step.body || step.text || step.subject)) return null;
+  if (!(step.body || step.text || step.subject || writerCacheQualityFailure(step))) return null;
   if (step.status === "planned" || step.status === "unavailable" || step.status === "error") return null;
 
   return compactObject({
@@ -1201,8 +1204,11 @@ function writerCacheEntryFromStep(step, { branchKey, generatedAt }) {
     body: step.body,
     text: step.text,
     status: step.status,
+    quality_codes: Array.isArray(step.quality_codes) ? step.quality_codes.filter(Boolean) : undefined,
+    blank_reason: step.blank_reason,
+    writer_path: step.writer_path,
     generated_at: step.generated_at || generatedAt || new Date().toISOString(),
-    writer_engine: step?.metadata?.writer_engine,
+    writer_engine: step.writer_engine || step?.metadata?.writer_engine,
     target: step.target,
     metadata: step.metadata
   });
@@ -1210,6 +1216,10 @@ function writerCacheEntryFromStep(step, { branchKey, generatedAt }) {
 
 function writerCacheEntryKey(entry) {
   return `${entry.branch}:${entry.key}`;
+}
+
+function writerCacheQualityFailure(entry) {
+  return String(entry?.status || "") === "quality_failure";
 }
 
 async function prospectsImport(args, context, { accountOverride } = {}) {
@@ -2343,7 +2353,7 @@ function renderWriterStepRow(step, index, context) {
     fixedWidth(compactKindLabel(step.kind), 4),
     fixedWidth(writerStepAction(step), 42),
     fixedWidth(compactChannelLabel(step.channel), 7),
-    fixedWidth(display(step.status), 9)
+    fixedWidth(compactWriterStatusLabel(step.status), 9)
   ].join("  ");
   writeLine(context.stdout, row);
 }
@@ -2359,8 +2369,21 @@ function renderWriterTargetDraft(branch, context) {
   writeLine(context.stdout, `Drafted copy: ${display(draftedStep.stage)}${branch.resolved_target_step ? ` (${branch.resolved_target_step})` : ""}`);
   const targetUrl = writerDraftTargetUrl(draftedStep);
   if (targetUrl) writeLine(context.stdout, `Replying to: ${targetUrl}`);
+  if (draftedStep.status && draftedStep.status !== "success") writeLine(context.stdout, `Status: ${draftedStep.status}`);
+  if (String(draftedStep.status || "") === "quality_failure") {
+    const qualityCodes = Array.isArray(draftedStep.quality_codes) ? draftedStep.quality_codes.filter(Boolean) : [];
+    if (qualityCodes.length) writeLine(context.stdout, `Quality failure: ${qualityCodes.join(", ")}`);
+    if (draftedStep.blank_reason) writeLine(context.stdout, `Blank reason: ${draftedStep.blank_reason}`);
+    if (draftedStep.writer_path) writeLine(context.stdout, `Writer path: ${draftedStep.writer_path}`);
+    if (draftedStep.writer_engine) writeLine(context.stdout, `Writer engine: ${draftedStep.writer_engine}`);
+  }
+  for (const warning of Array.isArray(draftedStep.warnings) ? draftedStep.warnings : []) {
+    if (warning) writeLine(context.stdout, `Warning: ${warning}`);
+  }
+  if (draftedStep.missing_reason) writeLine(context.stdout, `Missing reason: ${draftedStep.missing_reason}`);
   if (draftedStep.subject) writeLine(context.stdout, `Subject: ${draftedStep.subject}`);
-  writeLine(context.stdout, display(draftedStep.body || draftedStep.text || draftedStep.empty_body_reason || ""));
+  const body = draftedStep.body || draftedStep.text || draftedStep.empty_body_reason;
+  writeLine(context.stdout, display(body || "No draft body returned."));
 }
 
 function writerDraftTargetUrl(step) {
@@ -2411,6 +2434,12 @@ function compactChannelLabel(channel) {
   if (value === "LinkedIn InMail") return "InMail";
   if (value === "Timeline") return "Wait";
   if (value === "Disposition") return "Done";
+  return value;
+}
+
+function compactWriterStatusLabel(status) {
+  const value = String(display(status));
+  if (value === "quality_failure") return "quality";
   return value;
 }
 

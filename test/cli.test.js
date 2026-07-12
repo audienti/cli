@@ -3233,7 +3233,8 @@ test("writer test-run step mode renders the resolved target draft", async () => 
       "--branch",
       "no-accept",
       "--step",
-      "connection_request"
+      "connection_request",
+      "--no-cache"
     ], {
       env,
       fetch,
@@ -3245,6 +3246,164 @@ test("writer test-run step mode renders the resolved target draft", async () => 
     assert.match(stdout.output, /Drafted copy: Connection request \(connection_request\)/);
     assert.match(stdout.output, /Blank invite by design/);
     assert.doesNotMatch(stdout.output, /Drafted copy: Public comment/);
+  });
+});
+
+test("writer test-run step mode renders target draft errors with warnings", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        branches: "no-accept",
+        draft_mode: "target",
+        target_step: "connection_request"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        branches: [{
+          key: "no_accept",
+          label: "No accept / no reply",
+          resolved_target_step: "connection_request",
+          summary: {
+            channel_sequence: ["LinkedIn"]
+          },
+          steps: [
+            {
+              kind: "message",
+              key: "connection_request",
+              stage: "Connection request",
+              channel: "LinkedIn",
+              status: "error",
+              body: "",
+              warnings: ["Incorrect API key provided."]
+            }
+          ]
+        }],
+        meta: {
+          draft_mode: "target",
+          target_step: "connection_request"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "writer",
+      "test-run",
+      "prsp_one",
+      "--mode",
+      "step",
+      "--branch",
+      "no-accept",
+      "--step",
+      "connection_request",
+      "--no-cache"
+    ], {
+      env,
+      fetch,
+      stdout,
+      now: () => new Date("2026-07-12T12:00:00Z")
+    });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Connection request\s+LI\s+error/);
+    assert.match(stdout.output, /Drafted copy: Connection request \(connection_request\)/);
+    assert.match(stdout.output, /Status: error/);
+    assert.match(stdout.output, /Warning: Incorrect API key provided\./);
+    assert.match(stdout.output, /No draft body returned\./);
+  });
+});
+
+test("writer test-run step mode renders target quality failure reasons", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        branches: "no-accept",
+        draft_mode: "target",
+        target_step: "connection_request"
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        branches: [{
+          key: "no_accept",
+          label: "No accept / no reply",
+          resolved_target_step: "connection_request",
+          summary: {
+            channel_sequence: ["LinkedIn"]
+          },
+          steps: [
+            {
+              kind: "message",
+              key: "connection_request",
+              stage: "Connection request",
+              channel: "LinkedIn",
+              status: "quality_failure",
+              body: "Draft that failed quality",
+              text: "Draft that failed quality",
+              quality_codes: ["connection_request_too_many_sentences"],
+              blank_reason: "Connection request had too many sentences.",
+              writer_path: "connect_request.specialized",
+              writer_engine: "connection_request_llm_v1"
+            }
+          ]
+        }],
+        meta: {
+          draft_mode: "target",
+          target_step: "connection_request"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "writer",
+      "test-run",
+      "prsp_one",
+      "--mode",
+      "step",
+      "--branch",
+      "no-accept",
+      "--step",
+      "connection_request",
+      "--no-cache"
+    ], {
+      env,
+      fetch,
+      stdout,
+      now: () => new Date("2026-07-12T12:00:00Z")
+    });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Connection request\s+LI\s+quality/);
+    assert.match(stdout.output, /Status: quality_failure/);
+    assert.match(stdout.output, /Quality failure: connection_request_too_many_sentences/);
+    assert.match(stdout.output, /Blank reason: Connection request had too many sentences\./);
+    assert.match(stdout.output, /Writer path: connect_request\.specialized/);
+    assert.match(stdout.output, /Writer engine: connection_request_llm_v1/);
+    assert.match(stdout.output, /Draft that failed quality/);
   });
 });
 
@@ -3364,6 +3523,115 @@ test("writer test-run step mode sends cached prior drafts for simulator context"
     assert.match(stdout.output, /Connection request\s+LI\s+cached/);
     assert.match(stdout.output, /Drafted copy: Voicemail \(pending_request_inmail_voicemail\)/);
     assert.match(stdout.output, /Voicemail script based on prior messages/);
+  });
+});
+
+test("writer test-run step mode sends cached quality failures so the target can retry", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    const cacheDir = join(root, "writer-cache");
+    env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR = cacheDir;
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(join(cacheDir, "acct_one-prsp_one.json"), `${JSON.stringify({
+      version: 1,
+      account_id: "acct_one",
+      prospect_id: "prsp_one",
+      entries: {
+        "no_accept:connection_request": {
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          status: "quality_failure",
+          quality_codes: ["connection_request_too_many_sentences"],
+          blank_reason: "Connection request had too many sentences.",
+          writer_path: "connect_request.specialized",
+          writer_engine: "connection_request_llm_v1",
+          generated_at: "2026-07-12T12:00:00Z"
+        }
+      }
+    }, null, 2)}\n`);
+
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        branches: "no-accept",
+        draft_mode: "target",
+        target_step: "connection_request",
+        cached_drafts: [{
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          status: "quality_failure",
+          quality_codes: ["connection_request_too_many_sentences"],
+          blank_reason: "Connection request had too many sentences.",
+          writer_path: "connect_request.specialized",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "connection_request_llm_v1"
+        }]
+      });
+
+      return jsonResponse({
+        prospect: {
+          prefix_id: "prsp_one",
+          display_name: "Pat Prospect"
+        },
+        branches: [{
+          key: "no_accept",
+          label: "No accept / no reply",
+          resolved_target_step: "connection_request",
+          summary: {
+            channel_sequence: ["LinkedIn"]
+          },
+          steps: [
+            {
+              kind: "message",
+              key: "connection_request",
+              stage: "Connection request",
+              channel: "LinkedIn",
+              status: "success",
+              body: "Recovered connection request"
+            }
+          ]
+        }],
+        meta: {
+          draft_mode: "target",
+          target_step: "connection_request"
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "writer",
+      "test-run",
+      "prsp_one",
+      "--mode",
+      "step",
+      "--branch",
+      "no-accept",
+      "--step",
+      "connection_request"
+    ], {
+      env,
+      fetch,
+      stdout,
+      now: () => new Date("2026-07-12T12:00:00Z"),
+      cwd: root
+    });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Cached drafts sent: 1/);
+    assert.match(stdout.output, /Recovered connection request/);
   });
 });
 

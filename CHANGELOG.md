@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-12
+
+### Fixed
+
+- Show writer test-run target-step error status and warnings when a draft fails instead of rendering an empty drafted-copy block.
+
 ## [0.1.6] - 2026-07-12
 
 ### Added
