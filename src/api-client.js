@@ -130,6 +130,20 @@ export class AudientiClient {
     });
   }
 
+  cloneMotion(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "clone"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  moveMotionProspects(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "move_prospects"]), {
+      method: "POST",
+      body
+    });
+  }
+
   motionStatus(accountId, motionId) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "status"]));
   }

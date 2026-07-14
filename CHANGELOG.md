@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-14
+
+### Added
+
+- Add `audienti motions clone <motn_id> --name <text>` to clone a motion/play config through the API without copying people.
+- Add `audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]` to transfer prospects between motions/plays.
+
 ## [0.1.7] - 2026-07-12
 
 ### Fixed

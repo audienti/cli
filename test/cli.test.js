@@ -27,6 +27,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti help agent-workflows/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
+  assert.match(stdout.output, /audienti motions clone <motn_id> --name <text>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
@@ -309,6 +310,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["motions", "add-prospects", "help"],
       expected: [/Usage:\n  audienti motions add-prospects <motn_id> <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:motion_id\/prospects\.json/]
+    },
+    {
+      args: ["plays", "clone", "help"],
+      expected: [/Usage:\n  audienti motions clone <motn_id> --name <text>/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/clone\.json/]
+    },
+    {
+      args: ["plays", "move-prospects", "help"],
+      expected: [/Usage:\n  audienti motions move-prospects <source_motn_id>/, /Move removes each selected prospect/]
     },
     {
       args: ["plays", "create", "help"],
@@ -1248,6 +1257,80 @@ test("motions create posts the expected payload, supports plays alias, and honor
       accountId: "acct_one",
       accountName: "One"
     });
+  });
+});
+
+test("motions clone posts the expected payload, supports plays alias, and honors account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_source/clone.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          name: "Restaurant operators"
+        }
+      });
+      return jsonResponse({
+        id: 12,
+        prefix_id: "motn_clone",
+        name: "Restaurant operators",
+        kind: "transition",
+        status: "draft",
+        offer: { id: 21, prefix_id: "offr_abc123", name: "Offer One" },
+        icp: { id: 31, prefix_id: "icpp_abc123", name: "ICP One" },
+        list: { id: 42, prefix_id: "list_clone", name: "Restaurant operators List" },
+        principal_account_user: { id: 42, user_id: 7, name: "User One", email: "one@example.com" }
+      }, { status: 201 });
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "clone", "motn_source", "--name", "Restaurant operators", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).prefix_id, "motn_clone");
+  });
+});
+
+test("motions move-prospects posts the expected payload, supports plays alias, and honors account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_source/move_prospects.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {
+        target_motion_id: "motn_target",
+        prospect_ids: ["prsp_one", "prsp_two"]
+      });
+      return jsonResponse({
+        moved: 2,
+        failed: [],
+        source_motion_id: "motn_source",
+        target_motion_id: "motn_target"
+      });
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "move-prospects", "motn_source", "--target", "motn_target", "prsp_one", "prsp_two", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).moved, 2);
   });
 });
 

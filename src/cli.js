@@ -31,6 +31,8 @@ const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
+const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
+const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
@@ -135,6 +137,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "prospects") return motionsProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "create") return motionsCreate(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "clone") return motionsClone(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "timeline") return prospectsTimeline(rest, context, { accountOverride });
@@ -780,6 +784,52 @@ async function motionsCreate(args, context, { accountOverride } = {}) {
 
   writeLine(context.stdout, `Created motion ${display(created?.name)} (${display(created?.prefix_id)}).`);
   renderMotion(created, context);
+}
+
+async function motionsClone(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    name: { type: "string" }
+  });
+  if (positionals.length !== 1 || !values.name) {
+    throw new CommandError(MOTIONS_CLONE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const cloned = await client.cloneMotion(accountId, positionals[0], {
+    motion: {
+      name: values.name
+    }
+  });
+  if (values.json) return writeJson(context.stdout, cloned);
+
+  writeLine(context.stdout, `Cloned motion ${display(positionals[0])} as ${display(cloned?.name)} (${display(cloned?.prefix_id)}).`);
+  renderMotion(cloned, context);
+}
+
+async function motionsMoveProspects(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    target: { type: "string" }
+  });
+  if (positionals.length < 2 || !values.target) {
+    throw new CommandError(MOTIONS_MOVE_PROSPECTS_USAGE);
+  }
+
+  const [sourceMotionId, ...prospectIds] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.moveMotionProspects(accountId, sourceMotionId, {
+    target_motion_id: values.target,
+    prospect_ids: prospectIds
+  });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const moved = Number(payload?.moved || 0);
+  const failed = Array.isArray(payload?.failed) ? payload.failed.length : 0;
+  writeLine(context.stdout, `Moved ${moved} prospects from ${display(sourceMotionId)} to ${display(values.target)}.`);
+  if (failed > 0) {
+    writeLine(context.stdout, `${failed} prospects failed.`);
+  }
 }
 
 async function prospectsList(args, context, { accountOverride } = {}) {
@@ -3270,6 +3320,8 @@ const HELP_TOPICS = new Map([
     "    audienti motions analytics <motn_id>",
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
+    "    audienti motions clone <motn_id> --name <text>",
+    "    audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
     "    Tip: `plays` is accepted anywhere `motions` is accepted.",
     "",
     "  Prospects",
@@ -3842,8 +3894,10 @@ const HELP_TOPICS = new Map([
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
+    "  audienti motions clone <motn_id> --name <text> [--json]",
+    "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json]",
     "",
-    "Status: read, create, status, and prospect attachment commands implemented",
+    "Status: read, create, clone, status, and prospect attachment commands implemented",
     "",
     "CLI synonym:",
     "  `plays` is accepted anywhere `motions` is accepted",
@@ -4015,6 +4069,62 @@ const HELP_TOPICS = new Map([
     "Behavior:",
     "  The API calls Motions::Setup and the managed graph provisioner. If principal_account_user_id is omitted, the authenticated account user is used.",
     "  Use `audienti offers list`, `audienti icps list`, and `audienti users list` to resolve valid ids before calling this command."
+  ].join("\n")],
+
+  ["motions clone", [
+    "Usage:",
+    `  ${MOTIONS_CLONE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Clone one motion or play's configuration under a new name without copying its people.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  name: new motion name",
+    "",
+    "Behavior:",
+    "  Copies the motion kind, offer, ICP, principal, premise, approach, targeting profile, suppression policy, secondary roles, and active signal rows.",
+    "  The clone starts as draft with a new empty backing list.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/motions/:id/clone.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"motion\": {",
+    "      \"name\": \"Wine Campaign Restaurant Operators\"",
+    "    }",
+    "  }"
+  ].join("\n")],
+
+  ["motions move-prospects", [
+    "Usage:",
+    `  ${MOTIONS_MOVE_PROSPECTS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Move prospects out of one motion or play and into another motion or play.",
+    "",
+    "Input shape:",
+    "  source_motn_id: source motn_ prefix id",
+    "  target_motn_id: target motn_ prefix id",
+    "  prsp_id: one or more prospect prefix ids",
+    "",
+    "Behavior:",
+    "  Move removes each selected prospect from the source motion and source backing list, then adds it to the target motion and target backing list.",
+    "  Copy is intentionally not exposed until multi-motion membership exists.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/motions/:id/move_prospects.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"target_motion_id\": \"motn_target\",",
+    "    \"prospect_ids\": [\"prsp_one\", \"prsp_two\"]",
+    "  }"
   ].join("\n")],
 
   ["prospects", [
@@ -4762,6 +4872,8 @@ const HELP_TOPICS = new Map([
     "",
     "2. Create a motion or play",
     "  audienti motions create --payload <file.json>",
+    "  audienti motions clone <motn_id> --name \"New subset motion\"",
+    "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
     "  audienti motions status <motn_id>",
     "",
     "3. Add a new prospect from LinkedIn and poll enrichment",
