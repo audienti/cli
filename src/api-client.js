@@ -134,6 +134,19 @@ export class AudientiClient {
     });
   }
 
+  updateMotion(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  deleteMotion(accountId, motionId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId]), {
+      method: "DELETE"
+    });
+  }
+
   cloneMotion(accountId, motionId, body) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "clone"]), {
       method: "POST",

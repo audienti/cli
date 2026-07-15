@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-15
+
+### Added
+
+- Add `audienti motions update <motn_id> --status <draft|preparing|active|paused|archived>` plus `activate`, `pause`, and `archive` shortcuts for motion/play lifecycle status management.
+- Add `audienti motions delete <motn_id> --confirm <yes|true|Y|y>` to delete a motion/play through the API cleanup path.
+
 ## [0.1.9] - 2026-07-15
 
 ### Added

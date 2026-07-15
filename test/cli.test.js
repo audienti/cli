@@ -27,6 +27,10 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti help agent-workflows/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
+  assert.match(stdout.output, /audienti motions update <motn_id> --status <state>/);
+  assert.match(stdout.output, /audienti motions activate <motn_id>/);
+  assert.match(stdout.output, /audienti motions pause <motn_id>/);
+  assert.match(stdout.output, /audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/);
   assert.match(stdout.output, /audienti motions clone <motn_id> --name <text>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
@@ -87,6 +91,8 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti offers list/);
   assert.match(stdout.output, /audienti icps list/);
   assert.match(stdout.output, /audienti motions create --payload <file\.json>/);
+  assert.match(stdout.output, /audienti motions activate <motn_id>/);
+  assert.match(stdout.output, /audienti motions pause <motn_id>/);
   assert.match(stdout.output, /audienti prospects import https:\/\/www\.linkedin\.com\/in\/example/);
   assert.match(stdout.output, /audienti motions add-prospects <motn_id> <prsp_id>/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url prospect@example.com/);
@@ -334,6 +340,26 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["plays", "create", "help"],
       expected: [/Usage:\n  audienti motions create --payload <file\.json>/, /Status: implemented/]
+    },
+    {
+      args: ["plays", "update", "help"],
+      expected: [/Usage:\n  audienti motions update <motn_id> --status <draft\|preparing\|active\|paused\|archived>/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+    },
+    {
+      args: ["plays", "activate", "help"],
+      expected: [/Usage:\n  audienti motions activate <motn_id>/, /--status active/]
+    },
+    {
+      args: ["plays", "pause", "help"],
+      expected: [/Usage:\n  audienti motions pause <motn_id>/, /--status paused/]
+    },
+    {
+      args: ["plays", "archive", "help"],
+      expected: [/Usage:\n  audienti motions archive <motn_id>/, /--status archived/]
+    },
+    {
+      args: ["plays", "delete", "help"],
+      expected: [/Usage:\n  audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/, /DELETE \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
     }
   ];
 
@@ -1387,6 +1413,183 @@ test("motions clone posts the expected payload, supports plays alias, and honors
 
     assert.equal(exitCode, 0);
     assert.equal(JSON.parse(stdout.output).prefix_id, "motn_clone");
+  });
+});
+
+test("motions delete sends DELETE, supports plays alias, and honors account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      deleted: true,
+      prefix_id: "motn_source",
+      name: "Old motion"
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_source.json");
+      assert.equal(options.method, "DELETE");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.body, undefined);
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "delete", "motn_source", "--confirm", "yes", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions update patches status, supports plays alias, and honors account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "paused",
+      kind: "outbound"
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          status: "paused"
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "update", "motn_source", "--status", "paused", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions status shortcuts patch expected statuses", async () => {
+  const cases = [
+    { action: "activate", status: "active" },
+    { action: "pause", status: "paused" },
+    { action: "archive", status: "archived" }
+  ];
+
+  for (const { action, status } of cases) {
+    await withTempConfigHome(async ({ env }) => {
+      await writeConfig({
+        host: "https://app.audienti.com",
+        token: "saved-token",
+        accountId: "acct_one",
+        accountName: "One"
+      }, { env });
+
+      const stdout = captureStream();
+      const fetch = createFetch((url, options) => {
+        assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+        assert.equal(options.method, "PATCH");
+        assert.deepEqual(JSON.parse(options.body), {
+          motion: {
+            status
+          }
+        });
+        return jsonResponse({
+          prefix_id: "motn_source",
+          name: "Pipeline motion",
+          status,
+          kind: "outbound"
+        });
+      });
+
+      const exitCode = await run(["motions", action, "motn_source"], { env, fetch, stdout });
+
+      assert.equal(exitCode, 0);
+      assert.match(stdout.output, new RegExp(`Updated motion Pipeline motion \\(motn_source\\) to ${status}\\.`));
+      assert.match(stdout.output, new RegExp(`Status: ${status}`));
+    });
+  }
+});
+
+test("motions update rejects invalid status without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("invalid status should not call the API");
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--status", "running"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> --status <draft\|preparing\|active\|paused\|archived>/);
+  });
+});
+
+test("motions delete renders a readable confirmation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      deleted: true,
+      prefix_id: "motn_source",
+      name: "Old motion"
+    }));
+
+    const exitCode = await run(["motions", "delete", "motn_source", "--confirm", "Y"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Deleted motion Old motion \(motn_source\)\./);
+  });
+});
+
+test("motions delete requires explicit confirmation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("delete should not call the API without confirmation");
+    });
+
+    const exitCode = await run(["motions", "delete", "motn_source"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Error: Usage: audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/);
   });
 });
 

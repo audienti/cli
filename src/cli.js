@@ -25,6 +25,7 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
   "email/profile"
 ];
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
+const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "paused", "archived"]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
@@ -34,6 +35,8 @@ const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --f
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity <account_user_id|me> [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> --status <draft|preparing|active|paused|archived> [--json] [--account <acct_id>]";
+const MOTIONS_DELETE_USAGE = "Usage: audienti motions delete <motn_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
 const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
 const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
@@ -141,6 +144,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "prospects") return motionsProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "create") return motionsCreate(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "update") return motionsUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && ["activate", "pause", "archive"].includes(action)) return motionsStatusShortcut(action, rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "delete") return motionsDelete(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "clone") return motionsClone(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
@@ -816,6 +822,68 @@ async function motionsCreate(args, context, { accountOverride } = {}) {
 
   writeLine(context.stdout, `Created motion ${display(created?.name)} (${display(created?.prefix_id)}).`);
   renderMotion(created, context);
+}
+
+async function motionsDelete(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    confirm: { type: "string" }
+  });
+  const normalizedConfirm = String(values.confirm || "").trim().toLowerCase();
+  if (positionals.length !== 1 || !DELETE_CONFIRMATION_VALUES.has(normalizedConfirm)) {
+    throw new CommandError(MOTIONS_DELETE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteMotion(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Deleted motion ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
+}
+
+async function motionsUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    status: { type: "string" }
+  });
+  if (positionals.length !== 1 || !values.status) {
+    throw new CommandError(MOTIONS_UPDATE_USAGE);
+  }
+
+  return updateMotionStatus(positionals[0], values.status, context, { accountOverride, json: values.json });
+}
+
+async function motionsStatusShortcut(action, args, context, { accountOverride } = {}) {
+  const usage = `Usage: audienti motions ${action} <motn_id> [--json] [--account <acct_id>]`;
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) {
+    throw new CommandError(usage);
+  }
+
+  const statusByAction = {
+    activate: "active",
+    pause: "paused",
+    archive: "archived"
+  };
+  return updateMotionStatus(positionals[0], statusByAction[action], context, { accountOverride, json: values.json });
+}
+
+async function updateMotionStatus(motionId, status, context, { accountOverride, json } = {}) {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (!MOTION_STATUS_VALUES.has(normalizedStatus)) {
+    throw new CommandError(MOTIONS_UPDATE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const motion = await client.updateMotion(accountId, motionId, {
+    motion: {
+      status: normalizedStatus
+    }
+  });
+  if (json) return writeJson(context.stdout, motion);
+
+  writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}) to ${display(motion?.status)}.`);
+  renderMotion(motion, context);
 }
 
 async function motionsClone(args, context, { accountOverride } = {}) {
@@ -3609,6 +3677,10 @@ const HELP_TOPICS = new Map([
     "    audienti motions analytics <motn_id>",
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
+    "    audienti motions update <motn_id> --status <state>",
+    "    audienti motions activate <motn_id>",
+    "    audienti motions pause <motn_id>",
+    "    audienti motions delete <motn_id> --confirm <yes|true|Y|y>",
     "    audienti motions clone <motn_id> --name <text>",
     "    audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
     "    Tip: `plays` is accepted anywhere `motions` is accepted.",
@@ -4205,10 +4277,15 @@ const HELP_TOPICS = new Map([
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
+    "  audienti motions update <motn_id> --status <draft|preparing|active|paused|archived> [--json]",
+    "  audienti motions activate <motn_id> [--json]",
+    "  audienti motions pause <motn_id> [--json]",
+    "  audienti motions archive <motn_id> [--json]",
+    "  audienti motions delete <motn_id> --confirm <yes|true|Y|y> [--json]",
     "  audienti motions clone <motn_id> --name <text> [--json]",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json]",
     "",
-    "Status: read, create, clone, status, and prospect attachment commands implemented",
+    "Status: read, create, status update, delete, clone, status, and prospect attachment commands implemented",
     "",
     "CLI synonym:",
     "  `plays` is accepted anywhere `motions` is accepted",
@@ -4408,6 +4485,92 @@ const HELP_TOPICS = new Map([
     "      \"name\": \"Wine Campaign Restaurant Operators\"",
     "    }",
     "  }"
+  ].join("\n")],
+
+  ["motions update", [
+    "Usage:",
+    `  ${MOTIONS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Change one motion or play's lifecycle status.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  status: draft | preparing | active | paused | archived",
+    "",
+    "Behavior:",
+    "  Updates only the motion status. Other motion configuration stays unchanged.",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/motions/:id.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"motion\": {",
+    "      \"status\": \"paused\"",
+    "    }",
+    "  }"
+  ].join("\n")],
+
+  ["motions activate", [
+    "Usage:",
+    "  audienti motions activate <motn_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Shortcut for `audienti motions update <motn_id> --status active`.",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/motions/:id.json"
+  ].join("\n")],
+
+  ["motions pause", [
+    "Usage:",
+    "  audienti motions pause <motn_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Shortcut for `audienti motions update <motn_id> --status paused`.",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/motions/:id.json"
+  ].join("\n")],
+
+  ["motions archive", [
+    "Usage:",
+    "  audienti motions archive <motn_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Shortcut for `audienti motions update <motn_id> --status archived`.",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/motions/:id.json"
+  ].join("\n")],
+
+  ["motions delete", [
+    "Usage:",
+    `  ${MOTIONS_DELETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Delete one motion or play through the same cleanup path the app uses.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  confirm: one of yes, true, Y, y",
+    "",
+    "Behavior:",
+    "  Removes the motion, its managed custom signals, and its dedicated finder agent. Prospect records remain in the account.",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/motions/:id.json"
   ].join("\n")],
 
   ["motions move-prospects", [
@@ -5233,6 +5396,9 @@ const HELP_TOPICS = new Map([
     "  audienti motions create --payload <file.json>",
     "  audienti motions clone <motn_id> --name \"New subset motion\"",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
+    "  audienti motions activate <motn_id>",
+    "  audienti motions pause <motn_id>",
+    "  audienti motions delete <motn_id> --confirm yes",
     "  audienti motions status <motn_id>",
     "",
     "3. Add a new prospect from LinkedIn and poll enrichment",

@@ -56,6 +56,9 @@ audienti prospects assign <prsp_id> --assigned-user me --json
 audienti users activity me --window 7d --json
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json
+audienti motions update <motn_id> --status paused --json
+audienti motions activate <motn_id> --json
+audienti motions delete <motn_id> --confirm yes --json
 audienti operator next --json
 audienti operator next --plan
 audienti analytics prospects --window 24h --json

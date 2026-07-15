@@ -54,6 +54,9 @@ Common inspection commands:
 audienti operator next --plan
 audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
+audienti motions update <motn_id> --status paused
+audienti motions activate <motn_id>
+audienti motions delete <motn_id> --confirm yes
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned
