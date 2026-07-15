@@ -4,6 +4,15 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-15
+
+### Added
+
+- Add `audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign>` for reassigning existing prospects from the CLI.
+- Add `audienti users activity <account_user_id|me>` for inspecting one account user's outbound activity feed.
+- Add `audienti prospects import-batch --file <csv|jsonl|json>` for starting multiple normal prospect imports with shared list, motion, and assignee defaults.
+- Add `audienti prospects list --assigned-user unassigned` for finding prospects without an owner.
+
 ## [0.1.8] - 2026-07-14
 
 ### Added

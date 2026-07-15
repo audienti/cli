@@ -56,6 +56,9 @@ audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
+audienti prospects list --assigned-user unassigned
+audienti prospects assign <prsp_id> --assigned-user me
+audienti users activity me --window 7d
 audienti analytics prospects --window 24h
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
@@ -125,6 +128,22 @@ audienti prospects add-profile <prsp_id> --url +12025550123
 audienti prospects add-profile <prsp_id> --url https://www.linkedin.com/in/example
 audienti prospects report-bad-profile <prsp_id> <prof_id>
 ```
+
+To reassign or clear ownership for existing prospects:
+
+```bash
+audienti prospects assign <prsp_id> --assigned-user <account_user_id|me>
+audienti prospects assign <prsp_id> --assigned-user unassign
+```
+
+To import multiple LinkedIn people through the same per-prospect import path:
+
+```bash
+audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me
+```
+
+CSV files should include a `linkedin_url` or `url` header. Optional row columns
+`list_id`, `motion_id`, and `assigned_user_id` override command defaults.
 
 ## Compatibility
 

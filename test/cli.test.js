@@ -136,6 +136,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti users list \[--json\]/, /GET \/api\/v1\/accounts\/:account_id\/users\.json/]
     },
     {
+      args: ["users", "activity", "help"],
+      expected: [/Usage:\n  audienti users activity <account_user_id\|me>/, /GET \/api\/v1\/accounts\/:account_id\/operations\/users\/:user_id\/activity\.json/]
+    },
+    {
       args: ["offers", "help"],
       expected: [/Usage:\n  audienti offers list \[--json\]/, /choose offer_id for motion creation/]
     },
@@ -244,8 +248,16 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti prospects import <linkedin_url>/, /linkedin_url: url/]
     },
     {
+      args: ["prospects", "import-batch", "help"],
+      expected: [/Usage:\n  audienti prospects import-batch --file <csv\|jsonl\|json>/, /POST \/api\/v1\/accounts\/:account_id\/prospect_imports\.json/]
+    },
+    {
       args: ["prospects", "import-status", "help"],
       expected: [/Usage:\n  audienti prospects import-status <primp_id>/, /GET \/api\/v1\/accounts\/:account_id\/prospect_imports\/:id\.json/]
+    },
+    {
+      args: ["prospects", "assign", "help"],
+      expected: [/Usage:\n  audienti prospects assign <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/assign\.json/]
     },
     {
       args: ["prospects", "message-types", "help"],
@@ -605,6 +617,84 @@ test("users list renders a readable principal table", async () => {
     assert.match(stdout.output, /ACCOUNT USER ID\tCURRENT\tROLES\tNAME\tEMAIL/);
     assert.match(stdout.output, /42\tyes\tadmin\tUser One\tone@example\.com/);
     assert.match(stdout.output, /43\tno\tmember\tUser Two\ttwo@example\.com/);
+  });
+});
+
+test("users activity fetches a user activity feed", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/operations/users/me/activity.json?window=7d&platform=linkedin&limit=5&page=2");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        account_user: { id: 42, name: "User One", email: "one@example.com" },
+        filters: { mode: "actor", window: "7d", platform: "linkedin", limit: 5 },
+        summary: {
+          window_count: 2,
+          by_platform: [{ key: "linkedin", label: "LinkedIn", count: 2 }],
+          by_key: [{ key: "action.profile.follow", label: "Followed Profile", count: 2 }]
+        },
+        pagination: { page: 2, pages: 3, count: 12 },
+        events: [{
+          id: 99,
+          occurred_at: "2026-03-27T15:00:00Z",
+          action_label: "Followed Profile",
+          platform: "linkedin",
+          details: "Followed the profile.",
+          prospect: { prefix_id: "prsp_one", name: "Pat Prospect", company: "ExampleCo" }
+        }]
+      });
+    });
+
+    const exitCode = await run([
+      "users",
+      "activity",
+      "me",
+      "--window",
+      "7d",
+      "--platform",
+      "linkedin",
+      "--limit",
+      "5",
+      "--page",
+      "2"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /User: User One \(42\)/);
+    assert.match(stdout.output, /Window actions: 2/);
+    assert.match(stdout.output, /TIME\tACTION\tPLATFORM\tPROSPECT\tCOMPANY\tDETAILS/);
+    assert.match(stdout.output, /Followed Profile\tlinkedin\tPat Prospect\tExampleCo\tFollowed the profile\./);
+  });
+});
+
+test("users activity supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = { account_user: { id: 42 }, summary: { window_count: 0 }, events: [] };
+    const fetch = createFetch((url) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/operations/users/42/activity.json");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["users", "activity", "42", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
   });
 });
 
@@ -1727,6 +1817,185 @@ test("prospects import sends motion and list ids when both are provided", async 
   });
 });
 
+test("prospects assign posts prospect ids and assignee", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/assign.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        prospect_ids: ["prsp_one", "prsp_two"],
+        assigned_user_id: "me"
+      });
+      return jsonResponse({
+        assigned: ["prsp_one", "prsp_two"],
+        failed: []
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "assign",
+      "prsp_one",
+      "prsp_two",
+      "--assigned-user",
+      "me"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Assigned 2 prospects to me\./);
+    assert.match(stdout.output, /Failures: 0/);
+  });
+});
+
+test("prospects assign supports unassign", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/assign.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        prospect_ids: ["prsp_one"],
+        assigned_user_id: "unassign"
+      });
+      return jsonResponse({
+        assigned: ["prsp_one"],
+        failed: []
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "assign",
+      "prsp_one",
+      "--assigned-user",
+      "unassign"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Unassigned 1 prospects\./);
+  });
+});
+
+test("prospects import-batch imports jsonl rows with command defaults", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const importPath = join(root, "prospects.jsonl");
+    await writeFile(importPath, [
+      JSON.stringify({ linkedin_url: "https://www.linkedin.com/in/pat-prospect" }),
+      JSON.stringify({ url: "https://www.linkedin.com/in/sam-prospect", assigned_user_id: "42" })
+    ].join("\n"), "utf8");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports.json");
+      assert.equal(options.method, "POST");
+      const bodies = [
+        {
+          linkedin_url: "https://www.linkedin.com/in/pat-prospect",
+          list_id: "list_one",
+          motion_id: "motn_one",
+          assigned_user_id: "me"
+        },
+        {
+          linkedin_url: "https://www.linkedin.com/in/sam-prospect",
+          list_id: "list_one",
+          motion_id: "motn_one",
+          assigned_user_id: "42"
+        }
+      ];
+      assert.deepEqual(JSON.parse(options.body), bodies[calls.length - 1]);
+      return jsonResponse({
+        prefix_id: `primp_${calls.length}`,
+        status: "running",
+        prospect: { prefix_id: `prsp_${calls.length}`, display_name: `Prospect ${calls.length}` }
+      }, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "import-batch",
+      "--file",
+      importPath,
+      "--list",
+      "list_one",
+      "--motion",
+      "motn_one",
+      "--assigned-user",
+      "me"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Started 2 prospect imports\./);
+    assert.match(stdout.output, /primp_1\tProspect 1\tprsp_1\trunning/);
+    assert.match(stdout.output, /Failures: 0/);
+  });
+});
+
+test("prospects import-batch supports json output and keeps failed rows visible", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const importPath = join(root, "prospects.csv");
+    await writeFile(importPath, "linkedin_url,assigned_user_id\nhttps://www.linkedin.com/in/pat-prospect,me\nhttps://www.linkedin.com/in/bad-prospect,me\n", "utf8");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports.json");
+      if (calls.length === 2) {
+        return jsonResponse({ error: "LinkedIn profile not found." }, { status: 422 });
+      }
+
+      return jsonResponse({
+        prefix_id: "primp_one",
+        status: "running",
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" }
+      }, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "import-batch",
+      "--file",
+      importPath,
+      "--json"
+    ], { env, fetch, stdout });
+
+    const payload = JSON.parse(stdout.output);
+    assert.equal(exitCode, 1);
+    assert.equal(payload.summary.total, 2);
+    assert.equal(payload.summary.started, 1);
+    assert.equal(payload.summary.failed, 1);
+    assert.equal(payload.imports[0].prefix_id, "primp_one");
+    assert.equal(payload.failed[0].row, 2);
+    assert.equal(payload.failed[0].linkedin_url, "https://www.linkedin.com/in/bad-prospect");
+    assert.equal(payload.failed[0].error, "LinkedIn profile not found.");
+  });
+});
+
 test("prospects import supports json output", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -2004,6 +2273,31 @@ test("prospects list sends filters and renders a readable table", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /PROSPECT ID\tSTAGE\tNAME\tCOMPANY\tNEXT ACTION/);
     assert.match(stdout.output, /prsp_one\tnew\tPat Prospect\tExampleCo\tSend connection request/);
+  });
+});
+
+test("prospects list can filter unassigned prospects", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.searchParams.get("assigned_user_id"), "unassigned");
+      return jsonResponse({
+        prospects: [],
+        meta: { total_count: 0, limit: 20, offset: 0, page: 1, returned_count: 0 }
+      });
+    });
+
+    const exitCode = await run(["prospects", "list", "--assigned-user", "unassigned"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /No prospects found\./);
   });
 });
 

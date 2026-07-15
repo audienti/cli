@@ -43,6 +43,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["users"]));
   }
 
+  userActivity(accountId, userId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["operations", "users", userId, "activity"], query));
+  }
+
   offers(accountId) {
     return this.requestJson(accountPath(accountId, ["offers"]));
   }
@@ -165,6 +169,13 @@ export class AudientiClient {
 
   prospect(accountId, prospectId) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId]));
+  }
+
+  assignProspects(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["prospects", "assign"]), {
+      method: "POST",
+      body
+    });
   }
 
   prospectTimeline(accountId, prospectId, query = {}) {

@@ -29,6 +29,9 @@ const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
+const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
+const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
+const USERS_ACTIVITY_USAGE = "Usage: audienti users activity <account_user_id|me> [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
 const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
@@ -117,6 +120,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "accounts" && action === "list") return accountsList(rest, context, { accountOverride });
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
+  if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "list") return icpsList(rest, context, { accountOverride });
@@ -141,6 +145,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "timeline") return prospectsTimeline(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "message-types") return prospectsMessageTypes(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
@@ -151,6 +156,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "sequence-preview") return prospectsSequencePreview(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "sequence-export") return prospectsSequenceExport(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import") return prospectsImport(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "import-batch") return prospectsImportBatch(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import-status") return prospectsImportStatus(rest, context, { accountOverride });
   if (normalizedResource === "writer" && action === "test-run") return writerTestRun(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
@@ -397,6 +403,32 @@ async function usersList(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, users);
 
   renderUsers(users, context);
+}
+
+async function usersActivity(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    mode: { type: "string" },
+    window: { type: "string" },
+    platform: { type: "string" },
+    query: { type: "string" },
+    limit: { type: "string" },
+    page: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(USERS_ACTIVITY_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.userActivity(accountId, positionals[0], compactObject({
+    mode: values.mode,
+    window: values.window,
+    platform: values.platform,
+    query: values.query,
+    limit: values.limit,
+    page: values.page
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderUserActivity(payload, context);
 }
 
 async function offersList(args, context, { accountOverride } = {}) {
@@ -882,6 +914,36 @@ async function prospectsList(args, context, { accountOverride } = {}) {
   renderProspects(payload, context, { wide: values.wide || values.all, profiles: values.profiles });
 }
 
+async function prospectsAssign(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    "assigned-user": { type: "string" }
+  });
+  if (positionals.length < 1 || !values["assigned-user"]) {
+    throw new CommandError(PROSPECTS_ASSIGN_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { payload, rejected } = await performBulkMutation(() =>
+    client.assignProspects(accountId, {
+      prospect_ids: positionals,
+      assigned_user_id: values["assigned-user"]
+    }));
+  if (values.json) {
+    writeJson(context.stdout, payload);
+    return rejected ? 1 : 0;
+  }
+
+  const successLabel = values["assigned-user"] === "unassign" ?
+    `Unassigned ${successCount(payload)} prospects.` :
+    `Assigned ${successCount(payload)} prospects to ${display(values["assigned-user"])}.`;
+  renderBulkMutationResult(payload, context, {
+    successLabel,
+    zeroSuccessLabel: "No prospects were assigned."
+  });
+  return rejected ? 1 : 0;
+}
+
 async function prospectsShow(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, jsonOptions());
   if (positionals.length !== 1) throw new CommandError("Usage: audienti prospects show <prsp_id> [--json] [--account <acct_id>]");
@@ -1293,6 +1355,66 @@ async function prospectsImport(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectImportStarted(payload, context);
+}
+
+async function prospectsImportBatch(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    file: { type: "string" },
+    list: { type: "string" },
+    motion: { type: "string" },
+    "assigned-user": { type: "string" }
+  });
+  if (positionals.length > 0 || !values.file) {
+    throw new CommandError(PROSPECTS_IMPORT_BATCH_USAGE);
+  }
+
+  const rows = await readProspectImportBatchFile(values.file);
+  if (rows.length === 0) throw new CommandError("Import batch file did not contain any prospects.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const result = {
+    summary: {
+      total: rows.length,
+      started: 0,
+      failed: 0
+    },
+    imports: [],
+    failed: []
+  };
+
+  for (const row of rows) {
+    const body = compactObject({
+      linkedin_url: row.linkedin_url,
+      list_id: row.list_id || values.list,
+      motion_id: row.motion_id || values.motion,
+      assigned_user_id: row.assigned_user_id || values["assigned-user"]
+    });
+
+    try {
+      const payload = await client.prospectImport(accountId, body);
+      result.imports.push(payload);
+      result.summary.started += 1;
+    } catch (error) {
+      if (!(error instanceof ApiError)) throw error;
+
+      result.failed.push({
+        row: row.row,
+        linkedin_url: row.linkedin_url,
+        status: error.status,
+        error: error.body?.error || error.message
+      });
+      result.summary.failed += 1;
+    }
+  }
+
+  if (values.json) {
+    writeJson(context.stdout, result);
+    return result.summary.failed > 0 ? 1 : 0;
+  }
+
+  renderProspectImportBatchResult(result, context);
+  return result.summary.failed > 0 ? 1 : 0;
 }
 
 async function prospectsImportStatus(args, context, { accountOverride } = {}) {
@@ -1984,6 +2106,113 @@ async function readJsonPayload(filePath) {
   }
 }
 
+async function readProspectImportBatchFile(filePath) {
+  let contents;
+  try {
+    contents = await readFile(filePath, "utf8");
+  } catch (error) {
+    throw new CommandError(`Could not read import batch file ${filePath}: ${error.message}`);
+  }
+
+  return parseProspectImportBatch(contents, filePath);
+}
+
+function parseProspectImportBatch(contents, filePath = "batch file") {
+  const trimmed = String(contents || "").trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") || (trimmed.startsWith("{") && !trimmed.includes("\n"))) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return normalizeImportBatchRows(Array.isArray(parsed) ? parsed : [parsed], filePath);
+    } catch (error) {
+      throw new CommandError(`Invalid JSON import batch in ${filePath}: ${error.message}`);
+    }
+  }
+
+  const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+
+  if (looksLikeCsvHeader(lines[0])) {
+    return parseProspectImportCsv(lines, filePath);
+  }
+
+  const rows = lines.map((line, index) => {
+    if (line.startsWith("{")) {
+      try {
+        return { ...JSON.parse(line), row: index + 1 };
+      } catch (error) {
+        throw new CommandError(`Invalid JSONL row ${index + 1} in ${filePath}: ${error.message}`);
+      }
+    }
+
+    return { linkedin_url: line, row: index + 1 };
+  });
+
+  return normalizeImportBatchRows(rows, filePath);
+}
+
+function looksLikeCsvHeader(line) {
+  const headers = parseCsvLine(line).map((header) => header.trim().toLowerCase());
+  return headers.includes("linkedin_url") || headers.includes("url");
+}
+
+function parseProspectImportCsv(lines, filePath) {
+  const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+  const rows = lines.slice(1).map((line, index) => {
+    const values = parseCsvLine(line);
+    return headers.reduce((row, header, headerIndex) => {
+      row[header] = values[headerIndex] || "";
+      return row;
+    }, { row: index + 1 });
+  });
+
+  return normalizeImportBatchRows(rows, filePath);
+}
+
+function parseCsvLine(line) {
+  const values = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const next = line[index + 1];
+
+    if (character === "\"" && inQuotes && next === "\"") {
+      current += "\"";
+      index += 1;
+    } else if (character === "\"") {
+      inQuotes = !inQuotes;
+    } else if (character === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  values.push(current);
+  return values.map((value) => value.trim());
+}
+
+function normalizeImportBatchRows(rows, filePath) {
+  return rows.map((row, index) => {
+    const rowNumber = row?.row || index + 1;
+    const normalized = typeof row === "string" ? { linkedin_url: row } : row;
+    const linkedinUrl = normalized?.linkedin_url || normalized?.url;
+    if (!linkedinUrl) throw new CommandError(`Missing linkedin_url on row ${rowNumber} in ${filePath}.`);
+
+    return compactObject({
+      row: rowNumber,
+      linkedin_url: linkedinUrl,
+      list_id: normalized.list_id,
+      motion_id: normalized.motion_id,
+      assigned_user_id: normalized.assigned_user_id || normalized.assigned_user
+    });
+  });
+}
+
 function writeLine(stream, text = "") {
   stream.write(`${text}\n`);
 }
@@ -2027,6 +2256,41 @@ function renderUsers(users, context) {
       ].join("\t")
     );
   }
+}
+
+function renderUserActivity(payload, context) {
+  const accountUser = payload?.account_user || {};
+  const summary = payload?.summary || {};
+  const events = Array.isArray(payload?.events) ? payload.events : [];
+  const pagination = payload?.pagination || {};
+
+  writeLine(context.stdout, `User: ${display(accountUser.name || accountUser.email)} (${display(accountUser.id)})`);
+  writeLine(context.stdout, `Window actions: ${display(summary.window_count, 0)}`);
+  if (pagination.page || pagination.pages) {
+    writeLine(context.stdout, `Page: ${display(pagination.page, 1)} of ${display(pagination.pages, 1)}`);
+  }
+  renderCountRows(context, "By platform", summary.by_platform);
+  renderCountRows(context, "By action", summary.by_key);
+
+  if (events.length === 0) return writeLine(context.stdout, "No activity events found.");
+
+  writeLine(context.stdout, "TIME\tACTION\tPLATFORM\tPROSPECT\tCOMPANY\tDETAILS");
+  for (const event of events) {
+    writeLine(context.stdout, [
+      display(event.occurred_at),
+      display(event.action_label || event.key),
+      display(event.platform),
+      display(event.prospect?.name || event.prospect?.display_name || event.prospect?.prefix_id),
+      display(event.prospect?.company),
+      display(event.details)
+    ].join("\t"));
+  }
+}
+
+function renderCountRows(context, label, rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  writeLine(context.stdout, `${label}: ${rows.map((row) => `${display(row.label || row.key)} ${display(row.count, 0)}`).join(" | ")}`);
 }
 
 function renderOffers(offers, context) {
@@ -2562,6 +2826,30 @@ function renderProspectImportStarted(payload, context) {
   if (payload?.profile?.status) writeLine(context.stdout, `Profile: ${payload.profile.status}`);
   writeProspectImportProspectLine(payload, context);
   if (payload?.prefix_id) writeLine(context.stdout, `Run \`audienti prospects import-status ${payload.prefix_id}\` to check completion.`);
+}
+
+function renderProspectImportBatchResult(result, context) {
+  const imports = Array.isArray(result?.imports) ? result.imports : [];
+  const failed = Array.isArray(result?.failed) ? result.failed : [];
+
+  writeLine(context.stdout, `Started ${display(result?.summary?.started, 0)} prospect imports.`);
+  writeLine(context.stdout, `Failures: ${display(result?.summary?.failed, 0)}`);
+
+  if (imports.length > 0) {
+    writeLine(context.stdout, "IMPORT ID\tPROSPECT\tPROSPECT ID\tSTATUS");
+    for (const payload of imports) {
+      writeLine(context.stdout, [
+        display(payload?.prefix_id),
+        display(payload?.prospect?.display_name || payload?.prospect?.name),
+        display(payload?.prospect?.prefix_id),
+        display(payload?.status)
+      ].join("\t"));
+    }
+  }
+
+  for (const row of failed) {
+    writeLine(context.stdout, `- row ${display(row.row)} ${display(row.linkedin_url)}: ${display(row.error, "failed")}`);
+  }
 }
 
 function renderProspectImportStatus(payload, context) {
@@ -3313,6 +3601,7 @@ const HELP_TOPICS = new Map([
     "    audienti auth status",
     "    audienti config list",
     "    audienti users list",
+    "    audienti users activity <account_user_id|me>",
     "",
     "  Motions / plays",
     "    audienti motions list",
@@ -3327,8 +3616,10 @@ const HELP_TOPICS = new Map([
     "  Prospects",
     "    audienti prospects list [filters]",
     "    audienti prospects show <prsp_id>",
+    "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
     "    audienti prospects timeline <prsp_id>",
     "    audienti prospects import <linkedin_url> [--motion <motn_id>]",
+    "    audienti prospects import-batch --file <csv|jsonl|json>",
     "    audienti prospects add-note <prsp_id> --message <text>",
     "    audienti prospects add-profile <prsp_id> --url <profile_url|email|phone>",
     "",
@@ -3505,6 +3796,7 @@ const HELP_TOPICS = new Map([
   ["users", [
     "Usage:",
     "  audienti users list [--json]",
+    "  audienti users activity <account_user_id|me> [--json]",
     "",
     "Status: implemented",
     "",
@@ -3531,6 +3823,25 @@ const HELP_TOPICS = new Map([
     "  email: string",
     "  roles: [admin | member]",
     "  current: boolean"
+  ].join("\n")],
+
+  ["users activity", [
+    "Usage:",
+    `  ${USERS_ACTIVITY_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Inspect one workspace user's outbound activity feed and action summary.",
+    "",
+    "Input shape:",
+    "  account_user_id: integer account user id, or me for the authenticated token user",
+    "  mode: actor | account_usage",
+    "  window: 24h | 7d | 30d",
+    "  platform: linkedin | email | gmail",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/operations/users/:user_id/activity.json"
   ].join("\n")],
 
   ["offers", [
@@ -4131,6 +4442,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti prospects list [--json] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
+    "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
     "  audienti prospects timeline <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
@@ -4141,9 +4453,10 @@ const HELP_TOPICS = new Map([
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects sequence-export <prsp_id> [--csv]",
     "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
+    "  audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "",
-    "Status: read commands, per-prospect draft preview, sequence preview, and import implemented; disposition planned",
+    "Status: read commands, assignment, per-prospect draft preview, sequence preview, and import implemented; disposition planned",
     "",
     "Filters:",
     "  --query <text>",
@@ -4153,7 +4466,7 @@ const HELP_TOPICS = new Map([
     "  --play <motn_id>",
     "  --list <list_id>",
     "  --stage <stage>",
-    "  --assigned-user <account_user_id|me>",
+    "  --assigned-user <account_user_id|me|unassigned>",
     "  --limit <n>",
     "  --page <n>",
     "  --offset <n>",
@@ -4181,7 +4494,7 @@ const HELP_TOPICS = new Map([
     "  --play <motn_id>                Filter to a play using the same motion relationship",
     "  --list <list_id>                Filter to a prospect list",
     "  --stage <stage>                 Filter to a pipeline stage",
-    "  --assigned-user <id|me>         Filter by assigned account user",
+    "  --assigned-user <id|me|unassigned>  Filter by assigned account user",
     "  --limit <n>                     Max rows for one page; with --all it caps total rows up to 1000",
     "  --page <n>                      1-based page number",
     "  --offset <n>                    Row offset for manual pagination",
@@ -4208,7 +4521,31 @@ const HELP_TOPICS = new Map([
     "",
     "Examples:",
     "  audienti prospects list --stage identified --page 2 --limit 50",
+    "  audienti prospects list --assigned-user unassigned",
     "  audienti prospects list --all --csv"
+  ].join("\n")],
+
+  ["prospects assign", [
+    "Usage:",
+    `  ${PROSPECTS_ASSIGN_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  prsp_id: one or more prsp_ prefix ids",
+    "  assigned_user_id: account user id, me, or unassign",
+    "",
+    "Behavior:",
+    "  Updates AccountProspect.assigned_to_account_user_id for existing account prospects without changing motion or list membership.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/assign.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"prospect_ids\": [\"prsp_abc123\", \"prsp_def456\"],",
+    "    \"assigned_user_id\": \"me\"",
+    "  }"
   ].join("\n")],
 
   ["prospects show", [
@@ -4534,6 +4871,28 @@ const HELP_TOPICS = new Map([
     "    \"motion_id\": \"motn_abc123\",",
     "    \"assigned_user_id\": \"me\"",
     "  }"
+  ].join("\n")],
+
+  ["prospects import-batch", [
+    "Usage:",
+    `  ${PROSPECTS_IMPORT_BATCH_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  file: CSV with linkedin_url/url header, JSON array, JSONL objects, or newline-delimited LinkedIn URLs",
+    "  list_id: list_ prefix id | optional default for every row",
+    "  motn_id: motn_ prefix id | optional default for every row",
+    "  assigned_user_id: account user id or me | optional default for every row",
+    "",
+    "CSV columns:",
+    "  linkedin_url or url, list_id, motion_id, assigned_user_id",
+    "",
+    "Behavior:",
+    "  Starts one normal prospect import per row. Row-level list_id, motion_id, and assigned_user_id override command defaults.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospect_imports.json"
   ].join("\n")],
 
   ["prospects import-status", [
@@ -4879,12 +5238,15 @@ const HELP_TOPICS = new Map([
     "3. Add a new prospect from LinkedIn and poll enrichment",
     "  audienti lists create --name \"Target list\"",
     "  audienti prospects import https://www.linkedin.com/in/example --list <list_id> --assigned-user me",
+    "  audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me",
     "  audienti prospects import-status <primp_id>",
     "  audienti prospects show <prsp_id>",
     "  audienti tools get email --url https://www.linkedin.com/in/example",
     "",
     "4. Find an existing prospect and inspect next step",
     "  audienti prospects list --query \"name or company\" --wide",
+    "  audienti prospects list --assigned-user unassigned",
+    "  audienti prospects assign <prsp_id> --assigned-user me",
     "  audienti companies search --query \"Honeywell\"",
     "  audienti prospects list --company-profile <prof_id>",
     "  audienti prospects show <prsp_id>",
@@ -4908,6 +5270,7 @@ const HELP_TOPICS = new Map([
     "  audienti operator outcome <row_id> --payload <file.json>",
     "",
     "7. Inspect account analytics",
+    "  audienti users activity me --window 7d",
     "  audienti analytics prospects --window 24h",
     "  audienti analytics users --user me --window 30d",
     "  audienti analytics visibility --window 24h --user me",
