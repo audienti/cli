@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.11] - 2026-07-15
+
+### Added
+
+- Add `audienti users select <account_user_id|email|name|me>` to save a default account user for CLI commands that accept `me` or default to the current operator.
+
 ## [0.1.10] - 2026-07-15
 
 ### Added

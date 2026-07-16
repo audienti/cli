@@ -32,7 +32,7 @@ const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
-const USERS_ACTIVITY_USAGE = "Usage: audienti users activity <account_user_id|me> [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
+const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
 const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> --status <draft|preparing|active|paused|archived> [--json] [--account <acct_id>]";
@@ -123,6 +123,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "accounts" && action === "list") return accountsList(rest, context, { accountOverride });
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
+  if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
@@ -274,6 +275,14 @@ async function authStatus(args, context, { accountOverride } = {}) {
   } else {
     writeLine(context.stdout, "Active account: none selected");
   }
+
+  const accountUser = defaultAccountUserConfig(config, { accountOverride });
+  if (accountUser.id) {
+    const name = accountUser.name ? `${accountUser.name} ` : "";
+    writeLine(context.stdout, `Default account user: ${name}(${accountUser.id})`);
+  } else {
+    writeLine(context.stdout, "Default account user: none selected");
+  }
 }
 
 async function authLogout(args, context) {
@@ -295,7 +304,10 @@ async function configList(args, context) {
     host: config.host || null,
     token: config.token ? maskToken(config.token) : null,
     accountId: config.accountId || null,
-    accountName: config.accountName || null
+    accountName: config.accountName || null,
+    accountUserId: config.accountUserId || null,
+    accountUserName: config.accountUserName || null,
+    accountUserEmail: config.accountUserEmail || null
   };
 
   if (values.json) return writeJson(context.stdout, payload);
@@ -310,6 +322,13 @@ async function configList(args, context) {
     writeLine(context.stdout, `Active account: ${name}(${payload.accountId})`);
   } else {
     writeLine(context.stdout, "Active account: none selected");
+  }
+
+  if (payload.accountUserId) {
+    const name = payload.accountUserName ? `${payload.accountUserName} ` : "";
+    writeLine(context.stdout, `Default account user: ${name}(${payload.accountUserId})`);
+  } else {
+    writeLine(context.stdout, "Default account user: none selected");
   }
 }
 
@@ -359,7 +378,10 @@ async function accountsSelect(args, context) {
   await writeConfig({
     ...config,
     accountId: account.prefix_id,
-    accountName: account.name
+    accountName: account.name,
+    accountUserId: account.prefix_id === config.accountId ? config.accountUserId : undefined,
+    accountUserName: account.prefix_id === config.accountId ? config.accountUserName : undefined,
+    accountUserEmail: account.prefix_id === config.accountId ? config.accountUserEmail : undefined
   }, { env: context.env });
 
   writeLine(context.stdout, `Selected account ${account.name} (${account.prefix_id}).`);
@@ -389,6 +411,46 @@ function resolveAccountSelection(accounts, term) {
   throw new CommandError(`Account term "${requested}" matched multiple accounts: ${options}.`);
 }
 
+function resolveAccountUserSelection(users, term) {
+  const requested = String(term || "").trim();
+  if (!requested) return null;
+
+  if (requested.toLowerCase() === "me") {
+    const currentUsers = users.filter((candidate) => candidate.current);
+    if (currentUsers.length === 1) return currentUsers[0];
+    if (currentUsers.length > 1) throw new CommandError("The token matched multiple current account users.");
+    return null;
+  }
+
+  const exactId = users.find((candidate) => String(candidate.id) === requested);
+  if (exactId) return exactId;
+
+  const normalizedRequested = requested.toLowerCase();
+  const exactEmail = users.find((candidate) => String(candidate.email || "").toLowerCase() === normalizedRequested);
+  if (exactEmail) return exactEmail;
+
+  const exactName = users.find((candidate) => String(candidate.name || "").toLowerCase() === normalizedRequested);
+  if (exactName) return exactName;
+
+  const matches = users.filter((candidate) => {
+    const id = String(candidate.id || "").toLowerCase();
+    const name = String(candidate.name || "").toLowerCase();
+    const email = String(candidate.email || "").toLowerCase();
+    return id.includes(normalizedRequested) || name.includes(normalizedRequested) || email.includes(normalizedRequested);
+  });
+
+  if (matches.length === 1) return matches[0];
+  if (matches.length === 0) return null;
+
+  const options = matches.map(accountUserLabel).join(", ");
+  throw new CommandError(`Account user term "${requested}" matched multiple account users: ${options}.`);
+}
+
+function accountUserLabel(accountUser) {
+  const name = accountUser?.name || accountUser?.email || `Account user ${accountUser?.id}`;
+  return `${name} (${accountUser?.id})`;
+}
+
 async function listsList(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, jsonOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti lists list [--json] [--account <acct_id>]");
@@ -411,6 +473,29 @@ async function usersList(args, context, { accountOverride } = {}) {
   renderUsers(users, context);
 }
 
+async function usersSelect(args, context, { accountOverride } = {}) {
+  const { positionals } = parseCommandArgs(args, {});
+  if (positionals.length !== 1) throw new CommandError("Usage: audienti users select <account_user_id|email|name|me> [--account <acct_id>]");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const users = await client.users(accountId);
+  const accountUser = resolveAccountUserSelection(users, positionals[0]);
+  if (!accountUser) {
+    throw new CommandError(`Account user ${positionals[0]} does not exist or is not visible in account ${accountId}.`);
+  }
+
+  await writeConfig({
+    ...config,
+    accountId,
+    accountName: accountOverride && accountOverride !== config.accountId ? undefined : config.accountName,
+    accountUserId: String(accountUser.id),
+    accountUserName: accountUser.name,
+    accountUserEmail: accountUser.email
+  }, { env: context.env });
+
+  writeLine(context.stdout, `Selected account user ${accountUserLabel(accountUser)}.`);
+}
+
 async function usersActivity(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -421,10 +506,10 @@ async function usersActivity(args, context, { accountOverride } = {}) {
     limit: { type: "string" },
     page: { type: "string" }
   });
-  if (positionals.length !== 1) throw new CommandError(USERS_ACTIVITY_USAGE);
+  if (positionals.length > 1) throw new CommandError(USERS_ACTIVITY_USAGE);
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.userActivity(accountId, positionals[0], compactObject({
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.userActivity(accountId, resolveAccountUserId(positionals[0] || "me", config, { accountOverride }), compactObject({
     mode: values.mode,
     window: values.window,
     platform: values.platform,
@@ -788,11 +873,11 @@ async function motionsAddProspects(args, context, { accountOverride } = {}) {
   }
 
   const [motionId, ...prospectIds] = positionals;
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
   const { payload, rejected } = await performBulkMutation(() =>
     client.addMotionProspects(accountId, motionId, compactObject({
       prospect_ids: prospectIds,
-      assigned_user_id: values["assigned-user"]
+      assigned_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride })
     })));
   if (values.json) {
     writeJson(context.stdout, payload);
@@ -958,7 +1043,7 @@ async function prospectsList(args, context, { accountOverride } = {}) {
   if (values.motion && values.play) throw new CommandError("Choose one motion filter: use either --motion or --play.");
   if (values.company && values["company-profile"]) throw new CommandError("Choose one company filter: use either --company or --company-profile.");
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
   const query = compactObject({
     query: values.query,
     company: values.company,
@@ -967,7 +1052,7 @@ async function prospectsList(args, context, { accountOverride } = {}) {
     play_id: values.play,
     list_id: values.list,
     stage: values.stage,
-    assigned_user_id: values["assigned-user"],
+    assigned_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride }),
     limit: values.limit,
     offset: values.offset,
     page: values.page,
@@ -991,11 +1076,12 @@ async function prospectsAssign(args, context, { accountOverride } = {}) {
     throw new CommandError(PROSPECTS_ASSIGN_USAGE);
   }
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const assignedUserId = resolveAccountUserId(values["assigned-user"], config, { accountOverride });
   const { payload, rejected } = await performBulkMutation(() =>
     client.assignProspects(accountId, {
       prospect_ids: positionals,
-      assigned_user_id: values["assigned-user"]
+      assigned_user_id: assignedUserId
     }));
   if (values.json) {
     writeJson(context.stdout, payload);
@@ -1004,7 +1090,7 @@ async function prospectsAssign(args, context, { accountOverride } = {}) {
 
   const successLabel = values["assigned-user"] === "unassign" ?
     `Unassigned ${successCount(payload)} prospects.` :
-    `Assigned ${successCount(payload)} prospects to ${display(values["assigned-user"])}.`;
+    `Assigned ${successCount(payload)} prospects to ${display(assignedUserId)}.`;
   renderBulkMutationResult(payload, context, {
     successLabel,
     zeroSuccessLabel: "No prospects were assigned."
@@ -1413,12 +1499,12 @@ async function prospectsImport(args, context, { accountOverride } = {}) {
     throw new CommandError("Usage: audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]");
   }
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
   const payload = await client.prospectImport(accountId, compactObject({
     linkedin_url: positionals[0],
     list_id: values.list,
     motion_id: values.motion,
-    assigned_user_id: values["assigned-user"]
+    assigned_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride })
   }));
   if (values.json) return writeJson(context.stdout, payload);
 
@@ -1440,7 +1526,7 @@ async function prospectsImportBatch(args, context, { accountOverride } = {}) {
   const rows = await readProspectImportBatchFile(values.file);
   if (rows.length === 0) throw new CommandError("Import batch file did not contain any prospects.");
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
   const result = {
     summary: {
       total: rows.length,
@@ -1456,7 +1542,7 @@ async function prospectsImportBatch(args, context, { accountOverride } = {}) {
       linkedin_url: row.linkedin_url,
       list_id: row.list_id || values.list,
       motion_id: row.motion_id || values.motion,
-      assigned_user_id: row.assigned_user_id || values["assigned-user"]
+      assigned_user_id: resolveAccountUserId(row.assigned_user_id || values["assigned-user"], config, { accountOverride })
     });
 
     try {
@@ -1614,8 +1700,8 @@ async function analyticsProspects(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, analyticsProspectsOptions());
   if (positionals.length > 0) throw new CommandError(ANALYTICS_PROSPECTS_USAGE);
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.analyticsProspects(accountId, analyticsQuery(values));
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsProspects(accountId, analyticsQuery(values, config, { accountOverride }));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsProspects(payload, context);
@@ -1634,13 +1720,13 @@ async function analyticsProspectsCohortAnalysis(args, context, { accountOverride
 
   const weeks = normalizedCohortAnalysisWeeks(values.weeks);
   const cohorts = weeklyCohorts({ weeks, now: currentDate(context) });
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
   const rows = [];
 
   for (const cohort of cohorts) {
     const payload = await client.analyticsProspects(accountId, compactObject({
       window: values.window,
-      account_user_id: values.user,
+      account_user_id: resolveAccountUserId(values.user, config, { accountOverride }),
       motion_id: values.motion,
       provenance: values.provenance,
       cohort_start: cohort.start_date,
@@ -1669,8 +1755,8 @@ async function analyticsUsers(args, context, { accountOverride } = {}) {
   validateDatePair(values.start, values.end, "--start", "--end");
   validateDatePair(values["cohort-start"], values["cohort-end"], "--cohort-start", "--cohort-end");
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.analyticsUsers(accountId, analyticsUsersQuery(values));
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsUsers(accountId, analyticsUsersQuery(values, config, { accountOverride }));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsUsers(payload, context);
@@ -1680,8 +1766,8 @@ async function analyticsVisibility(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, analyticsOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.analyticsVisibility(accountId, analyticsQuery(values));
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsVisibility(accountId, analyticsQuery(values, config, { accountOverride }));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsVisibility(payload, context);
@@ -1691,8 +1777,8 @@ async function analyticsContent(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, analyticsOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]");
 
-  const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.analyticsContent(accountId, analyticsQuery(values));
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsContent(accountId, analyticsQuery(values, config, { accountOverride }));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsContent(payload, context);
@@ -1736,6 +1822,25 @@ async function requireAccountContext(context, { accountOverride } = {}) {
     accountId,
     config,
     client: clientFromConfig(config, context)
+  };
+}
+
+function resolveAccountUserId(value, config = {}, { accountOverride } = {}) {
+  const rawValue = String(value || "").trim();
+  if (!rawValue) return undefined;
+  if (rawValue.toLowerCase() !== "me") return rawValue;
+
+  return defaultAccountUserConfig(config, { accountOverride }).id || "me";
+}
+
+function defaultAccountUserConfig(config = {}, { accountOverride } = {}) {
+  if (!config.accountUserId) return {};
+  if (accountOverride && accountOverride !== config.accountId) return {};
+
+  return {
+    id: String(config.accountUserId),
+    name: config.accountUserName,
+    email: config.accountUserEmail
   };
 }
 
@@ -1850,21 +1955,21 @@ function analyticsUsersOptions() {
   };
 }
 
-function analyticsQuery(values) {
+function analyticsQuery(values, config = {}, { accountOverride } = {}) {
   return compactObject({
     window: values.window,
     cohort_start: values["cohort-start"],
     cohort_end: values["cohort-end"],
     motion_id: values.motion,
     provenance: values.provenance,
-    account_user_id: values.user
+    account_user_id: resolveAccountUserId(values.user, config, { accountOverride })
   });
 }
 
-function analyticsUsersQuery(values) {
+function analyticsUsersQuery(values, config = {}, { accountOverride } = {}) {
   const hasDateRange = Boolean(values.start || values.end);
   return compactObject({
-    account_user_id: values.user || "me",
+    account_user_id: resolveAccountUserId(values.user || "me", config, { accountOverride }),
     window: hasDateRange ? undefined : (values.window || "30d"),
     start_date: values.start,
     end_date: values.end,
@@ -3662,6 +3767,7 @@ const HELP_TOPICS = new Map([
     "  audienti auth token <token>         Save an API token",
     "  audienti accounts list             See accounts available to this token",
     "  audienti accounts select <acct_id>  Use one account by default",
+    "  audienti users select <user>        Use one account user by default",
     "  audienti help agent-workflows       Common agent/operator paths",
     "",
     "Work areas:",
@@ -3669,7 +3775,8 @@ const HELP_TOPICS = new Map([
     "    audienti auth status",
     "    audienti config list",
     "    audienti users list",
-    "    audienti users activity <account_user_id|me>",
+    "    audienti users select <account_user_id|email|name|me>",
+    "    audienti users activity [account_user_id|me]",
     "",
     "  Motions / plays",
     "    audienti motions list",
@@ -3789,7 +3896,8 @@ const HELP_TOPICS = new Map([
     "  Host: string",
     "  Token: masked string",
     "  User: string",
-    "  Active account: account name and acct_ id, or none selected"
+    "  Active account: account name and acct_ id, or none selected",
+    "  Default account user: account user name and id, or none selected"
   ].join("\n")],
 
   ["auth logout", [
@@ -3823,7 +3931,8 @@ const HELP_TOPICS = new Map([
     "  Exists: yes|no",
     "  Host: string or none",
     "  Token: masked string or none",
-    "  Active account: account name and acct_ id, or none selected"
+    "  Active account: account name and acct_ id, or none selected",
+    "  Default account user: account user name and id, or none selected"
   ].join("\n")],
 
   ["accounts", [
@@ -3868,12 +3977,13 @@ const HELP_TOPICS = new Map([
   ["users", [
     "Usage:",
     "  audienti users list [--json]",
-    "  audienti users activity <account_user_id|me> [--json]",
+    "  audienti users select <account_user_id|email|name|me>",
+    "  audienti users activity [account_user_id|me] [--json]",
     "",
     "Status: implemented",
     "",
     "Purpose:",
-    "  List the account users that can be used as motion principals or assignees.",
+    "  List and select the account users that can be used as motion principals or assignees.",
     "",
     "CLI synonym:",
     "  `principals` is accepted anywhere `users` is accepted"
@@ -3897,6 +4007,24 @@ const HELP_TOPICS = new Map([
     "  current: boolean"
   ].join("\n")],
 
+  ["users select", [
+    "Usage:",
+    "  audienti users select <account_user_id|email|name|me> [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Save a default account user for commands that accept `me` or default to the current operator.",
+    "",
+    "Behavior:",
+    "  Validates the account user against `audienti users list` for the active account before saving.",
+    "  Selecting a different account with `audienti accounts select` clears the saved account user.",
+    "  Passing --account selects the account user for that account and makes it the active account.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/users.json"
+  ].join("\n")],
+
   ["users activity", [
     "Usage:",
     `  ${USERS_ACTIVITY_USAGE.slice("Usage: ".length)}`,
@@ -3907,7 +4035,7 @@ const HELP_TOPICS = new Map([
     "  Inspect one workspace user's outbound activity feed and action summary.",
     "",
     "Input shape:",
-    "  account_user_id: integer account user id, or me for the authenticated token user",
+    "  account_user_id: integer account user id, or me for the saved default account user when configured",
     "  mode: actor | account_usage",
     "  window: 24h | 7d | 30d",
     "  platform: linkedin | email | gmail",
@@ -5389,6 +5517,7 @@ const HELP_TOPICS = new Map([
     "  audienti accounts list",
     "  audienti accounts select <acct_id>",
     "  audienti users list",
+    "  audienti users select me",
     "  audienti offers list",
     "  audienti icps list",
     "",

@@ -25,6 +25,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /Analytics/);
   assert.match(stdout.output, /Utilities/);
   assert.match(stdout.output, /audienti help agent-workflows/);
+  assert.match(stdout.output, /audienti users select <user>/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
   assert.match(stdout.output, /audienti motions update <motn_id> --status <state>/);
@@ -88,6 +89,7 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.equal(exitCode, 0);
   assert.match(stdout.output, /Authenticate and select an account/);
   assert.match(stdout.output, /audienti users list/);
+  assert.match(stdout.output, /audienti users select me/);
   assert.match(stdout.output, /audienti offers list/);
   assert.match(stdout.output, /audienti icps list/);
   assert.match(stdout.output, /audienti motions create --payload <file\.json>/);
@@ -135,15 +137,19 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["users", "help"],
-      expected: [/Usage:\n  audienti users list \[--json\]/, /motion principals or assignees/]
+      expected: [/Usage:\n  audienti users list \[--json\]/, /audienti users select <account_user_id\|email\|name\|me>/]
     },
     {
       args: ["users", "list", "help"],
       expected: [/Usage:\n  audienti users list \[--json\]/, /GET \/api\/v1\/accounts\/:account_id\/users\.json/]
     },
     {
+      args: ["users", "select", "help"],
+      expected: [/Usage:\n  audienti users select <account_user_id\|email\|name\|me>/, /Save a default account user/]
+    },
+    {
       args: ["users", "activity", "help"],
-      expected: [/Usage:\n  audienti users activity <account_user_id\|me>/, /GET \/api\/v1\/accounts\/:account_id\/operations\/users\/:user_id\/activity\.json/]
+      expected: [/Usage:\n  audienti users activity \[account_user_id\|me\]/, /GET \/api\/v1\/accounts\/:account_id\/operations\/users\/:user_id\/activity\.json/]
     },
     {
       args: ["offers", "help"],
@@ -380,7 +386,10 @@ test("config list shows saved local config without calling the api", async () =>
       host: "https://app.audienti.com",
       token: "saved-token",
       accountId: "acct_one",
-      accountName: "One"
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
     }, { env });
 
     const stdout = captureStream();
@@ -396,6 +405,7 @@ test("config list shows saved local config without calling the api", async () =>
     assert.match(stdout.output, /Host: https:\/\/app\.audienti\.com/);
     assert.match(stdout.output, /Token: save\.\.\.oken/);
     assert.match(stdout.output, /Active account: One \(acct_one\)/);
+    assert.match(stdout.output, /Default account user: User One \(42\)/);
   });
 });
 
@@ -412,7 +422,10 @@ test("config list supports json output and empty config state", async () => {
       host: null,
       token: null,
       accountId: null,
-      accountName: null
+      accountName: null,
+      accountUserId: null,
+      accountUserName: null,
+      accountUserEmail: null
     });
   });
 });
@@ -492,7 +505,12 @@ test("accounts select persists only a visible prefixed account id", async () => 
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
       host: "https://app.audienti.com",
-      token: "saved-token"
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
     }, { env });
 
     const stdout = captureStream();
@@ -510,6 +528,97 @@ test("accounts select persists only a visible prefixed account id", async () => 
       token: "saved-token",
       accountId: "acct_two",
       accountName: "Two"
+    });
+  });
+});
+
+test("users select persists a visible default account user", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/users.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse([
+        { id: 42, user_id: 7, name: "User One", email: "one@example.com", roles: ["admin"], current: true },
+        { id: 43, user_id: 8, name: "User Two", email: "two@example.com", roles: ["member"], current: false }
+      ]);
+    });
+
+    const exitCode = await run(["users", "select", "two@example.com"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Selected account user User Two \(43\)\./);
+    assert.deepEqual(await readConfig({ env }), {
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "43",
+      accountUserName: "User Two",
+      accountUserEmail: "two@example.com"
+    });
+  });
+});
+
+test("users select accepts me for the current account user", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { id: 42, user_id: 7, name: "User One", email: "one@example.com", current: true },
+      { id: 43, user_id: 8, name: "User Two", email: "two@example.com", current: false }
+    ]));
+
+    const exitCode = await run(["users", "select", "me"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Selected account user User One \(42\)\./);
+    assert.equal((await readConfig({ env })).accountUserId, "42");
+  });
+});
+
+test("accounts select preserves default user when reselecting the same account", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { id: 1, prefix_id: "acct_one", name: "One" },
+      { id: 2, prefix_id: "acct_two", name: "Two" }
+    ]));
+
+    const exitCode = await run(["accounts", "select", "acct_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(await readConfig({ env }), {
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
     });
   });
 });
@@ -698,6 +807,36 @@ test("users activity fetches a user activity feed", async () => {
     assert.match(stdout.output, /Window actions: 2/);
     assert.match(stdout.output, /TIME\tACTION\tPLATFORM\tPROSPECT\tCOMPANY\tDETAILS/);
     assert.match(stdout.output, /Followed Profile\tlinkedin\tPat Prospect\tExampleCo\tFollowed the profile\./);
+  });
+});
+
+test("users activity defaults to the saved account user", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/operations/users/42/activity.json?window=7d");
+      return jsonResponse({
+        account_user: { id: 42, name: "User One", email: "one@example.com" },
+        filters: { mode: "actor", window: "7d" },
+        summary: { window_count: 0 },
+        events: []
+      });
+    });
+
+    const exitCode = await run(["users", "activity", "--window", "7d"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /User: User One \(42\)/);
   });
 });
 
@@ -2055,6 +2194,35 @@ test("prospects assign posts prospect ids and assignee", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Assigned 2 prospects to me\./);
     assert.match(stdout.output, /Failures: 0/);
+  });
+});
+
+test("prospects assign resolves me to the saved account user", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/assign.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        prospect_ids: ["prsp_one"],
+        assigned_user_id: "42"
+      });
+      return jsonResponse({ assigned: ["prsp_one"], failed: [] });
+    });
+
+    const exitCode = await run(["prospects", "assign", "prsp_one", "--assigned-user", "me"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Assigned 1 prospects to 42\./);
   });
 });
 
@@ -5205,6 +5373,41 @@ test("analytics users defaults to me and a 30 day activity window", async () => 
   });
 });
 
+test("analytics users defaults to the saved account user when selected", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/users.json");
+      assert.equal(url.searchParams.get("account_user_id"), "42");
+      assert.equal(url.searchParams.get("window"), "30d");
+      return jsonResponse({
+        kind: "users",
+        account_user: { id: 42, name: "User One" },
+        window: { key: "30d" },
+        summary: { total_count: 0, performed_by_others_count: 0, performed_by_others_percentage: null },
+        daily_actions: [],
+        action_mix: [],
+        platform_mix: []
+      });
+    });
+    const stdout = captureStream();
+
+    const exitCode = await run(["analytics", "user"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /User: User One \(42\)/);
+  });
+});
+
 test("analytics visibility supports visops alias and json output", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -5387,7 +5590,10 @@ test("auth status checks live auth and masks token", async () => {
       host: "https://app.audienti.com",
       token: "abcd1234wxyz",
       accountId: "acct_one",
-      accountName: "One"
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
     }, { env });
 
     const stdout = captureStream();
@@ -5403,5 +5609,6 @@ test("auth status checks live auth and masks token", async () => {
     assert.match(stdout.output, /Token: abcd...wxyz/);
     assert.match(stdout.output, /User: User One/);
     assert.match(stdout.output, /Active account: One \(acct_one\)/);
+    assert.match(stdout.output, /Default account user: User One \(42\)/);
   });
 });

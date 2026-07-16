@@ -30,11 +30,17 @@ Create an Audienti API token through the product, then configure this machine:
 audienti auth token <token>
 audienti accounts list --json
 audienti accounts select <acct_id>
+audienti users list
+audienti users select <account_user_id|email|name|me>
 ```
 
 The CLI writes its local configuration to `~/.config/audienti/config.json` with
 owner-only permissions. Do not place a production token in an agent prompt,
 repository file, issue, or CI secret.
+
+The selected account user is used when commands accept `me` or default to the
+current operator, such as `audienti users activity`, `audienti analytics users`,
+and `audienti prospects assign --assigned-user me`.
 
 ## Agent Workflows
 
@@ -61,7 +67,7 @@ audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned
 audienti prospects assign <prsp_id> --assigned-user me
-audienti users activity me --window 7d
+audienti users activity --window 7d
 audienti analytics prospects --window 24h
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
