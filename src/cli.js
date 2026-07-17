@@ -17,6 +17,8 @@ const DEFAULT_LIST_LIMIT = 20;
 const API_MAX_LIST_LIMIT = 100;
 const DEFAULT_LOOKUP_TIMEOUT_SECONDS = 60;
 const DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS = 2;
+const PACKAGE_NAME = "@audienti/cli";
+const DEFAULT_NPM_REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_PROFILE_IDENTIFIERS = [
   "linkedin/profile",
   "linkedin/company",
@@ -31,17 +33,34 @@ const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id>
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
+const PROSPECTS_REJECT_USAGE = "Usage: audienti prospects reject <prsp_id> [--json] [--account <acct_id>]";
+const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit>] [--json] [--account <acct_id>]";
+const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--json] [--account <acct_id>]";
+const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [filters] [--account <acct_id>]";
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
+const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
+const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
+const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> --status <draft|preparing|active|paused|archived> [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]";
+const MOTIONS_ADD_TAG_USAGE = "Usage: audienti motions add-tag <motn_id> <tag> [--json] [--account <acct_id>]";
+const MOTIONS_REMOVE_TAG_USAGE = "Usage: audienti motions remove-tag <motn_id> <tag> [--json] [--account <acct_id>]";
 const MOTIONS_DELETE_USAGE = "Usage: audienti motions delete <motn_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
 const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
 const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
+const MOTIONS_RUN_DISCOVERY_USAGE = "Usage: audienti motions run-discovery <motn_id> [--target-count <n>] [--json] [--account <acct_id>]";
+const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
+const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> [--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]";
+const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]";
+const ICPS_REMOVE_TAG_USAGE = "Usage: audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]";
+const LISTS_ADD_TAG_USAGE = "Usage: audienti lists add-tag <list_id> <tag> [--json] [--account <acct_id>]";
+const LISTS_REMOVE_TAG_USAGE = "Usage: audienti lists remove-tag <list_id> <tag> [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
+const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const COHORT_STAGE_ORDER = [
   "identified",
   "pre_connect",
@@ -120,20 +139,32 @@ async function dispatch(argv, context) {
   if (normalizedResource === "auth" && action === "status") return authStatus(rest, context, { accountOverride });
   if (normalizedResource === "auth" && action === "logout") return authLogout(rest, context);
   if (normalizedResource === "config" && action === "list") return configList(rest, context);
+  if (normalizedResource === "update" && action === "check") return updateCheck(rest, context);
   if (normalizedResource === "accounts" && action === "list") return accountsList(rest, context, { accountOverride });
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "show") return offersShow(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "update") return offersUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "delete") return offersDelete(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "list") return icpsList(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "show") return icpsShow(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "create") return icpsCreate(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "update") return icpsUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "add-tag") return icpsTagMutation("add", rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "remove-tag") return icpsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "companies" && action === "search") return companiesSearch(rest, context, { accountOverride });
+  if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
+  if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "list") return listsList(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "create") return listsCreate(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "show") return listsShow(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "update") return listsUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "lists" && action === "add-tag") return listsTagMutation("add", rest, context, { accountOverride });
+  if (normalizedResource === "lists" && action === "remove-tag") return listsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "delete") return listsDelete(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "prospects") return listProspects(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "add-prospects") return listsAddProspects(rest, context, { accountOverride });
@@ -146,13 +177,20 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "create") return motionsCreate(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "update") return motionsUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "add-tag") return motionsTagMutation("add", rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "remove-tag") return motionsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "motions" && ["activate", "pause", "archive"].includes(action)) return motionsStatusShortcut(action, rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "delete") return motionsDelete(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "clone") return motionsClone(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "run-discovery") return motionsRunDiscovery(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "check") return prospectsCheck(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "reject") return prospectsDisposition("reject", rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "nurture") return prospectsDisposition("nurture", rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "restore") return prospectsDisposition("restore", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "timeline") return prospectsTimeline(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "message-types") return prospectsMessageTypes(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
@@ -174,6 +212,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "analytics" && ["users", "user"].includes(action)) return analyticsUsers(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["dashboard", "campaign", "campaigns"].includes(action)) return analyticsDashboard(rest, context, { accountOverride });
 
   throw new CommandError(usage(), { exitCode: resource ? 1 : 0 });
 }
@@ -332,6 +371,51 @@ async function configList(args, context) {
   }
 }
 
+async function updateCheck(args, context) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    registry: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError("Usage: audienti update check [--json] [--registry <url>]");
+
+  const localPackage = await readLocalPackageMetadata();
+  let payload;
+
+  try {
+    const latestVersion = await fetchLatestPackageVersion({
+      fetchImpl: context.fetchImpl,
+      registry: values.registry
+    });
+    const updateAvailable = compareVersions(localPackage.version, latestVersion) < 0;
+    payload = updateCheckPayload({
+      currentVersion: localPackage.version,
+      latestVersion,
+      status: updateAvailable ? "update_available" : "current",
+      updateAvailable,
+      registry: values.registry || DEFAULT_NPM_REGISTRY,
+      now: context.now()
+    });
+  } catch (error) {
+    payload = updateCheckPayload({
+      currentVersion: localPackage.version,
+      latestVersion: null,
+      status: "unknown",
+      updateAvailable: null,
+      registry: values.registry || DEFAULT_NPM_REGISTRY,
+      error: error.message,
+      now: context.now()
+    });
+  }
+
+  if (values.json) {
+    writeJson(context.stdout, payload);
+    return payload.status === "unknown" ? 1 : 0;
+  }
+
+  renderUpdateCheck(payload, context);
+  return payload.status === "unknown" ? 1 : 0;
+}
+
 async function accountsList(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     json: { type: "boolean" }
@@ -452,11 +536,14 @@ function accountUserLabel(accountUser) {
 }
 
 async function listsList(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, jsonOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti lists list [--json] [--account <acct_id>]");
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    tag: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError("Usage: audienti lists list [--tag <tag>] [--json] [--account <acct_id>]");
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const lists = await client.lists(accountId);
+  const lists = filterRecordsByTag(await client.lists(accountId), values.tag, "tags");
   if (values.json) return writeJson(context.stdout, lists);
 
   renderLists(lists, context);
@@ -533,6 +620,17 @@ async function offersList(args, context, { accountOverride } = {}) {
   renderOffers(offers, context);
 }
 
+async function offersShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(OFFERS_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const offer = await client.offer(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, offer);
+
+  renderOffer(offer, context);
+}
+
 async function offersCreate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -559,15 +657,72 @@ async function offersCreate(args, context, { accountOverride } = {}) {
   if (offer?.url) writeLine(context.stdout, `URL: ${offer.url}`);
 }
 
-async function icpsList(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, jsonOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti icps list [--json] [--account <acct_id>]");
+async function offersUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    name: { type: "string" },
+    description: { type: "string" },
+    url: { type: "string" }
+  });
+  const hasUpdateField = values.name || values.description !== undefined || values.url !== undefined;
+  if (positionals.length !== 1 || !hasUpdateField) {
+    throw new CommandError(OFFERS_UPDATE_USAGE);
+  }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const icps = await client.icps(accountId);
+  const offer = await client.updateOffer(accountId, positionals[0], {
+    offer: compactObject({
+      name: values.name,
+      description: values.description,
+      url: values.url
+    })
+  });
+  if (values.json) return writeJson(context.stdout, offer);
+
+  writeLine(context.stdout, `Updated offer ${display(offer?.name)} (${display(offer?.prefix_id)}).`);
+  renderOffer(offer, context);
+}
+
+async function offersDelete(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    confirm: { type: "string" }
+  });
+  const normalizedConfirm = String(values.confirm || "").trim().toLowerCase();
+  if (positionals.length !== 1 || !DELETE_CONFIRMATION_VALUES.has(normalizedConfirm)) {
+    throw new CommandError(OFFERS_DELETE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteOffer(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Deleted offer ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
+}
+
+async function icpsList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    tag: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError("Usage: audienti icps list [--tag <tag>] [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icps = filterRecordsByTag(await client.icps(accountId), values.tag, "tags");
   if (values.json) return writeJson(context.stdout, icps);
 
   renderIcps(icps, context);
+}
+
+async function icpsShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(ICPS_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icp = await client.icp(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, icp);
+
+  renderIcp(icp, context);
 }
 
 async function icpsCreate(args, context, { accountOverride } = {}) {
@@ -576,10 +731,11 @@ async function icpsCreate(args, context, { accountOverride } = {}) {
     payload: { type: "string" },
     name: { type: "string" },
     notes: { type: "string" },
+    tags: { type: "string" },
     "discovery-keyword": { type: "string" }
   });
   if (positionals.length > 0) {
-    throw new CommandError("Usage: audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] | --payload <file.json>) [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]");
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -589,7 +745,56 @@ async function icpsCreate(args, context, { accountOverride } = {}) {
 
   writeLine(context.stdout, `Created ICP ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
   if (icp?.notes) writeLine(context.stdout, `Notes: ${icp.notes}`);
+  if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
   if (icp?.discovery_keyword) writeLine(context.stdout, `Discovery keyword: ${icp.discovery_keyword}`);
+}
+
+async function icpsUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    name: { type: "string" },
+    notes: { type: "string" },
+    tags: { type: "string" },
+    "discovery-keyword": { type: "string" }
+  });
+  const hasUpdateField = values.name || values.notes !== undefined || values.tags !== undefined || values["discovery-keyword"] !== undefined;
+  if (positionals.length !== 1 || !hasUpdateField) {
+    throw new CommandError(ICPS_UPDATE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icp = await client.updateIcp(accountId, positionals[0], {
+    icp: compactObject({
+      name: values.name,
+      notes: values.notes,
+      discovery_keyword: values["discovery-keyword"],
+      tags: values.tags !== undefined ? tagList(values.tags) : undefined
+    })
+  });
+  if (values.json) return writeJson(context.stdout, icp);
+
+  writeLine(context.stdout, `Updated ICP ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
+  renderIcp(icp, context);
+}
+
+async function icpsTagMutation(action, args, context, { accountOverride } = {}) {
+  const usageText = action === "add" ? ICPS_ADD_TAG_USAGE : ICPS_REMOVE_TAG_USAGE;
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) {
+    throw new CommandError(usageText);
+  }
+
+  const [icpId, tag] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icp = action === "add" ?
+    await client.addIcpTag(accountId, icpId, { tag }) :
+    await client.removeIcpTag(accountId, icpId, { tag });
+  if (values.json) return writeJson(context.stdout, icp);
+
+  const verb = action === "add" ? "Added" : "Removed";
+  const preposition = action === "add" ? "to" : "from";
+  writeLine(context.stdout, `${verb} tag ${display(tag)} ${preposition} ICP ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
+  if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
 }
 
 async function companiesSearch(args, context, { accountOverride } = {}) {
@@ -608,16 +813,47 @@ async function companiesSearch(args, context, { accountOverride } = {}) {
   renderCompanies(payload, context);
 }
 
+async function tagsList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti tags list [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.tags(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderTags(payload, context);
+}
+
+async function tagsShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError("Usage: audienti tags show <tag> [--json] [--account <acct_id>]");
+
+  const tag = tagList(positionals[0])[0];
+  if (!tag) throw new CommandError("Usage: audienti tags show <tag> [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = {
+    tag,
+    icps: filterRecordsByTag(await client.icps(accountId), tag, "tags"),
+    lists: filterRecordsByTag(await client.lists(accountId), tag, "tags"),
+    motions: filterRecordsByTag(await client.motions(accountId), tag, "play_tags")
+  };
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderTagDetails(payload, context);
+}
+
 async function listsCreate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     name: { type: "string" },
     description: { type: "string" },
+    tags: { type: "string" },
     "campaign-hook": { type: "string" },
     "audience-note": { type: "string" }
   });
   if (positionals.length > 0 || !values.name) {
-    throw new CommandError("Usage: audienti lists create --name <text> [--description <text>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti lists create --name <text> [--description <text>] [--tags <tag[,tag...]>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]");
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -629,6 +865,7 @@ async function listsCreate(args, context, { accountOverride } = {}) {
     list: compactObject({
       name: values.name,
       description: values.description,
+      tags: tagList(values.tags),
       campaign_brief: Object.keys(campaignBrief).length > 0 ? campaignBrief : undefined
     })
   });
@@ -654,13 +891,14 @@ async function listsUpdate(args, context, { accountOverride } = {}) {
     ...jsonOptions(),
     name: { type: "string" },
     description: { type: "string" },
+    tags: { type: "string" },
     "campaign-hook": { type: "string" },
     "audience-note": { type: "string" }
   });
   const hasCampaignUpdate = values["campaign-hook"] || values["audience-note"];
-  const hasUpdateField = values.name || values.description || hasCampaignUpdate;
+  const hasUpdateField = values.name || values.description || values.tags !== undefined || hasCampaignUpdate;
   if (positionals.length !== 1 || !hasUpdateField) {
-    throw new CommandError("Usage: audienti lists update <list_id> [--name <text>] [--description <text>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti lists update <list_id> [--name <text>] [--description <text>] [--tags <tag[,tag...]>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]");
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -672,6 +910,7 @@ async function listsUpdate(args, context, { accountOverride } = {}) {
     list: compactObject({
       name: values.name,
       description: values.description,
+      tags: values.tags !== undefined ? tagList(values.tags) : undefined,
       campaign_brief: Object.keys(campaignBrief).length > 0 ? campaignBrief : undefined
     })
   });
@@ -679,6 +918,26 @@ async function listsUpdate(args, context, { accountOverride } = {}) {
 
   writeLine(context.stdout, `Updated list ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
   if (payload?.description) writeLine(context.stdout, `Description: ${payload.description}`);
+}
+
+async function listsTagMutation(action, args, context, { accountOverride } = {}) {
+  const usageText = action === "add" ? LISTS_ADD_TAG_USAGE : LISTS_REMOVE_TAG_USAGE;
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) {
+    throw new CommandError(usageText);
+  }
+
+  const [listId, tag] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = action === "add" ?
+    await client.addListTag(accountId, listId, { tag }) :
+    await client.removeListTag(accountId, listId, { tag });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const verb = action === "add" ? "Added" : "Removed";
+  const preposition = action === "add" ? "to" : "from";
+  writeLine(context.stdout, `${verb} tag ${display(tag)} ${preposition} list ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
+  if (Array.isArray(payload?.tags)) writeLine(context.stdout, `Tags: ${display(payload.tags.join(", "), "-")}`);
 }
 
 async function listsDelete(args, context, { accountOverride } = {}) {
@@ -780,11 +1039,14 @@ async function listsRemoveProspects(args, context, { accountOverride } = {}) {
 }
 
 async function motionsList(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, jsonOptions());
-  if (positionals.length > 0) throw new CommandError("Usage: audienti motions list [--json] [--account <acct_id>]");
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    tag: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError("Usage: audienti motions list [--tag <tag>] [--json] [--account <acct_id>]");
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const motions = await client.motions(accountId);
+  const motions = filterRecordsByTag(await client.motions(accountId), values.tag, "play_tags");
   if (values.json) return writeJson(context.stdout, motions);
 
   renderMotions(motions, context);
@@ -810,6 +1072,22 @@ async function motionsStatus(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, status);
 
   renderMotionStatus(status, context);
+}
+
+async function motionsRunDiscovery(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    "target-count": { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(MOTIONS_RUN_DISCOVERY_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.runMotionDiscovery(accountId, positionals[0], compactObject({
+    target_count: normalizeOptionalPositiveInteger(values["target-count"], "--target-count")
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderMotionDiscoveryRun(payload, context);
 }
 
 async function motionsAnalytics(args, context, { accountOverride } = {}) {
@@ -929,13 +1207,26 @@ async function motionsDelete(args, context, { accountOverride } = {}) {
 async function motionsUpdate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    status: { type: "string" }
+    status: { type: "string" },
+    tags: { type: "string" }
   });
-  if (positionals.length !== 1 || !values.status) {
+  const hasUpdateField = values.status || values.tags !== undefined;
+  if (positionals.length !== 1 || !hasUpdateField) {
     throw new CommandError(MOTIONS_UPDATE_USAGE);
   }
 
-  return updateMotionStatus(positionals[0], values.status, context, { accountOverride, json: values.json });
+  const normalizedStatus = normalizeMotionStatus(values.status);
+  const motionAttributes = compactObject({
+    status: normalizedStatus,
+    play_tags: values.tags !== undefined ? tagList(values.tags) : undefined
+  });
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const motion = await client.updateMotion(accountId, positionals[0], { motion: motionAttributes });
+  if (values.json) return writeJson(context.stdout, motion);
+
+  writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}).`);
+  renderMotion(motion, context);
 }
 
 async function motionsStatusShortcut(action, args, context, { accountOverride } = {}) {
@@ -954,10 +1245,7 @@ async function motionsStatusShortcut(action, args, context, { accountOverride } 
 }
 
 async function updateMotionStatus(motionId, status, context, { accountOverride, json } = {}) {
-  const normalizedStatus = String(status || "").trim().toLowerCase();
-  if (!MOTION_STATUS_VALUES.has(normalizedStatus)) {
-    throw new CommandError(MOTIONS_UPDATE_USAGE);
-  }
+  const normalizedStatus = normalizeMotionStatus(status);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const motion = await client.updateMotion(accountId, motionId, {
@@ -969,6 +1257,37 @@ async function updateMotionStatus(motionId, status, context, { accountOverride, 
 
   writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}) to ${display(motion?.status)}.`);
   renderMotion(motion, context);
+}
+
+function normalizeMotionStatus(status) {
+  if (status === undefined) return undefined;
+
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  if (!MOTION_STATUS_VALUES.has(normalizedStatus)) {
+    throw new CommandError(MOTIONS_UPDATE_USAGE);
+  }
+
+  return normalizedStatus;
+}
+
+async function motionsTagMutation(action, args, context, { accountOverride } = {}) {
+  const usageText = action === "add" ? MOTIONS_ADD_TAG_USAGE : MOTIONS_REMOVE_TAG_USAGE;
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) {
+    throw new CommandError(usageText);
+  }
+
+  const [motionId, tag] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const motion = action === "add" ?
+    await client.addMotionTag(accountId, motionId, { tag }) :
+    await client.removeMotionTag(accountId, motionId, { tag });
+  if (values.json) return writeJson(context.stdout, motion);
+
+  const verb = action === "add" ? "Added" : "Removed";
+  const preposition = action === "add" ? "to" : "from";
+  writeLine(context.stdout, `${verb} tag ${display(tag)} ${preposition} motion ${display(motion?.name)} (${display(motion?.prefix_id)}).`);
+  if (Array.isArray(motion?.play_tags)) writeLine(context.stdout, `Tags: ${display(motion.play_tags.join(", "), "-")}`);
 }
 
 async function motionsClone(args, context, { accountOverride } = {}) {
@@ -1018,7 +1337,47 @@ async function motionsMoveProspects(args, context, { accountOverride } = {}) {
 }
 
 async function prospectsList(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, {
+  const { values, positionals } = parseCommandArgs(args, prospectFilterOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti prospects list [--json] [filters] [--account <acct_id>]");
+  if (values.csv && values.json) throw new CommandError("Choose one output format: use either --csv or --json.");
+  validateProspectFilterValues(values);
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const query = prospectQueryFromValues(values, config, { accountOverride });
+  const payload = values.all ?
+    await fetchAllProspects(client, accountId, query, { totalLimit: parseProspectTotalLimit(values.limit) }) :
+    await client.prospects(accountId, query);
+  if (values.json) return writeJson(context.stdout, payload);
+  if (values.csv) return writeLine(context.stdout, prospectsToCsv(payload?.prospects || []));
+
+  renderProspects(payload, context, { wide: values.wide || values.all, profiles: values.profiles });
+}
+
+async function prospectsCheck(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, prospectFilterOptions());
+  if (positionals.length > 0) throw new CommandError(PROSPECTS_CHECK_USAGE);
+  if (values.csv && values.json) throw new CommandError("Choose one output format: use either --csv or --json.");
+  if (values.company || values["company-profile"]) throw new CommandError("Company filters are not supported for `prospects check`; it already finds prospects missing a certified company.");
+  validateProspectFilterValues(values);
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const query = {
+    ...prospectQueryFromValues(values, config, { accountOverride }),
+    data_quality: "missing_certified_company"
+  };
+  const rawPayload = values.all ?
+    await fetchAllProspects(client, accountId, query, { totalLimit: parseProspectTotalLimit(values.limit) }) :
+    await client.prospects(accountId, query);
+  const payload = withProspectAppUrls(rawPayload, client.host);
+
+  if (values.json) return writeJson(context.stdout, payload);
+  if (values.csv) return writeLine(context.stdout, prospectCheckToCsv(payload?.prospects || []));
+
+  renderProspectCheck(payload, context);
+}
+
+function prospectFilterOptions() {
+  return {
     ...jsonOptions(),
     all: { type: "boolean" },
     csv: { type: "boolean" },
@@ -1035,16 +1394,18 @@ async function prospectsList(args, context, { accountOverride } = {}) {
     page: { type: "string" },
     profiles: { type: "boolean" },
     wide: { type: "boolean" }
-  });
-  if (positionals.length > 0) throw new CommandError("Usage: audienti prospects list [--json] [filters] [--account <acct_id>]");
-  if (values.csv && values.json) throw new CommandError("Choose one output format: use either --csv or --json.");
+  };
+}
+
+function validateProspectFilterValues(values) {
   if (values.page && values.offset) throw new CommandError("Choose one pagination mode: use either --page or --offset.");
   if (values.all && (values.page || values.offset)) throw new CommandError("--all cannot be combined with --page or --offset.");
   if (values.motion && values.play) throw new CommandError("Choose one motion filter: use either --motion or --play.");
   if (values.company && values["company-profile"]) throw new CommandError("Choose one company filter: use either --company or --company-profile.");
+}
 
-  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
-  const query = compactObject({
+function prospectQueryFromValues(values, config, { accountOverride } = {}) {
+  return compactObject({
     query: values.query,
     company: values.company,
     company_profile_id: values["company-profile"],
@@ -1058,13 +1419,6 @@ async function prospectsList(args, context, { accountOverride } = {}) {
     page: values.page,
     include_profiles: values.profiles
   });
-  const payload = values.all ?
-    await fetchAllProspects(client, accountId, query, { totalLimit: parseProspectTotalLimit(values.limit) }) :
-    await client.prospects(accountId, query);
-  if (values.json) return writeJson(context.stdout, payload);
-  if (values.csv) return writeLine(context.stdout, prospectsToCsv(payload?.prospects || []));
-
-  renderProspects(payload, context, { wide: values.wide || values.all, profiles: values.profiles });
 }
 
 async function prospectsAssign(args, context, { accountOverride } = {}) {
@@ -1107,6 +1461,32 @@ async function prospectsShow(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, prospect);
 
   renderProspect(prospect, context);
+}
+
+async function prospectsDisposition(action, args, context, { accountOverride } = {}) {
+  const usageText = {
+    reject: PROSPECTS_REJECT_USAGE,
+    nurture: PROSPECTS_NURTURE_USAGE,
+    restore: PROSPECTS_RESTORE_USAGE
+  }[action];
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    reason: { type: "string" }
+  });
+  if (positionals.length !== 1 || (action !== "nurture" && values.reason)) {
+    throw new CommandError(usageText);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const prospectId = positionals[0];
+  const payload = action === "reject" ?
+    await client.rejectProspect(accountId, prospectId) :
+    action === "restore" ?
+      await client.restoreProspect(accountId, prospectId) :
+      await client.nurtureProspect(accountId, prospectId, compactObject({ inactive_reason: values.reason }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectDisposition(payload, context, { action });
 }
 
 async function prospectsTimeline(args, context, { accountOverride } = {}) {
@@ -1784,6 +2164,18 @@ async function analyticsContent(args, context, { accountOverride } = {}) {
   renderAnalyticsContent(payload, context);
 }
 
+async function analyticsDashboard(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsDashboardOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_DASHBOARD_USAGE);
+  validateDatePair(values["cohort-start"], values["cohort-end"], "--cohort-start", "--cohort-end");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsDashboard(accountId, analyticsDashboardQuery(values, config, { accountOverride }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsDashboard(payload, context);
+}
+
 function parseCommandArgs(args, options) {
   try {
     return parseArgs({
@@ -1955,6 +2347,20 @@ function analyticsUsersOptions() {
   };
 }
 
+function analyticsDashboardOptions() {
+  return {
+    ...jsonOptions(),
+    "cohort-start": { type: "string" },
+    "cohort-end": { type: "string" },
+    "play-tag": { type: "string" },
+    tag: { type: "string" },
+    motion: { type: "string" },
+    offer: { type: "string" },
+    icp: { type: "string" },
+    user: { type: "string" }
+  };
+}
+
 function analyticsQuery(values, config = {}, { accountOverride } = {}) {
   return compactObject({
     window: values.window,
@@ -1978,6 +2384,18 @@ function analyticsUsersQuery(values, config = {}, { accountOverride } = {}) {
     motion_id: values.motion,
     provenance: values.provenance,
     platform: values.platform || values.channel
+  });
+}
+
+function analyticsDashboardQuery(values, config = {}, { accountOverride } = {}) {
+  return compactObject({
+    cohort_start_date: values["cohort-start"],
+    cohort_end_date: values["cohort-end"],
+    play_tag: values["play-tag"] || values.tag,
+    motion_id: values.motion,
+    offer_id: values.offer,
+    icp_id: values.icp,
+    account_user_id: resolveAccountUserId(values.user, config, { accountOverride })
   });
 }
 
@@ -2086,26 +2504,125 @@ function provenancePayload(provenance) {
 
 function compactObject(object) {
   return Object.fromEntries(
-    Object.entries(object).filter(([, value]) => value !== undefined && value !== null && String(value).trim() !== "")
+    Object.entries(object).filter(([, value]) => {
+      if (value === undefined || value === null) return false;
+      if (Array.isArray(value)) return true;
+
+      return String(value).trim() !== "";
+    })
   );
+}
+
+async function readLocalPackageMetadata() {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  return {
+    name: packageJson.name || PACKAGE_NAME,
+    version: packageJson.version
+  };
+}
+
+async function fetchLatestPackageVersion({ fetchImpl, registry }) {
+  if (!fetchImpl) throw new Error("This Node runtime does not provide fetch.");
+
+  const response = await fetchImpl(registryLatestPackageUrl(registry), {
+    headers: {
+      accept: "application/vnd.npm.install-v1+json, application/json"
+    }
+  });
+  const bodyText = await response.text();
+  const body = bodyText ? JSON.parse(bodyText) : {};
+
+  if (!response.ok) {
+    throw new Error(body?.error || body?.message || `Registry returned HTTP ${response.status}.`);
+  }
+
+  const version = body?.version?.toString().trim();
+  if (!version) throw new Error("Registry response did not include a version.");
+
+  return version;
+}
+
+function registryLatestPackageUrl(registry) {
+  const base = new URL(registry || DEFAULT_NPM_REGISTRY);
+  if (!base.pathname.endsWith("/")) base.pathname = `${base.pathname}/`;
+
+  return new URL(`${encodeURIComponent(PACKAGE_NAME)}/latest`, base).toString();
+}
+
+function updateCheckPayload({ currentVersion, latestVersion, status, updateAvailable, registry, error, now }) {
+  return {
+    kind: "update_check",
+    package_name: PACKAGE_NAME,
+    current_version: currentVersion,
+    latest_version: latestVersion,
+    update_available: updateAvailable,
+    status,
+    install_command: `npm install --global ${PACKAGE_NAME}`,
+    registry,
+    checked_at: now.toISOString(),
+    error: error || null
+  };
+}
+
+function compareVersions(currentVersion, latestVersion) {
+  const current = parseVersion(currentVersion);
+  const latest = parseVersion(latestVersion);
+
+  for (let index = 0; index < 3; index += 1) {
+    if (current.parts[index] !== latest.parts[index]) return current.parts[index] - latest.parts[index];
+  }
+
+  if (current.prerelease === latest.prerelease) return 0;
+  if (!current.prerelease) return 1;
+  if (!latest.prerelease) return -1;
+
+  return current.prerelease.localeCompare(latest.prerelease);
+}
+
+function parseVersion(version) {
+  const [core, prerelease = ""] = String(version || "").split("-", 2);
+  const parts = core.split(".").map((part) => Number.parseInt(part, 10));
+
+  return {
+    parts: [parts[0] || 0, parts[1] || 0, parts[2] || 0],
+    prerelease
+  };
+}
+
+function tagList(value) {
+  if (value === undefined) return undefined;
+
+  return String(value)
+    .split(/[\r\n,;]+/)
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean)
+    .filter((tag, index, tags) => tags.indexOf(tag) === index);
+}
+
+function filterRecordsByTag(records, value, field) {
+  const tag = tagList(value)?.[0];
+  if (!tag) return records;
+
+  return Array.isArray(records) ? records.filter((record) => (tagList(record?.[field]) || []).includes(tag)) : [];
 }
 
 async function icpCreatePayload(values) {
   if (values.payload) {
-    if (values.name || values.notes || values["discovery-keyword"]) {
-      throw new CommandError("Choose one ICP input mode: either --payload <file.json> or the simple --name/--notes/--discovery-keyword flags.");
+    if (values.name || values.notes || values.tags !== undefined || values["discovery-keyword"]) {
+      throw new CommandError("Choose one ICP input mode: either --payload <file.json> or the simple --name/--notes/--discovery-keyword/tags flags.");
     }
 
     return readJsonPayload(values.payload);
   }
 
   if (!values.name) {
-    throw new CommandError("Usage: audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] | --payload <file.json>) [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]");
   }
 
   return compactObject({
     name: values.name,
     notes: values.notes,
+    tags: values.tags !== undefined ? tagList(values.tags) : undefined,
     discovery_keyword: values["discovery-keyword"]
   });
 }
@@ -2242,6 +2759,17 @@ function normalizePositiveInteger(value) {
 
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
+
+  return parsed;
+}
+
+function normalizeOptionalPositiveInteger(value, flagName) {
+  if (value === undefined || value === null || value === "") return undefined;
+
+  const parsed = normalizePositiveInteger(value);
+  if (parsed === null || String(parsed) !== String(value).trim()) {
+    throw new CommandError(`${flagName} must be a positive integer.`);
+  }
 
   return parsed;
 }
@@ -2394,6 +2922,22 @@ function writeJson(stream, value) {
   writeLine(stream, JSON.stringify(value, null, 2));
 }
 
+function renderUpdateCheck(payload, context) {
+  writeLine(context.stdout, `Package: ${payload.package_name}`);
+  writeLine(context.stdout, `Current version: ${display(payload.current_version, "-")}`);
+  writeLine(context.stdout, `Latest version: ${display(payload.latest_version, "unknown")}`);
+
+  if (payload.status === "update_available") {
+    writeLine(context.stdout, "Status: update available");
+    writeLine(context.stdout, `Update: ${payload.install_command}`);
+  } else if (payload.status === "current") {
+    writeLine(context.stdout, "Status: current");
+  } else {
+    writeLine(context.stdout, "Status: unknown");
+    if (payload.error) writeLine(context.stdout, `Error: ${payload.error}`);
+  }
+}
+
 async function sleep(milliseconds) {
   await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
@@ -2410,7 +2954,46 @@ function renderLists(lists, context) {
 function renderList(list, context) {
   writeLine(context.stdout, `List: ${display(list?.name)} (${display(list?.prefix_id)})`);
   writeLine(context.stdout, `Prospects: ${display(list?.prospect_count, 0)}`);
+  if (Array.isArray(list?.tags)) writeLine(context.stdout, `Tags: ${display(list.tags.join(", "), "-")}`);
   if (list?.description) writeLine(context.stdout, `Description: ${list.description}`);
+}
+
+function renderTags(tags, context) {
+  if (!Array.isArray(tags) || tags.length === 0) return writeLine(context.stdout, "No tags found.");
+
+  writeLine(context.stdout, "TAG\tICPS\tLISTS\tMOTIONS\tTOTAL");
+  for (const tag of tags) {
+    writeLine(
+      context.stdout,
+      [
+        display(tag.name),
+        display(tag.icp_count, 0),
+        display(tag.list_count, 0),
+        display(tag.motion_count, 0),
+        display(tag.total_count, 0)
+      ].join("\t")
+    );
+  }
+}
+
+function renderTagDetails(payload, context) {
+  const icps = Array.isArray(payload?.icps) ? payload.icps : [];
+  const lists = Array.isArray(payload?.lists) ? payload.lists : [];
+  const motions = Array.isArray(payload?.motions) ? payload.motions : [];
+
+  writeLine(context.stdout, `Tag: ${display(payload?.tag)}`);
+  writeLine(context.stdout, `ICPs: ${icps.length}`);
+  writeLine(context.stdout, `Lists: ${lists.length}`);
+  writeLine(context.stdout, `Motions: ${motions.length}`);
+  writeLine(context.stdout);
+  writeLine(context.stdout, "ICPs");
+  renderIcps(icps, context);
+  writeLine(context.stdout);
+  writeLine(context.stdout, "Lists");
+  renderLists(lists, context);
+  writeLine(context.stdout);
+  writeLine(context.stdout, "Motions");
+  renderMotions(motions, context);
 }
 
 function renderUsers(users, context) {
@@ -2482,21 +3065,36 @@ function renderOffers(offers, context) {
   }
 }
 
+function renderOffer(offer, context) {
+  writeLine(context.stdout, `Offer: ${display(offer?.name)} (${display(offer?.prefix_id)})`);
+  if (offer?.description) writeLine(context.stdout, `Description: ${offer.description}`);
+  if (offer?.url) writeLine(context.stdout, `URL: ${offer.url}`);
+}
+
 function renderIcps(icps, context) {
   if (!Array.isArray(icps) || icps.length === 0) return writeLine(context.stdout, "No ICPs found.");
 
-  writeLine(context.stdout, "ICP ID\tNAME\tDISCOVERY KEYWORD\tAGENT");
+  writeLine(context.stdout, "ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tAGENT");
   for (const icp of icps) {
     writeLine(
       context.stdout,
       [
         display(icp.prefix_id),
         display(icp.name),
+        display(Array.isArray(icp.tags) && icp.tags.length > 0 ? icp.tags.join(",") : "-"),
         display(icp.discovery_keyword),
         display(icp.agent?.name)
       ].join("\t")
     );
   }
+}
+
+function renderIcp(icp, context) {
+  writeLine(context.stdout, `ICP: ${display(icp?.name)} (${display(icp?.prefix_id)})`);
+  if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
+  if (icp?.notes) writeLine(context.stdout, `Notes: ${icp.notes}`);
+  if (icp?.discovery_keyword) writeLine(context.stdout, `Discovery keyword: ${icp.discovery_keyword}`);
+  if (icp?.agent?.name) writeLine(context.stdout, `Agent: ${icp.agent.name}`);
 }
 
 function renderCompanies(payload, context) {
@@ -2563,6 +3161,7 @@ function renderMotion(motion, context) {
   if (motion?.offer?.name) writeLine(context.stdout, `Offer: ${motion.offer.name} (${display(motion.offer.prefix_id)})`);
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
   if (motion?.list?.name) writeLine(context.stdout, `List: ${motion.list.name} (${display(motion.list.prefix_id)})`);
+  if (Array.isArray(motion?.play_tags)) writeLine(context.stdout, `Tags: ${display(motion.play_tags.join(", "), "-")}`);
   if (motion?.principal_account_user?.id) {
     writeLine(
       context.stdout,
@@ -2630,6 +3229,27 @@ function renderProspects(payload, context, { wide = false, profiles = false } = 
   }
 }
 
+function renderProspectCheck(payload, context) {
+  const prospects = Array.isArray(payload?.prospects) ? payload.prospects : [];
+  const totalCount = display(payload?.meta?.total_count, prospects.length);
+  if (prospects.length === 0) return writeLine(context.stdout, "No suspect prospects found.");
+
+  writeLine(context.stdout, `Suspect prospects: ${totalCount}`);
+  writeLine(context.stdout, "PROSPECT ID\tSTAGE\tNAME\tREPORTED COMPANY\tCERTIFIED\tREASON\tURL");
+  for (const prospect of prospects) {
+    const certification = prospect.company_certification || {};
+    writeLine(context.stdout, [
+      display(prospect.prefix_id),
+      display(prospect.account_prospect?.pipeline_stage),
+      display(prospect.display_name || prospect.name),
+      display(certification.reported_company || prospect.company),
+      certification.status === "certified" ? "yes" : "no",
+      display(certification.reason, "missing_employment_citation"),
+      display(prospect.app_url)
+    ].join("\t"));
+  }
+}
+
 function renderProspect(prospect, context) {
   writeLine(context.stdout, `Prospect: ${display(prospect?.display_name || prospect?.name)} (${display(prospect?.prefix_id)})`);
   if (prospect?.company) writeLine(context.stdout, `Company: ${prospect.company}`);
@@ -2637,6 +3257,21 @@ function renderProspect(prospect, context) {
   if (prospect?.linkedin_url) writeLine(context.stdout, `LinkedIn: ${prospect.linkedin_url}`);
   if (prospect?.account_prospect?.pipeline_stage) writeLine(context.stdout, `Stage: ${prospect.account_prospect.pipeline_stage}`);
   if (nextActionLabel(prospect?.queue)) writeLine(context.stdout, `Next action: ${nextActionLabel(prospect.queue)}`);
+}
+
+function renderProspectDisposition(payload, context, { action }) {
+  const prospect = payload?.prospect || {};
+  const accountProspect = payload?.account_prospect || {};
+  const actionLabel = {
+    reject: "Rejected",
+    nurture: "Moved to nurture",
+    restore: "Restored"
+  }[action] || display(payload?.status, "Updated");
+
+  writeLine(context.stdout, `${actionLabel} prospect ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
+  if (accountProspect.status) writeLine(context.stdout, `Status: ${accountProspect.status}`);
+  if (accountProspect.inactive_reason) writeLine(context.stdout, `Inactive reason: ${accountProspect.inactive_reason}`);
+  if (payload?.system_list?.name) writeLine(context.stdout, `List: ${payload.system_list.name} (${display(payload.system_list.prefix_id)})`);
 }
 
 function renderProspectTimeline(payload, context) {
@@ -3161,6 +3796,32 @@ function renderMotionAnalytics(payload, context) {
   writeCountTable(context, "Prospect cohorts by produced day", payload?.prospects_by_day, ["DATE", "PRODUCED", "ACTIVE", "ACTIVE %", "INACTIVE", "STAGES"], dailyProspectRow);
 }
 
+function renderMotionDiscoveryRun(payload, context) {
+  const motion = payload?.motion || {};
+  const label = entityLabel(motion) || payload?.motion_id;
+  const prefix = payload?.enqueued ? "Discovery queued" : "Discovery not queued";
+  writeLine(context.stdout, `${prefix} for ${display(label)}.`);
+  writeLine(context.stdout, `Reason: ${display(payload?.reason)}`);
+  writeLine(context.stdout, `Target count: ${display(payload?.target_count)}`);
+}
+
+function renderAnalyticsDashboard(payload, context) {
+  writeLine(context.stdout, `Dashboard analytics (${display(payload?.cohort?.label, "selected cohort")})`);
+  if (payload?.cohort) {
+    writeLine(context.stdout, `Cohort: ${payload.cohort.start_date} to ${payload.cohort.end_date} (${display(payload.cohort.field, "account_prospects.created_at")})`);
+  }
+  if (payload?.activity) {
+    writeLine(context.stdout, `Activity: ${payload.activity.start_date} to ${payload.activity.end_date} (${display(payload.activity.field, "events.created_at")})`);
+  }
+  writeDashboardFilters(payload, context);
+  writeLine(context.stdout, `Prospects: ${display(payload?.cohort_size, 0)}`);
+  writeLine(context.stdout, `Companies: ${display(payload?.cohort_company_target_count, 0)}`);
+  writeLine(context.stdout, `People/company: ${display(payload?.cohort_people_per_company_average, "0.0")}`);
+  writeLine(context.stdout, `Active: ${display(payload?.active_cohort_count, 0)} (${display(payload?.active_cohort_company_target_count, 0)} companies, ${percentageLabel(payload?.active_cohort_percentage)})`);
+  writeLine(context.stdout, `Inactive: ${display(payload?.inactive_cohort_count, 0)}`);
+  writeCountTable(context, "Current pipeline stages", payload?.pipeline_stage_counts, ["STAGE", "COUNT"], countRow);
+}
+
 function renderAnalyticsProspectCohortAnalysis(payload, context) {
   const cohorts = Array.isArray(payload?.cohorts) ? payload.cohorts : [];
   writeLine(context.stdout, `Prospect cohort analysis (${display(payload?.weeks, cohorts.length)} weeks)`);
@@ -3230,6 +3891,19 @@ function writeAnalyticsScope(payload, context) {
   writeAnalyticsProvenance(payload, context);
   if (payload?.account_user) {
     writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
+  } else {
+    writeLine(context.stdout, "User: all account users");
+  }
+}
+
+function writeDashboardFilters(payload, context) {
+  const filters = payload?.filters || {};
+  if (filters.motion) writeLine(context.stdout, `Motion: ${entityLabel(filters.motion)}`);
+  if (filters.play_tag) writeLine(context.stdout, `Tag: ${filters.play_tag}`);
+  if (filters.offer) writeLine(context.stdout, `Offer: ${entityLabel(filters.offer)}`);
+  if (filters.icp) writeLine(context.stdout, `ICP: ${entityLabel(filters.icp)}`);
+  if (filters.account_user) {
+    writeLine(context.stdout, `User: ${entityLabel(filters.account_user)}`);
   } else {
     writeLine(context.stdout, "User: all account users");
   }
@@ -3674,6 +4348,77 @@ function prospectsToCsv(prospects) {
   ].join("\n");
 }
 
+function prospectCheckToCsv(prospects) {
+  const headers = [
+    "prefix_id",
+    "display_name",
+    "name",
+    "title",
+    "reported_company",
+    "company_certification_status",
+    "company_certification_reason",
+    "email",
+    "linkedin_url",
+    "app_url",
+    "account_prospect_status",
+    "pipeline_stage",
+    "assigned_to_account_user_id",
+    "motion_prefix_id",
+    "motion_name",
+    "updated_at"
+  ];
+
+  const rows = prospects.map((prospect) => {
+    const certification = prospect.company_certification || {};
+    return {
+      prefix_id: prospect.prefix_id,
+      display_name: prospect.display_name,
+      name: prospect.name,
+      title: prospect.title,
+      reported_company: certification.reported_company || prospect.company,
+      company_certification_status: certification.status,
+      company_certification_reason: certification.reason,
+      email: prospect.email,
+      linkedin_url: prospect.linkedin_url,
+      app_url: prospect.app_url,
+      account_prospect_status: prospect.account_prospect?.status,
+      pipeline_stage: prospect.account_prospect?.pipeline_stage,
+      assigned_to_account_user_id: prospect.account_prospect?.assigned_to_account_user_id,
+      motion_prefix_id: prospect.account_prospect?.motion?.prefix_id,
+      motion_name: prospect.account_prospect?.motion?.name,
+      updated_at: prospect.updated_at
+    };
+  });
+
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => csvField(row[header])).join(","))
+  ].join("\n");
+}
+
+function withProspectAppUrls(payload, host) {
+  if (!payload || !Array.isArray(payload.prospects)) return payload;
+
+  return {
+    ...payload,
+    prospects: payload.prospects.map((prospect) => ({
+      ...prospect,
+      app_url: prospectAppUrl(prospect, host)
+    }))
+  };
+}
+
+function prospectAppUrl(prospect, host) {
+  const prospectId = String(prospect?.prefix_id || "").trim();
+  if (!prospectId) return undefined;
+
+  try {
+    return new URL(`/prospects/${encodeURIComponent(prospectId)}`, normalizeHost(host)).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 function sequenceExportRowsToCsv(rows) {
   return [
     SEQUENCE_EXPORT_CSV_COLUMNS.join(","),
@@ -3774,6 +4519,7 @@ const HELP_TOPICS = new Map([
     "  Setup & identity",
     "    audienti auth status",
     "    audienti config list",
+    "    audienti update check",
     "    audienti users list",
     "    audienti users select <account_user_id|email|name|me>",
     "    audienti users activity [account_user_id|me]",
@@ -3782,9 +4528,12 @@ const HELP_TOPICS = new Map([
     "    audienti motions list",
     "    audienti motions show <motn_id>",
     "    audienti motions analytics <motn_id>",
+    "    audienti motions run-discovery <motn_id>",
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
-    "    audienti motions update <motn_id> --status <state>",
+    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>]",
+    "    audienti motions add-tag <motn_id> <tag>",
+    "    audienti motions remove-tag <motn_id> <tag>",
     "    audienti motions activate <motn_id>",
     "    audienti motions pause <motn_id>",
     "    audienti motions delete <motn_id> --confirm <yes|true|Y|y>",
@@ -3794,8 +4543,12 @@ const HELP_TOPICS = new Map([
     "",
     "  Prospects",
     "    audienti prospects list [filters]",
+    "    audienti prospects check [filters]",
     "    audienti prospects show <prsp_id>",
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
+    "    audienti prospects reject <prsp_id>",
+    "    audienti prospects nurture <prsp_id> [--reason <reason>]",
+    "    audienti prospects restore <prsp_id>",
     "    audienti prospects timeline <prsp_id>",
     "    audienti prospects import <linkedin_url> [--motion <motn_id>]",
     "    audienti prospects import-batch --file <csv|jsonl|json>",
@@ -3803,10 +4556,21 @@ const HELP_TOPICS = new Map([
     "    audienti prospects add-profile <prsp_id> --url <profile_url|email|phone>",
     "",
     "  Lists & targeting inputs",
-    "    audienti lists list",
+    "    audienti lists list [--tag <tag>]",
     "    audienti lists prospects <list_id>",
+    "    audienti lists add-tag <list_id> <tag>",
+    "    audienti lists remove-tag <list_id> <tag>",
+    "    audienti tags list",
+    "    audienti tags show <tag>",
     "    audienti offers list",
-    "    audienti icps list",
+    "    audienti offers show <offr_id>",
+    "    audienti offers update <offr_id> [--name <text>]",
+    "    audienti offers delete <offr_id> --confirm <yes|true|Y|y>",
+    "    audienti icps list [--tag <tag>]",
+    "    audienti icps show <icp_id>",
+    "    audienti icps update <icp_id> [--tags <tag[,tag...]>]",
+    "    audienti icps add-tag <icp_id> <tag>",
+    "    audienti icps remove-tag <icp_id> <tag>",
     "    audienti companies search --query <text>",
     "",
     "  Writer",
@@ -3821,6 +4585,7 @@ const HELP_TOPICS = new Map([
     "",
     "  Analytics",
     "    audienti analytics prospects --window 24h",
+    "    audienti analytics dashboard --play-tag <tag>",
     "    audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>",
     "    audienti analytics users --user me --window 30d",
     "    audienti analytics visibility --window 24h --user me",
@@ -3835,6 +4600,7 @@ const HELP_TOPICS = new Map([
     "  Inspect a prospect:  audienti prospects show <prsp_id> --json",
     "  Preview a campaign:  audienti writer test-run <prsp_id>",
     "  Analyze one motion:  audienti motions analytics <motn_id>",
+    "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
     "  Audit your work:     audienti analytics users --user me --window 30d",
     "",
     "Global options:",
@@ -3933,6 +4699,46 @@ const HELP_TOPICS = new Map([
     "  Token: masked string or none",
     "  Active account: account name and acct_ id, or none selected",
     "  Default account user: account user name and id, or none selected"
+  ].join("\n")],
+
+  ["update", [
+    "Usage:",
+    "  audienti update check [--json] [--registry <url>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Check whether this local Audienti CLI install is behind the latest published package.",
+    "",
+    "Commands:",
+    "  audienti update check  Compare the local package version to the npm registry"
+  ].join("\n")],
+
+  ["update check", [
+    "Usage:",
+    "  audienti update check [--json] [--registry <url>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Report whether this local CLI should be updated.",
+    "",
+    "Output shape:",
+    "  package_name: @audienti/cli",
+    "  current_version: local package version",
+    "  latest_version: latest registry version, or null when unknown",
+    "  update_available: true | false | null",
+    "  status: current | update_available | unknown",
+    "  install_command: npm install --global @audienti/cli",
+    "  registry: registry URL used for the check",
+    "  checked_at: ISO timestamp",
+    "  error: string | null",
+    "",
+    "Options:",
+    "  --registry <url>  Alternate npm-compatible registry. Default: https://registry.npmjs.org",
+    "",
+    "Example:",
+    "  audienti update check --json"
   ].join("\n")],
 
   ["accounts", [
@@ -4047,12 +4853,15 @@ const HELP_TOPICS = new Map([
   ["offers", [
     "Usage:",
     "  audienti offers list [--json]",
+    "  audienti offers show <offr_id> [--json]",
     "  audienti offers create --name <text> [--json]",
+    "  audienti offers update <offr_id> [--name <text>] [--json]",
+    "  audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json]",
     "",
     "Status: implemented",
     "",
     "Purpose:",
-    "  List the offers available to the current account so an agent can choose offer_id for motion creation."
+    "  Manage the offers available to the current account so an agent can choose offer_id for motion creation."
   ].join("\n")],
 
   ["offers list", [
@@ -4102,10 +4911,60 @@ const HELP_TOPICS = new Map([
     "  }"
   ].join("\n")],
 
+  ["offers show", [
+    "Usage:",
+    `  ${OFFERS_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/offers/:id.json"
+  ].join("\n")],
+
+  ["offers update", [
+    "Usage:",
+    `  ${OFFERS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Update simple offer fields without changing linked motions.",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  name: string | optional",
+    "  description: string | optional",
+    "  url: string | optional",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:id.json"
+  ].join("\n")],
+
+  ["offers delete", [
+    "Usage:",
+    `  ${OFFERS_DELETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  confirm: one of yes, true, Y, y",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/offers/:id.json"
+  ].join("\n")],
+
   ["icps", [
     "Usage:",
-    "  audienti icps list [--json]",
+    "  audienti icps list [--tag <tag>] [--json]",
+    "  audienti icps show <icp_id> [--json]",
     "  audienti icps create (--name <text> | --payload <file.json>) [--json]",
+    "  audienti icps update <icp_id> [--tags <tag[,tag...]>] [--json]",
+    "  audienti icps add-tag <icp_id> <tag> [--json]",
+    "  audienti icps remove-tag <icp_id> <tag> [--json]",
     "",
     "Status: implemented",
     "",
@@ -4115,9 +4974,12 @@ const HELP_TOPICS = new Map([
 
   ["icps list", [
     "Usage:",
-    "  audienti icps list [--json] [--account <acct_id>]",
+    "  audienti icps list [--tag <tag>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
+    "",
+    "Options:",
+    "  --tag <tag>  Filter locally to ICPs whose tags include the normalized tag",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/icps.json",
@@ -4127,13 +4989,14 @@ const HELP_TOPICS = new Map([
     "  prefix_id: icpp_",
     "  name: string",
     "  notes: string | null",
+    "  tags: [string]",
     "  discovery_keyword: string | null",
     "  agent: { id, name } | null"
   ].join("\n")],
 
   ["icps create", [
     "Usage:",
-    "  audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] | --payload <file.json>) [--json] [--account <acct_id>]",
+    "  audienti icps create (--name <text> [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
@@ -4143,6 +5006,7 @@ const HELP_TOPICS = new Map([
     "Input shape:",
     "  name: string  Required ICP name",
     "  notes: string | optional",
+    "  tags: comma-separated tag list | optional",
     "  discovery_keyword: string | optional",
     "  payload: file.json | optional full ICP object using the account API create shape",
     "",
@@ -4154,7 +5018,8 @@ const HELP_TOPICS = new Map([
     "    \"icp\": {",
     "      \"name\": \"Renewal-stage IT leaders\",",
     "      \"notes\": \"IT leaders reviewing vendors before renewal or QBR.\",",
-    "      \"discovery_keyword\": \"renewal\"",
+    "      \"discovery_keyword\": \"renewal\",",
+    "      \"tags\": [\"enterprise\", \"renewal\"]",
     "    }",
     "  }",
     "",
@@ -4172,6 +5037,90 @@ const HELP_TOPICS = new Map([
     "      {\"name\": \"Vendor Management Office\"},",
     "      {\"name\": \"Strategic Vendor Management\"}",
     "    ]",
+    "  }"
+  ].join("\n")],
+
+  ["icps show", [
+    "Usage:",
+    `  ${ICPS_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefixed id or integer id",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/icps/:id.json"
+  ].join("\n")],
+
+  ["icps update", [
+    "Usage:",
+    "  audienti icps update <icp_id> [--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Update simple ICP fields or replace the ICP's full tag set.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefixed id or integer id",
+    "  name: string | optional",
+    "  notes: string | optional",
+    "  discovery_keyword: string | optional",
+    "  tags: comma-separated tag list | optional",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/icps/:id.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"icp\": {",
+    "      \"tags\": [\"enterprise\", \"renewal\"]",
+    "    }",
+    "  }"
+  ].join("\n")],
+
+  ["icps add-tag", [
+    "Usage:",
+    "  audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add one normalized tag to an ICP.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefixed id or integer id",
+    "  tag: string",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/icps/:id/add_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"enterprise\"",
+    "  }"
+  ].join("\n")],
+
+  ["icps remove-tag", [
+    "Usage:",
+    "  audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Remove one normalized tag from an ICP.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefixed id or integer id",
+    "  tag: string",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/icps/:id/remove_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"enterprise\"",
     "  }"
   ].join("\n")],
 
@@ -4206,12 +5155,68 @@ const HELP_TOPICS = new Map([
     "  companies[].location: string | null"
   ].join("\n")],
 
+  ["tags", [
+    "Usage:",
+    "  audienti tags list [--json]",
+    "  audienti tags show <tag> [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show the shared vocabulary from ICP tags, list tags, and motion play_tags currently in use.",
+    "",
+    "Run `audienti tags list help` or `audienti tags show help` for output shape."
+  ].join("\n")],
+
+  ["tags list", [
+    "Usage:",
+    "  audienti tags list [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List normalized tags currently used by account ICPs, lists, and motions so new records can match existing labels.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tags.json",
+    "",
+    "Output shape:",
+    "  tags[].name: normalized tag string",
+    "  tags[].icp_count: number of ICPs using the tag",
+    "  tags[].list_count: number of lists using the tag",
+    "  tags[].motion_count: number of motions using the tag",
+    "  tags[].total_count: icp_count + list_count + motion_count"
+  ].join("\n")],
+
+  ["tags show", [
+    "Usage:",
+    "  audienti tags show <tag> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show the ICPs, lists, and motions currently using one normalized tag.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/icps.json",
+    "  GET /api/v1/accounts/:account_id/lists.json",
+    "  GET /api/v1/accounts/:account_id/motions.json",
+    "",
+    "Output shape:",
+    "  tag: normalized tag string",
+    "  icps[]: ICP rows whose tags include tag",
+    "  lists[]: list rows whose tags include tag",
+    "  motions[]: motion rows whose play_tags include tag"
+  ].join("\n")],
+
   ["lists", [
     "Usage:",
-    "  audienti lists list [--json]",
-    "  audienti lists create --name <text> [--json]",
+    "  audienti lists list [--tag <tag>] [--json]",
+    "  audienti lists create --name <text> [--tags <tag[,tag...]>] [--json]",
     "  audienti lists show <list_id> [--json]",
-    "  audienti lists update <list_id> [--json]",
+    "  audienti lists update <list_id> [--tags <tag[,tag...]>] [--json]",
+    "  audienti lists add-tag <list_id> <tag> [--json]",
+    "  audienti lists remove-tag <list_id> <tag> [--json]",
     "  audienti lists delete <list_id> --confirm <yes|true|Y|y> [--json]",
     "  audienti lists prospects <list_id> [--json]",
     "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
@@ -4225,9 +5230,12 @@ const HELP_TOPICS = new Map([
 
   ["lists list", [
     "Usage:",
-    "  audienti lists list [--json] [--account <acct_id>]",
+    "  audienti lists list [--tag <tag>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
+    "",
+    "Options:",
+    "  --tag <tag>  Filter locally to lists whose tags include the normalized tag",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/lists.json",
@@ -4239,12 +5247,13 @@ const HELP_TOPICS = new Map([
     "  description: string | null",
     "  prospect_count: integer",
     "  protected_system_list: boolean",
-    "  hubspot_synced: boolean"
+    "  hubspot_synced: boolean",
+    "  tags: [string]"
   ].join("\n")],
 
   ["lists create", [
     "Usage:",
-    "  audienti lists create --name <text> [--description <text>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]",
+    "  audienti lists create --name <text> [--description <text>] [--tags <tag[,tag...]>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
@@ -4254,6 +5263,7 @@ const HELP_TOPICS = new Map([
     "Input shape:",
     "  name: string  Required list name",
     "  description: string | optional",
+    "  tags: comma-separated tag list | optional",
     "  campaign_hook: string | optional",
     "  audience_note: string | optional",
     "",
@@ -4262,10 +5272,11 @@ const HELP_TOPICS = new Map([
     "",
     "JSON body:",
     "  {",
-    "    \"list\": {",
-    "      \"name\": \"CIO renewal targets\",",
-    "      \"description\": \"Accounts to review before QBR outreach.\",",
-    "      \"campaign_brief\": {",
+      "    \"list\": {",
+      "      \"name\": \"CIO renewal targets\",",
+      "      \"description\": \"Accounts to review before QBR outreach.\",",
+      "      \"tags\": [\"sarit\", \"pj\"],",
+      "      \"campaign_brief\": {",
     "        \"hook\": \"Vendor accountability before renewal\",",
     "        \"audience_note\": \"IT leaders running QBRs and renewals\"",
     "      }",
@@ -4288,7 +5299,7 @@ const HELP_TOPICS = new Map([
 
   ["lists update", [
     "Usage:",
-    "  audienti lists update <list_id> [--name <text>] [--description <text>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]",
+    "  audienti lists update <list_id> [--name <text>] [--description <text>] [--tags <tag[,tag...]>] [--campaign-hook <text>] [--audience-note <text>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
     "",
@@ -4299,11 +5310,56 @@ const HELP_TOPICS = new Map([
     "  list_id: list_ prefix id",
     "  list.name: string | optional",
     "  list.description: string | optional",
+    "  list.tags: comma-separated tag list | optional",
     "  list.campaign_brief.hook: string | optional",
     "  list.campaign_brief.audience_note: string | optional",
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/lists/:id.json"
+  ].join("\n")],
+
+  ["lists add-tag", [
+    "Usage:",
+    `  ${LISTS_ADD_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add one normalized tag to a list without changing prospect membership.",
+    "",
+    "Input shape:",
+    "  list_id: list_ prefix id",
+    "  tag: string",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/lists/:id/add_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"sarit\"",
+    "  }"
+  ].join("\n")],
+
+  ["lists remove-tag", [
+    "Usage:",
+    `  ${LISTS_REMOVE_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Remove one normalized tag from a list.",
+    "",
+    "Input shape:",
+    "  list_id: list_ prefix id",
+    "  tag: string",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/lists/:id/remove_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"sarit\"",
+    "  }"
   ].join("\n")],
 
   ["lists delete", [
@@ -4398,14 +5454,17 @@ const HELP_TOPICS = new Map([
 
   ["motions", [
     "Usage:",
-    "  audienti motions list [--json]",
+    "  audienti motions list [--tag <tag>] [--json]",
     "  audienti motions show <motn_id> [--json]",
     "  audienti motions status <motn_id> [--json]",
+    "  audienti motions run-discovery <motn_id> [--target-count <n>] [--json]",
     "  audienti motions analytics <motn_id> [--window 30d] [--json]",
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
-    "  audienti motions update <motn_id> --status <draft|preparing|active|paused|archived> [--json]",
+    "  audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--json]",
+    "  audienti motions add-tag <motn_id> <tag> [--json]",
+    "  audienti motions remove-tag <motn_id> <tag> [--json]",
     "  audienti motions activate <motn_id> [--json]",
     "  audienti motions pause <motn_id> [--json]",
     "  audienti motions archive <motn_id> [--json]",
@@ -4413,7 +5472,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions clone <motn_id> --name <text> [--json]",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json]",
     "",
-    "Status: read, create, status update, delete, clone, status, and prospect attachment commands implemented",
+    "Status: read, create, status update, delete, clone, status, discovery launch, and prospect attachment commands implemented",
     "",
     "CLI synonym:",
     "  `plays` is accepted anywhere `motions` is accepted",
@@ -4424,9 +5483,12 @@ const HELP_TOPICS = new Map([
 
   ["motions list", [
     "Usage:",
-    "  audienti motions list [--json] [--account <acct_id>]",
+    "  audienti motions list [--tag <tag>] [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
+    "",
+    "Options:",
+    "  --tag <tag>  Filter locally to motions whose play_tags include the normalized tag",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/motions.json",
@@ -4440,7 +5502,8 @@ const HELP_TOPICS = new Map([
     "  offer.prefix_id: offr_",
     "  icp.prefix_id: icpp_",
     "  list.prefix_id: list_ | null",
-    "  principal_account_user.id: integer"
+    "  principal_account_user.id: integer",
+    "  play_tags: [string]"
   ].join("\n")],
 
   ["motions show", [
@@ -4496,6 +5559,27 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/analytics/prospects.json?motion_id=:motion_id"
+  ].join("\n")],
+
+  ["motions run-discovery", [
+    "Usage:",
+    `  ${MOTIONS_RUN_DISCOVERY_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queue an immediate discovery run for one discovery-capable motion or play.",
+    "",
+    "Options:",
+    "  --target-count <n>  Override the manual replenishment target count for this launch.",
+    "",
+    "Output shape:",
+    "  enqueued: true when Motions::DiscoverJob was queued",
+    "  reason: launched | run_in_progress | lock_contention | target_met | enqueue_failed",
+    "  target_count: requested target count",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/motions/:id/run_discovery.json"
   ].join("\n")],
 
   ["motions prospects", [
@@ -4568,7 +5652,8 @@ const HELP_TOPICS = new Map([
     "  principal_account_user_id: integer | me | optional",
     "  icp_id: icpp_ prefix id | optional",
     "  list_id: list_ prefix id | optional",
-    "  inbound_channels: [linkedin | reddit | x | tiktok | instagram | facebook] | optional",
+    "  play_tags: [string] | optional",
+    "  inbound_channels: [linkedin | reddit] | optional",
     "  lopa_profiles: [{ url: string, source_type: creator | competitor | partner | customer | other }] | optional",
     "",
     "JSON example:",
@@ -4579,7 +5664,8 @@ const HELP_TOPICS = new Map([
     "    \"status\": \"draft\",",
     "    \"offer_id\": \"offr_abc123\",",
     "    \"principal_account_user_id\": 42,",
-    "    \"list_id\": \"list_abc123\"",
+    "    \"list_id\": \"list_abc123\",",
+    "    \"play_tags\": [\"sarit\", \"pj\"]",
     "  }",
     "",
     "Behavior:",
@@ -4622,23 +5708,69 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Change one motion or play's lifecycle status.",
+    "  Change one motion or play's lifecycle status or replace its tag set.",
     "",
     "Input shape:",
     "  motn_id: motn_ prefix id",
-    "  status: draft | preparing | active | paused | archived",
+    "  status: draft | preparing | active | paused | archived | optional",
+    "  tags: comma-separated tag list | optional",
     "",
     "Behavior:",
-    "  Updates only the motion status. Other motion configuration stays unchanged.",
+    "  Updates only the provided fields. Sending --tags replaces the motion's full tag set.",
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/motions/:id.json",
     "",
     "JSON body:",
     "  {",
-    "    \"motion\": {",
-    "      \"status\": \"paused\"",
-    "    }",
+      "    \"motion\": {",
+      "      \"status\": \"paused\",",
+      "      \"play_tags\": [\"sarit\", \"pj\"]",
+      "    }",
+    "  }"
+  ].join("\n")],
+
+  ["motions add-tag", [
+    "Usage:",
+    `  ${MOTIONS_ADD_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add one normalized tag to a motion or play.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  tag: string",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/motions/:id/add_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"sarit\"",
+    "  }"
+  ].join("\n")],
+
+  ["motions remove-tag", [
+    "Usage:",
+    `  ${MOTIONS_REMOVE_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Remove one normalized tag from a motion or play.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  tag: string",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/motions/:id/remove_tag.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"tag\": \"sarit\"",
     "  }"
   ].join("\n")],
 
@@ -4732,8 +5864,12 @@ const HELP_TOPICS = new Map([
   ["prospects", [
     "Usage:",
     "  audienti prospects list [--json] [filters]",
+    "  audienti prospects check [--json|--csv] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
+    "  audienti prospects reject <prsp_id> [--json]",
+    "  audienti prospects nurture <prsp_id> [--reason <reason>] [--json]",
+    "  audienti prospects restore <prsp_id> [--json]",
     "  audienti prospects timeline <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
@@ -4747,7 +5883,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "",
-    "Status: read commands, assignment, per-prospect draft preview, sequence preview, and import implemented; disposition planned",
+    "Status: read commands, assignment, disposition, per-prospect draft preview, sequence preview, and import implemented",
     "",
     "Filters:",
     "  --query <text>",
@@ -4816,6 +5952,43 @@ const HELP_TOPICS = new Map([
     "  audienti prospects list --all --csv"
   ].join("\n")],
 
+  ["prospects check", [
+    "Usage:",
+    "  audienti prospects check [--json|--csv] [filters] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Description:",
+    "  Lists suspect people prospects that do not have a certified company employment citation.",
+    "  Imported or reported company text is shown for investigation but does not count as certification.",
+    "",
+    "Filters:",
+    "  --query <text>                  Search name, title, company, email, profile URL",
+    "  --motion <motn_id>              Filter to a motion",
+    "  --play <motn_id>                Filter to a play using the same motion relationship",
+    "  --list <list_id>                Filter to a prospect list",
+    "  --stage <stage>                 Filter to a pipeline stage",
+    "  --assigned-user <id|me|unassigned>  Filter by assigned account user",
+    "  --limit <n>                     Max rows for one page; with --all it caps total rows up to 1000",
+    "  --page <n>                      1-based page number",
+    "  --offset <n>                    Row offset for manual pagination",
+    "  --all                           Fetch every matching suspect prospect up to 1000 rows",
+    "  --csv                           Export CSV with app_url for operator review",
+    "",
+    "Output shape:",
+    "  prospects[].company_certification.status: missing",
+    "  prospects[].company_certification.reason: missing_employment_citation",
+    "  prospects[].app_url: product URL for operator inspection",
+    "  meta.total_count: total matching suspect prospects",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/prospects.json?data_quality=missing_certified_company",
+    "",
+    "Examples:",
+    "  audienti prospects check --motion <motn_id> --all --csv",
+    "  audienti prospects check --assigned-user me --json"
+  ].join("\n")],
+
   ["prospects assign", [
     "Usage:",
     `  ${PROSPECTS_ASSIGN_USAGE.slice("Usage: ".length)}`,
@@ -4850,6 +6023,48 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/prospects/:id.json"
+  ].join("\n")],
+
+  ["prospects reject", [
+    "Usage:",
+    `  ${PROSPECTS_REJECT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Reject one prospect through the shared disposition and account DNC path.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/reject.json"
+  ].join("\n")],
+
+  ["prospects nurture", [
+    "Usage:",
+    `  ${PROSPECTS_NURTURE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Move one prospect to an inactive nurture disposition through the shared disposition path.",
+    "",
+    "Input shape:",
+    "  reason: nurture | non_responsive | not_fit. Defaults to nurture.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/nurture.json"
+  ].join("\n")],
+
+  ["prospects restore", [
+    "Usage:",
+    `  ${PROSPECTS_RESTORE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Restore one rejected or inactive prospect through the shared disposition path.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/restore.json"
   ].join("\n")],
 
   ["prospects timeline", [
@@ -5209,26 +6424,6 @@ const HELP_TOPICS = new Map([
     "  GET /api/v1/accounts/:account_id/prospect_imports/:id.json"
   ].join("\n")],
 
-  ["prospects disposition", [
-    "Usage:",
-    "  audienti prospects disposition <prsp_id> --payload <file.json> [--account <acct_id>]",
-    "",
-    "Status: planned",
-    "",
-    "Input shape:",
-    "  action: defer | nurture | reject | restore",
-    "  reason: string | optional",
-    "  delay_until: ISO8601 datetime | optional",
-    "  note: string | optional",
-    "",
-    "JSON example:",
-    "  {",
-    "    \"action\": \"nurture\",",
-    "    \"reason\": \"not_a_fit\",",
-    "    \"note\": \"Not a fit for this motion right now.\"",
-    "  }"
-  ].join("\n")],
-
   ["tools", [
     "Usage:",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
@@ -5358,6 +6553,7 @@ const HELP_TOPICS = new Map([
   ["analytics", [
     "Usage:",
     "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--json]",
     "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--platform <linkedin|email|gmail>] [--json]",
     "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
@@ -5371,13 +6567,42 @@ const HELP_TOPICS = new Map([
     "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  For user analytics, select the events.created_at activity range instead of --window.",
     "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort while --window or --start/--end selects the activity period.",
     "  --motion <motn_id>  For prospect and user analytics, filter AccountProspect.motion_id to one motion/play.",
+    "  --play-tag <tag>  For dashboard analytics, filter to motions/lists tagged with a campaign tag.",
     "  --provenance <source>  Optional lower-level AccountProspect.intake_source filter.",
     "  --platform <linkedin|email|gmail>  For user analytics, filter events.platform. --channel is accepted as an alias.",
     "  cohort-analysis loops over recent weekly AccountProspect.created_at cohorts and compares their current stages.",
     "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. For prospect analytics, this means prospects assigned to that account user. Email/name partials are accepted when they match exactly one account user.",
     "",
     "Output:",
-    "  Account-scoped analytics for prospects, users, visibility engagement, and ContentOps publishing."
+    "  Account-scoped analytics for prospects, campaign dashboard counts, users, visibility engagement, and ContentOps publishing."
+  ].join("\n")],
+
+  ["analytics dashboard", [
+    "Usage:",
+    `  ${ANALYTICS_DASHBOARD_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Return the dashboard outreach read model through the CLI, including distinct company target counts for a motion, tag, offer, ICP, or user-filtered cohort.",
+    "",
+    "Options:",
+    "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort.",
+    "  --play-tag <tag>  Filter to motions/lists tagged with a campaign tag. --tag is accepted as an alias.",
+    "  --motion <motn_id>  Filter to one motion/play.",
+    "  --offer <offr_id>  Filter to one offer.",
+    "  --icp <icp_id>  Filter to one ICP.",
+    "  --user <account_user_id|email|name|me>  Filter to prospects assigned to one account user.",
+    "",
+    "Output shape:",
+    "  cohort_size: people in the selected cohort",
+    "  cohort_company_target_count: distinct company targets in that cohort",
+    "  cohort_people_per_company_average: people per company target",
+    "  active_cohort_count and active_cohort_company_target_count: still-active campaign cohort counts",
+    "  pipeline_stage_counts[]: current stage distribution",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/dashboard.json"
   ].join("\n")],
 
   ["analytics prospects", [
@@ -5529,6 +6754,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions pause <motn_id>",
     "  audienti motions delete <motn_id> --confirm yes",
     "  audienti motions status <motn_id>",
+    "  audienti motions run-discovery <motn_id>",
     "",
     "3. Add a new prospect from LinkedIn and poll enrichment",
     "  audienti lists create --name \"Target list\"",
@@ -5550,6 +6776,9 @@ const HELP_TOPICS = new Map([
     "  audienti prospects add-profile <prsp_id> --url prospect@example.com",
     "  audienti prospects report-bad-profile <prsp_id> <prof_id>",
     "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
+    "  audienti prospects reject <prsp_id>",
+    "  audienti prospects nurture <prsp_id>",
+    "  audienti prospects restore <prsp_id>",
     "  audienti prospects sequence-preview <prsp_id>",
     "  audienti writer test-run <prsp_id>",
     "  audienti prospects sequence-export <prsp_id> --csv",
@@ -5567,6 +6796,7 @@ const HELP_TOPICS = new Map([
     "7. Inspect account analytics",
     "  audienti users activity me --window 7d",
     "  audienti analytics prospects --window 24h",
+    "  audienti analytics dashboard --play-tag wine_campaign",
     "  audienti analytics users --user me --window 30d",
     "  audienti analytics visibility --window 24h --user me",
     "  audienti analytics content --window week",
@@ -5578,7 +6808,6 @@ const HELP_TOPICS = new Map([
     "  Prefer prospects import for new LinkedIn people and add-prospects commands for records that already exist.",
     "",
     "Current gaps to plan around:",
-    "  Prospect disposition still lacks a dedicated CLI mutation.",
     "  Operator outcome writeback is implemented for prospect rows, not visibility rows."
   ].join("\n")]
 ]);

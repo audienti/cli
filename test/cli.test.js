@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { readConfig, writeConfig } from "../src/config.js";
@@ -17,6 +17,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /Start:/);
   assert.match(stdout.output, /Work areas:/);
   assert.match(stdout.output, /Setup & identity/);
+  assert.match(stdout.output, /audienti update check/);
   assert.match(stdout.output, /Motions \/ plays/);
   assert.match(stdout.output, /Prospects/);
   assert.match(stdout.output, /Lists & targeting inputs/);
@@ -28,12 +29,23 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti users select <user>/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
-  assert.match(stdout.output, /audienti motions update <motn_id> --status <state>/);
+  assert.match(stdout.output, /audienti motions run-discovery <motn_id>/);
+  assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\]/);
+  assert.match(stdout.output, /audienti motions add-tag <motn_id> <tag>/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
   assert.match(stdout.output, /audienti motions pause <motn_id>/);
   assert.match(stdout.output, /audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/);
   assert.match(stdout.output, /audienti motions clone <motn_id> --name <text>/);
+  assert.match(stdout.output, /audienti tags list/);
+  assert.match(stdout.output, /audienti offers show <offr_id>/);
+  assert.match(stdout.output, /audienti offers delete <offr_id> --confirm <yes\|true\|Y\|y>/);
+  assert.match(stdout.output, /audienti icps show <icp_id>/);
+  assert.match(stdout.output, /audienti icps add-tag <icp_id> <tag>/);
+  assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
+  assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
   assert.match(stdout.output, /More help:/);
@@ -67,6 +79,76 @@ test("command help documents accepted options without calling the api", async ()
   assert.match(stdout.output, /Input shape:/);
 });
 
+test("update check reports current when the registry version matches", async () => {
+  const stdout = captureStream();
+  const packageVersion = await currentPackageVersion();
+  const fetch = createFetch((url) => {
+    assert.equal(url.toString(), "https://registry.example.test/%40audienti%2Fcli/latest");
+    return jsonResponse({ version: packageVersion });
+  });
+
+  const exitCode = await run(["update", "check", "--registry", "https://registry.example.test"], {
+    stdout,
+    fetch,
+    now: () => new Date("2026-07-16T12:00:00.000Z")
+  });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /Package: @audienti\/cli/);
+  assert.match(stdout.output, new RegExp(`Current version: ${escapeRegex(packageVersion)}`));
+  assert.match(stdout.output, new RegExp(`Latest version: ${escapeRegex(packageVersion)}`));
+  assert.match(stdout.output, /Status: current/);
+});
+
+test("update check returns parseable update availability", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => jsonResponse({ version: "99.0.0" }));
+
+  const exitCode = await run(["update", "check", "--json"], {
+    stdout,
+    fetch,
+    now: () => new Date("2026-07-16T12:00:00.000Z")
+  });
+
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.output);
+  assert.equal(payload.kind, "update_check");
+  assert.equal(payload.package_name, "@audienti/cli");
+  assert.equal(payload.current_version, await currentPackageVersion());
+  assert.equal(payload.latest_version, "99.0.0");
+  assert.equal(payload.update_available, true);
+  assert.equal(payload.status, "update_available");
+  assert.equal(payload.install_command, "npm install --global @audienti/cli");
+  assert.equal(payload.checked_at, "2026-07-16T12:00:00.000Z");
+});
+
+test("update check returns unknown when the registry cannot be queried", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => jsonResponse({ error: "registry unavailable" }, { status: 503 }));
+
+  const exitCode = await run(["update", "check", "--json"], {
+    stdout,
+    fetch,
+    now: () => new Date("2026-07-16T12:00:00.000Z")
+  });
+
+  assert.equal(exitCode, 1);
+  const payload = JSON.parse(stdout.output);
+  assert.equal(payload.status, "unknown");
+  assert.equal(payload.update_available, null);
+  assert.equal(payload.latest_version, null);
+  assert.equal(payload.error, "registry unavailable");
+});
+
+async function currentPackageVersion() {
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+  return packageJson.version;
+}
+
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 test("help topics describe submit payload shapes for implemented mutations", async () => {
   const stdout = captureStream();
 
@@ -79,6 +161,8 @@ test("help topics describe submit payload shapes for implemented mutations", asy
   assert.match(stdout.output, /premise: string/);
   assert.match(stdout.output, /offer_id: offr_/);
   assert.match(stdout.output, /principal_account_user_id: integer/);
+  assert.match(stdout.output, /inbound_channels: \[linkedin \| reddit\]/);
+  assert.doesNotMatch(stdout.output, /instagram|facebook|tiktok/);
 });
 
 test("agent workflow help gives local agents common production paths", async () => {
@@ -99,12 +183,16 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti motions add-prospects <motn_id> <prsp_id>/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url prospect@example.com/);
   assert.match(stdout.output, /audienti prospects report-bad-profile <prsp_id> <prof_id>/);
+  assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti analytics prospects --window 24h/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti analytics visibility --window 24h --user me/);
   assert.match(stdout.output, /audienti analytics content --window week/);
   assert.match(stdout.output, /Current gaps to plan around:/);
+  assert.doesNotMatch(stdout.output, /Prospect disposition still lacks/);
   assert.doesNotMatch(stdout.output, /Motion creation still lacks a live CLI mutation/);
 });
 
@@ -115,7 +203,11 @@ test("resource help lists child commands", async () => {
 
   assert.equal(exitCode, 0);
   assert.match(stdout.output, /audienti prospects list/);
+  assert.match(stdout.output, /audienti prospects check/);
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti prospects timeline <prsp_id>/);
   assert.match(stdout.output, /audienti prospects message-types <prsp_id>/);
   assert.match(stdout.output, /audienti prospects write <prsp_id> --type <surface_key>/);
@@ -164,16 +256,44 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti offers create --name <text>/, /POST \/api\/v1\/accounts\/:account_id\/offers\.json/]
     },
     {
+      args: ["offers", "show", "help"],
+      expected: [/Usage:\n  audienti offers show <offr_id>/, /GET \/api\/v1\/accounts\/:account_id\/offers\/:id\.json/]
+    },
+    {
+      args: ["offers", "update", "help"],
+      expected: [/Usage:\n  audienti offers update <offr_id>/, /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:id\.json/]
+    },
+    {
+      args: ["offers", "delete", "help"],
+      expected: [/Usage:\n  audienti offers delete <offr_id> --confirm <yes\|true\|Y\|y>/, /DELETE \/api\/v1\/accounts\/:account_id\/offers\/:id\.json/]
+    },
+    {
       args: ["icps", "help"],
-      expected: [/Usage:\n  audienti icps list \[--json\]/, /choose icp_id for motion creation/]
+      expected: [/Usage:\n  audienti icps list \[--tag <tag>\] \[--json\]/, /choose icp_id for motion creation/]
     },
     {
       args: ["icps", "list", "help"],
-      expected: [/Usage:\n  audienti icps list \[--json\]/, /GET \/api\/v1\/accounts\/:account_id\/icps\.json/]
+      expected: [/Usage:\n  audienti icps list \[--tag <tag>\] \[--json\]/, /GET \/api\/v1\/accounts\/:account_id\/icps\.json/]
+    },
+    {
+      args: ["icps", "show", "help"],
+      expected: [/Usage:\n  audienti icps show <icp_id>/, /GET \/api\/v1\/accounts\/:account_id\/icps\/:id\.json/]
     },
     {
       args: ["icps", "create", "help"],
-      expected: [/Usage:\n  audienti icps create \(\--name <text> \[\--notes <text>\] \[\--discovery-keyword <text>\] \| \-\-payload <file\.json>\)/, /POST \/api\/v1\/accounts\/:account_id\/icps\.json/]
+      expected: [/Usage:\n  audienti icps create \(\--name <text> \[\--notes <text>\] \[\--discovery-keyword <text>\] \[\--tags <tag\[,tag\.\.\.\]>\] \| \-\-payload <file\.json>\)/, /POST \/api\/v1\/accounts\/:account_id\/icps\.json/]
+    },
+    {
+      args: ["icps", "update", "help"],
+      expected: [/Usage:\n  audienti icps update <icp_id>/, /PATCH \/api\/v1\/accounts\/:account_id\/icps\/:id\.json/]
+    },
+    {
+      args: ["icps", "add-tag", "help"],
+      expected: [/Usage:\n  audienti icps add-tag <icp_id> <tag>/, /POST \/api\/v1\/accounts\/:account_id\/icps\/:id\/add_tag\.json/]
+    },
+    {
+      args: ["icps", "remove-tag", "help"],
+      expected: [/Usage:\n  audienti icps remove-tag <icp_id> <tag>/, /DELETE \/api\/v1\/accounts\/:account_id\/icps\/:id\/remove_tag\.json/]
     },
     {
       args: ["companies", "help"],
@@ -192,12 +312,32 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti lists update <list_id>/, /PATCH \/api\/v1\/accounts\/:account_id\/lists\/:id\.json/]
     },
     {
+      args: ["lists", "add-tag", "help"],
+      expected: [/Usage:\n  audienti lists add-tag <list_id> <tag>/, /POST \/api\/v1\/accounts\/:account_id\/lists\/:id\/add_tag\.json/]
+    },
+    {
+      args: ["lists", "remove-tag", "help"],
+      expected: [/Usage:\n  audienti lists remove-tag <list_id> <tag>/, /DELETE \/api\/v1\/accounts\/:account_id\/lists\/:id\/remove_tag\.json/]
+    },
+    {
+      args: ["tags", "help"],
+      expected: [/Usage:\n  audienti tags list \[--json\]/, /shared vocabulary from ICP tags, list tags, and motion play_tags/]
+    },
+    {
+      args: ["tags", "list", "help"],
+      expected: [/Usage:\n  audienti tags list \[--json\]/, /GET \/api\/v1\/accounts\/:account_id\/tags\.json/]
+    },
+    {
+      args: ["tags", "show", "help"],
+      expected: [/Usage:\n  audienti tags show <tag>/, /GET \/api\/v1\/accounts\/:account_id\/icps\.json/]
+    },
+    {
       args: ["lists", "delete", "help"],
       expected: [/Usage:\n  audienti lists delete <list_id> --confirm <yes\|true\|Y\|y>/, /DELETE \/api\/v1\/accounts\/:account_id\/lists\/:id\.json/]
     },
     {
       args: ["help", "agent-workflows"],
-      expected: [/audienti lists create --name "Target list"/, /audienti operator outcome <row_id> --payload <file\.json>/]
+      expected: [/audienti lists create --name "Target list"/, /audienti motions run-discovery <motn_id>/, /audienti analytics dashboard --play-tag wine_campaign/, /audienti operator outcome <row_id> --payload <file\.json>/]
     },
     {
       args: ["config", "list", "help"],
@@ -205,7 +345,11 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["prospects", "help"],
-      expected: [/audienti prospects list/, /Filters:/]
+      expected: [/audienti prospects list/, /audienti prospects check/, /Filters:/]
+    },
+    {
+      args: ["prospects", "check", "help"],
+      expected: [/Usage:\n  audienti prospects check/, /do not have a certified company employment citation/, /app_url/]
     },
     {
       args: ["lists", "prospects", "help"],
@@ -213,11 +357,11 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["motions", "help"],
-      expected: [/audienti motions prospects <motn_id>/, /motn_ prefix id/]
+      expected: [/audienti motions run-discovery <motn_id>/, /audienti motions prospects <motn_id>/, /motn_ prefix id/]
     },
     {
       args: ["plays", "help"],
-      expected: [/audienti motions prospects <motn_id>/, /motn_ prefix id/]
+      expected: [/audienti motions run-discovery <motn_id>/, /audienti motions prospects <motn_id>/, /motn_ prefix id/]
     },
     {
       args: ["operator", "help"],
@@ -229,7 +373,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["analytics", "help"],
-      expected: [/audienti analytics prospects/, /audienti analytics users/, /audienti analytics visops/, /--start <YYYY-MM-DD> --end <YYYY-MM-DD>/, /--window <24h\|7d\|1w\|day\|week>/, /--user <account_user_id\|email\|name\|me>/]
+      expected: [/audienti analytics prospects/, /audienti analytics dashboard/, /audienti analytics users/, /audienti analytics visops/, /--start <YYYY-MM-DD> --end <YYYY-MM-DD>/, /--window <24h\|7d\|1w\|day\|week>/, /--play-tag <tag>/, /--user <account_user_id\|email\|name\|me>/]
     },
     {
       args: ["analytics", "prospects", "help"],
@@ -256,6 +400,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti analytics content/, /published_posts_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/content\.json/]
     },
     {
+      args: ["analytics", "dashboard", "help"],
+      expected: [/Usage:\n  audienti analytics dashboard/, /cohort_company_target_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/dashboard\.json/]
+    },
+    {
       args: ["prospects", "import", "help"],
       expected: [/Usage:\n  audienti prospects import <linkedin_url>/, /linkedin_url: url/]
     },
@@ -270,6 +418,18 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "assign", "help"],
       expected: [/Usage:\n  audienti prospects assign <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/assign\.json/]
+    },
+    {
+      args: ["prospects", "reject", "help"],
+      expected: [/Usage:\n  audienti prospects reject <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/reject\.json/]
+    },
+    {
+      args: ["prospects", "nurture", "help"],
+      expected: [/Usage:\n  audienti prospects nurture <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
+    },
+    {
+      args: ["prospects", "restore", "help"],
+      expected: [/Usage:\n  audienti prospects restore <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/restore\.json/]
     },
     {
       args: ["prospects", "message-types", "help"],
@@ -328,6 +488,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti motions analytics <motn_id>/, /prospects_by_day\[\]/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/prospects\.json\?motion_id=:motion_id/]
     },
     {
+      args: ["motions", "run-discovery", "help"],
+      expected: [/Usage:\n  audienti motions run-discovery <motn_id>/, /Motions::DiscoverJob/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/run_discovery\.json/]
+    },
+    {
       args: ["motions", "prospects", "help"],
       expected: [/Usage:\n  audienti motions prospects <motn_id>/, /GET \/api\/v1\/accounts\/:account_id\/motions\/:motion_id\/prospects\.json/]
     },
@@ -349,7 +513,15 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["plays", "update", "help"],
-      expected: [/Usage:\n  audienti motions update <motn_id> --status <draft\|preparing\|active\|paused\|archived>/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+      expected: [/Usage:\n  audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\]/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+    },
+    {
+      args: ["motions", "add-tag", "help"],
+      expected: [/Usage:\n  audienti motions add-tag <motn_id> <tag>/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/add_tag\.json/]
+    },
+    {
+      args: ["plays", "remove-tag", "help"],
+      expected: [/Usage:\n  audienti motions remove-tag <motn_id> <tag>/, /DELETE \/api\/v1\/accounts\/:account_id\/motions\/:id\/remove_tag\.json/]
     },
     {
       args: ["plays", "activate", "help"],
@@ -882,7 +1054,7 @@ test("offers and icps list render readable selection tables", async () => {
 
       if (url.pathname === "/api/v1/accounts/acct_one/icps.json") {
         return jsonResponse([
-          { id: 21, prefix_id: "icpp_one", name: "ICP One", discovery_keyword: "migration", agent: { id: 31, name: "Finder One" } }
+          { id: 21, prefix_id: "icpp_one", name: "ICP One", tags: ["enterprise"], discovery_keyword: "migration", agent: { id: 31, name: "Finder One" } }
         ]);
       }
 
@@ -897,8 +1069,8 @@ test("offers and icps list render readable selection tables", async () => {
     stdout.output = "";
     exitCode = await run(["icps", "list"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /ICP ID\tNAME\tDISCOVERY KEYWORD\tAGENT/);
-    assert.match(stdout.output, /icpp_one\tICP One\tmigration\tFinder One/);
+    assert.match(stdout.output, /ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tAGENT/);
+    assert.match(stdout.output, /icpp_one\tICP One\tenterprise\tmigration\tFinder One/);
   });
 });
 
@@ -937,7 +1109,8 @@ test("offers create and icps create post the expected payloads and support json 
           icp: {
             name: "ICP One",
             notes: "ICP notes.",
-            discovery_keyword: "renewal"
+            discovery_keyword: "renewal",
+            tags: ["enterprise", "renewal"]
           }
         });
         return jsonResponse({
@@ -945,6 +1118,7 @@ test("offers create and icps create post the expected payloads and support json 
           prefix_id: "icpp_one",
           name: "ICP One",
           notes: "ICP notes.",
+          tags: ["enterprise", "renewal"],
           discovery_keyword: "renewal",
           agent: null
         }, { status: 201 });
@@ -977,10 +1151,67 @@ test("offers create and icps create post the expected payloads and support json 
       "ICP notes.",
       "--discovery-keyword",
       "renewal",
+      "--tags",
+      "enterprise, renewal",
       "--json"
     ], { env, fetch, stdout });
     assert.equal(exitCode, 0);
     assert.equal(JSON.parse(stdout.output).prefix_id, "icpp_one");
+  });
+});
+
+test("offers show update and delete call the expected endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      id: 11,
+      prefix_id: "offr_one",
+      name: "Offer One",
+      description: "Offer description.",
+      url: "https://example.com/offer-one"
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      if (url.pathname === "/api/v1/accounts/acct_one/offers/offr_one.json" && options.method === "GET") {
+        return jsonResponse(responseBody);
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/offers/offr_one.json" && options.method === "PATCH") {
+        assert.deepEqual(JSON.parse(options.body), {
+          offer: {
+            name: "Offer Updated",
+            description: "Updated description."
+          }
+        });
+        return jsonResponse({ ...responseBody, name: "Offer Updated", description: "Updated description." });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/offers/offr_one.json" && options.method === "DELETE") {
+        return jsonResponse({ ...responseBody, deleted: true });
+      }
+
+      throw new Error(`unexpected request ${options.method || "GET"} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["offers", "show", "offr_one"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Offer: Offer One \(offr_one\)/);
+
+    stdout.output = "";
+    exitCode = await run(["offers", "update", "offr_one", "--name", "Offer Updated", "--description", "Updated description.", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).name, "Offer Updated");
+
+    stdout.output = "";
+    exitCode = await run(["offers", "delete", "offr_one", "--confirm", "yes"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Deleted offer Offer One \(offr_one\)\./);
   });
 });
 
@@ -1054,6 +1285,132 @@ test("icps create accepts a payload file for rich ICP creation", async () => {
 
     assert.equal(exitCode, 0);
     assert.equal(JSON.parse(stdout.output).prefix_id, "icpp_one");
+  });
+});
+
+test("icps show renders one icp", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/icps/icpp_source.json");
+      assert.equal(options.method, "GET");
+      return jsonResponse({
+        prefix_id: "icpp_source",
+        name: "Pipeline ICP",
+        notes: "ICP notes.",
+        tags: ["sarit"],
+        discovery_keyword: "renewal",
+        agent: { name: "Finder One" }
+      });
+    });
+
+    const exitCode = await run(["icps", "show", "icpp_source"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /ICP: Pipeline ICP \(icpp_source\)/);
+    assert.match(stdout.output, /Tags: sarit/);
+    assert.match(stdout.output, /Agent: Finder One/);
+  });
+});
+
+test("icps update patches tags", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "icpp_source",
+      name: "Pipeline ICP",
+      notes: "ICP notes.",
+      tags: ["sarit", "pj"],
+      discovery_keyword: "renewal"
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/icps/icpp_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        icp: {
+          tags: ["sarit", "pj"]
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["icps", "update", "icpp_source", "--tags", "sarit, pj", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("icps add-tag posts the expected payload and supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "icpp_source",
+      name: "Pipeline ICP",
+      tags: ["sarit"]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/icps/icpp_source/add_tag.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["icps", "add-tag", "icpp_source", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("icps remove-tag sends DELETE and renders a readable confirmation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/icps/icpp_source/remove_tag.json");
+      assert.equal(options.method, "DELETE");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse({
+        prefix_id: "icpp_source",
+        name: "Pipeline ICP",
+        tags: []
+      });
+    });
+
+    const exitCode = await run(["icps", "remove-tag", "icpp_source", "sarit"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed tag sarit from ICP Pipeline ICP \(icpp_source\)\./);
   });
 });
 
@@ -1156,9 +1513,19 @@ test("account read commands call the expected api endpoints with json output", a
       body: [{ prefix_id: "offr_one", name: "Offer One", description: "Offer description." }]
     },
     {
+      args: ["offers", "show", "offr_one", "--json"],
+      path: "/api/v1/accounts/acct_one/offers/offr_one.json",
+      body: { prefix_id: "offr_one", name: "Offer One", description: "Offer description." }
+    },
+    {
       args: ["icps", "list", "--json"],
       path: "/api/v1/accounts/acct_one/icps.json",
       body: [{ prefix_id: "icpp_one", name: "ICP One", discovery_keyword: "migration" }]
+    },
+    {
+      args: ["icps", "show", "icpp_one", "--json"],
+      path: "/api/v1/accounts/acct_one/icps/icpp_one.json",
+      body: { prefix_id: "icpp_one", name: "ICP One", discovery_keyword: "migration" }
     },
     {
       args: ["lists", "list", "--json"],
@@ -1262,6 +1629,158 @@ test("account read commands call the expected api endpoints with json output", a
   }
 });
 
+test("tags list sends bearer auth and supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = [
+      { name: "matt", icp_count: 0, list_count: 1, motion_count: 2, total_count: 3 },
+      { name: "sarit", icp_count: 1, list_count: 2, motion_count: 1, total_count: 4 }
+    ];
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tags.json");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["tags", "list", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("tags list renders a readable table", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { name: "matt", icp_count: 0, list_count: 1, motion_count: 2, total_count: 3 },
+      { name: "sarit", icp_count: 1, list_count: 2, motion_count: 1, total_count: 4 }
+    ]));
+
+    const exitCode = await run(["tags", "list"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /TAG\tICPS\tLISTS\tMOTIONS\tTOTAL/);
+    assert.match(stdout.output, /matt\t0\t1\t2\t3/);
+    assert.match(stdout.output, /sarit\t1\t2\t1\t4/);
+  });
+});
+
+test("tags show returns icps, lists, and motions using the tag", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      if (url.pathname.endsWith("/icps.json")) {
+        return jsonResponse([
+          { prefix_id: "icpp_one", name: "Sarit ICP", tags: ["sarit"], discovery_keyword: "renewal" },
+          { prefix_id: "icpp_two", name: "Matt ICP", tags: ["matt"], discovery_keyword: "migration" }
+        ]);
+      }
+      if (url.pathname.endsWith("/lists.json")) {
+        return jsonResponse([
+          { prefix_id: "list_one", name: "Sarit list", tags: ["sarit"], prospect_count: 2 },
+          { prefix_id: "list_two", name: "Matt list", tags: ["matt"], prospect_count: 1 }
+        ]);
+      }
+      if (url.pathname.endsWith("/motions.json")) {
+        return jsonResponse([
+          { prefix_id: "motn_one", name: "Sarit motion", kind: "outbound", status: "active", play_tags: ["sarit"] },
+          { prefix_id: "motn_two", name: "PJ motion", kind: "outbound", status: "draft", play_tags: ["pj"] }
+        ]);
+      }
+      throw new Error(`unexpected URL ${url}`);
+    });
+
+    const exitCode = await run(["tags", "show", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), {
+      tag: "sarit",
+      icps: [
+        { prefix_id: "icpp_one", name: "Sarit ICP", tags: ["sarit"], discovery_keyword: "renewal" }
+      ],
+      lists: [
+        { prefix_id: "list_one", name: "Sarit list", tags: ["sarit"], prospect_count: 2 }
+      ],
+      motions: [
+        { prefix_id: "motn_one", name: "Sarit motion", kind: "outbound", status: "active", play_tags: ["sarit"] }
+      ]
+    });
+    assert.equal(fetch.calls.length, 3);
+  });
+});
+
+test("icps list can filter by tag", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { prefix_id: "icpp_one", name: "Sarit ICP", tags: ["sarit"], discovery_keyword: "renewal" },
+      { prefix_id: "icpp_two", name: "Matt ICP", tags: ["matt"], discovery_keyword: "migration" }
+    ]));
+
+    const exitCode = await run(["icps", "list", "--tag", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), [
+      { prefix_id: "icpp_one", name: "Sarit ICP", tags: ["sarit"], discovery_keyword: "renewal" }
+    ]);
+  });
+});
+
+test("lists list can filter by tag", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { prefix_id: "list_one", name: "Sarit list", tags: ["sarit"], prospect_count: 2 },
+      { prefix_id: "list_two", name: "Matt list", tags: ["matt"], prospect_count: 1 }
+    ]));
+
+    const exitCode = await run(["lists", "list", "--tag", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), [
+      { prefix_id: "list_one", name: "Sarit list", tags: ["sarit"], prospect_count: 2 }
+    ]);
+  });
+});
+
 test("lists create posts the expected payload and supports json output", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -1276,6 +1795,7 @@ test("lists create posts the expected payload and supports json output", async (
       prefix_id: "list_one",
       name: "CIO renewal targets",
       description: "Accounts to review before QBR outreach.",
+      tags: ["sarit", "pj"],
       campaign_brief: {
         hook: "Vendor accountability before renewal",
         audience_note: "IT leaders running QBRs and renewals"
@@ -1290,6 +1810,7 @@ test("lists create posts the expected payload and supports json output", async (
         list: {
           name: "CIO renewal targets",
           description: "Accounts to review before QBR outreach.",
+          tags: ["sarit", "pj"],
           campaign_brief: {
             hook: "Vendor accountability before renewal",
             audience_note: "IT leaders running QBRs and renewals"
@@ -1306,6 +1827,8 @@ test("lists create posts the expected payload and supports json output", async (
       "CIO renewal targets",
       "--description",
       "Accounts to review before QBR outreach.",
+      "--tags",
+      "sarit, pj",
       "--campaign-hook",
       "Vendor accountability before renewal",
       "--audience-note",
@@ -1376,6 +1899,30 @@ test("motions list renders an aligned table with readable columns", async () => 
     assert.match(stdout.output, /MOTION ID\s+STATUS\s+KIND\s+NAME/);
     assert.match(stdout.output, /motn_one\s+active\s+outbound\s+Motion One/);
     assert.match(stdout.output, /motn_two\s+paused\s+inbound\s+Longer Motion Name/);
+  });
+});
+
+test("motions list can filter by tag", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse([
+      { prefix_id: "motn_one", name: "Motion One", kind: "outbound", status: "active", play_tags: ["sarit"] },
+      { prefix_id: "motn_two", name: "Motion Two", kind: "inbound", status: "paused", play_tags: ["matt"] }
+    ]));
+
+    const exitCode = await run(["motions", "list", "--tag", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), [
+      { prefix_id: "motn_one", name: "Motion One", kind: "outbound", status: "active", play_tags: ["sarit"] }
+    ]);
   });
 });
 
@@ -1453,6 +2000,95 @@ test("motions analytics renders prospect output by day", async () => {
   });
 });
 
+test("motions run-discovery posts launch request and renders queue result", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_focus/run_discovery.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {});
+
+      return jsonResponse({
+        motion_id: "motn_focus",
+        motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion", kind: "outbound", status: "active" },
+        enqueued: true,
+        reason: "launched",
+        target_count: 25
+      }, { status: 202 });
+    });
+
+    const exitCode = await run(["motions", "run-discovery", "motn_focus"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Discovery queued for Focused Motion \(motn_focus\)\./);
+    assert.match(stdout.output, /Reason: launched/);
+    assert.match(stdout.output, /Target count: 25/);
+  });
+});
+
+test("motions run-discovery supports target count json output and account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      motion_id: "motn_focus",
+      motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion" },
+      enqueued: false,
+      reason: "run_in_progress",
+      target_count: 5
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_focus/run_discovery.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { target_count: 5 });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "run-discovery", "motn_focus", "--target-count", "5", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions run-discovery rejects invalid target count without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("invalid target count should not call the API");
+    });
+
+    const exitCode = await run(["motions", "run-discovery", "motn_focus", "--target-count", "0"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /--target-count must be a positive integer/);
+  });
+});
+
 test("motions create posts the expected payload, supports plays alias, and honors account override", async () => {
   await withTempConfigHome(async ({ root, env }) => {
     await writeConfig({
@@ -1469,7 +2105,8 @@ test("motions create posts the expected payload, supports plays alias, and honor
       status: "draft",
       offer_id: "offr_abc123",
       principal_account_user_id: 42,
-      list_id: "list_abc123"
+      list_id: "list_abc123",
+      play_tags: ["sarit", "pj"]
     }));
 
     const stdout = captureStream();
@@ -1486,7 +2123,8 @@ test("motions create posts the expected payload, supports plays alias, and honor
           status: "draft",
           offer_id: "offr_abc123",
           principal_account_user_id: 42,
-          list_id: "list_abc123"
+          list_id: "list_abc123",
+          play_tags: ["sarit", "pj"]
         }
       });
       return jsonResponse({
@@ -1621,6 +2259,77 @@ test("motions update patches status, supports plays alias, and honors account ov
   });
 });
 
+test("motions update patches play tags", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "draft",
+      kind: "outbound",
+      play_tags: ["sarit", "pj"]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          play_tags: ["sarit", "pj"]
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--tags", "sarit, pj", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions update can clear play tags", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "draft",
+      kind: "outbound",
+      play_tags: []
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          play_tags: []
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--tags", "", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
 test("motions status shortcuts patch expected statuses", async () => {
   const cases = [
     { action: "activate", status: "active" },
@@ -1682,7 +2391,69 @@ test("motions update rejects invalid status without calling the api", async () =
 
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
-    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> --status <draft\|preparing\|active\|paused\|archived>/);
+    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\]/);
+  });
+});
+
+test("motions add-tag posts the expected payload, supports plays alias, and honors account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "active",
+      kind: "outbound",
+      play_tags: ["sarit"]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_source/add_tag.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["--account", "acct_two", "plays", "add-tag", "motn_source", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions remove-tag sends DELETE and renders a readable confirmation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source/remove_tag.json");
+      assert.equal(options.method, "DELETE");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse({
+        prefix_id: "motn_source",
+        name: "Pipeline motion",
+        status: "active",
+        kind: "outbound",
+        play_tags: []
+      });
+    });
+
+    const exitCode = await run(["motions", "remove-tag", "motn_source", "sarit"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed tag sarit from motion Pipeline motion \(motn_source\)\./);
   });
 });
 
@@ -1780,6 +2551,7 @@ test("lists update patches the expected payload and supports json output", async
       prefix_id: "list_one",
       name: "Updated target list",
       description: "Re-ranked operator list.",
+      tags: ["matt", "pj"],
       campaign_brief: {
         hook: "Renewal leverage before QBRs",
         audience_note: "Vendor-management operators"
@@ -1794,6 +2566,7 @@ test("lists update patches the expected payload and supports json output", async
         list: {
           name: "Updated target list",
           description: "Re-ranked operator list.",
+          tags: ["matt", "pj"],
           campaign_brief: {
             hook: "Renewal leverage before QBRs",
             audience_note: "Vendor-management operators"
@@ -1811,6 +2584,8 @@ test("lists update patches the expected payload and supports json output", async
       "Updated target list",
       "--description",
       "Re-ranked operator list.",
+      "--tags",
+      "matt, pj",
       "--campaign-hook",
       "Renewal leverage before QBRs",
       "--audience-note",
@@ -1852,6 +2627,64 @@ test("lists update renders a readable confirmation", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Updated list Updated target list \(list_one\)\./);
     assert.match(stdout.output, /Description: Re-ranked operator list\./);
+  });
+});
+
+test("lists add-tag posts the expected payload and supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "list_one",
+      name: "Target list",
+      tags: ["sarit"]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_one/add_tag.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["lists", "add-tag", "list_one", "sarit", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("lists remove-tag sends DELETE and renders a readable confirmation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_one/remove_tag.json");
+      assert.equal(options.method, "DELETE");
+      assert.deepEqual(JSON.parse(options.body), { tag: "sarit" });
+      return jsonResponse({
+        prefix_id: "list_one",
+        name: "Target list",
+        tags: []
+      });
+    });
+
+    const exitCode = await run(["lists", "remove-tag", "list_one", "sarit"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed tag sarit from list Target list \(list_one\)\./);
   });
 });
 
@@ -2259,6 +3092,98 @@ test("prospects assign supports unassign", async () => {
 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Unassigned 1 prospects\./);
+  });
+});
+
+test("prospects disposition commands call shared account endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/reject.json") {
+        assert.equal(options.method, "POST");
+        assert.equal(options.body, undefined);
+        return jsonResponse({
+          status: "rejected",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "rejected" },
+          system_list: { prefix_id: "list_rejected", name: "Rejected" }
+        });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/nurture.json") {
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), { inactive_reason: "non_responsive" });
+        return jsonResponse({
+          status: "nurtured",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "inactive", inactive_reason: "non_responsive" },
+          system_list: { prefix_id: "list_inactive", name: "Inactive" }
+        });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/restore.json") {
+        assert.equal(options.method, "POST");
+        assert.equal(options.body, undefined);
+        return jsonResponse({
+          status: "restored",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "active" }
+        });
+      }
+
+      throw new Error(`unexpected request ${options.method || "GET"} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["prospects", "reject", "prsp_one"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Rejected prospect Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /List: Rejected \(list_rejected\)/);
+
+    stdout.output = "";
+    exitCode = await run(["prospects", "nurture", "prsp_one", "--reason", "non_responsive"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Moved to nurture prospect Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Inactive reason: non_responsive/);
+
+    stdout.output = "";
+    exitCode = await run(["prospects", "restore", "prsp_one"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Restored prospect Pat Prospect \(prsp_one\)\./);
+  });
+});
+
+test("prospects disposition commands support json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      status: "restored",
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      account_prospect: { status: "active" }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/restore.json");
+      assert.equal(options.method, "POST");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["prospects", "restore", "prsp_one", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
   });
 });
 
@@ -2792,6 +3717,113 @@ test("prospects list supports filtering by company profile id", async () => {
 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /prsp_one\tnew\tPat Prospect\tHoneywell\tSend connection request/);
+  });
+});
+
+test("prospects check lists suspect prospects with operator URLs", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects.json");
+      assert.equal(url.searchParams.get("data_quality"), "missing_certified_company");
+      assert.equal(url.searchParams.get("motion_id"), "motn_one");
+      assert.equal(url.searchParams.get("assigned_user_id"), "42");
+      assert.equal(url.searchParams.get("limit"), "5");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        prospects: [{
+          prefix_id: "prsp_missing",
+          display_name: "Missing Employer",
+          company: "ImportedCo",
+          company_certification: {
+            status: "missing",
+            reason: "missing_employment_citation",
+            reported_company: "ImportedCo"
+          },
+          account_prospect: {
+            pipeline_stage: "identified",
+            motion: { prefix_id: "motn_one", name: "Wine Campaign" }
+          }
+        }],
+        meta: { total_count: 1, limit: 5, returned_count: 1 }
+      });
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "check",
+      "--motion",
+      "motn_one",
+      "--assigned-user",
+      "me",
+      "--limit",
+      "5"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Suspect prospects: 1/);
+    assert.match(stdout.output, /PROSPECT ID\tSTAGE\tNAME\tREPORTED COMPANY\tCERTIFIED\tREASON\tURL/);
+    assert.match(stdout.output, /prsp_missing\tidentified\tMissing Employer\tImportedCo\tno\tmissing_employment_citation\thttps:\/\/app\.audienti\.com\/prospects\/prsp_missing/);
+  });
+});
+
+test("prospects check adds operator URLs to json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.searchParams.get("data_quality"), "missing_certified_company");
+      return jsonResponse({
+        prospects: [{
+          prefix_id: "prsp_missing",
+          display_name: "Missing Employer",
+          company_certification: { status: "missing", reason: "missing_employment_citation" }
+        }],
+        meta: { total_count: 1 }
+      });
+    });
+
+    const exitCode = await run(["prospects", "check", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).prospects[0].app_url, "https://app.audienti.com/prospects/prsp_missing");
+  });
+});
+
+test("prospects check rejects company filters", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("fetch should not be called");
+    });
+
+    const exitCode = await run(["prospects", "check", "--company", "Honeywell"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Company filters are not supported for `prospects check`/);
   });
 });
 
@@ -5149,6 +6181,131 @@ test("analytics prospects cohort-analysis loops recent weekly cohorts and render
     assert.match(stdout.output, /COHORT                    TOTAL  Identified  Pre Connect  Connected  Meeting Requested/);
     assert.match(stdout.output, /2026-06-15 to 2026-06-21     25           1            2         12                 10/);
     assert.match(stdout.output, /2026-07-06 to 2026-07-12     40          24           14          2                  0/);
+  });
+});
+
+test("analytics dashboard sends tag cohort filters and renders company target counts", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/dashboard.json");
+      assert.equal(url.searchParams.get("cohort_start_date"), "2026-07-01");
+      assert.equal(url.searchParams.get("cohort_end_date"), "2026-07-07");
+      assert.equal(url.searchParams.get("play_tag"), "wine_campaign");
+      assert.equal(url.searchParams.get("motion_id"), "motn_focus");
+      assert.equal(url.searchParams.get("offer_id"), "offr_one");
+      assert.equal(url.searchParams.get("icp_id"), "icpp_one");
+      assert.equal(url.searchParams.get("account_user_id"), "42");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        kind: "dashboard",
+        cohort: {
+          start_date: "2026-07-01",
+          end_date: "2026-07-07",
+          label: "Jul 1, 2026 - Jul 7, 2026",
+          field: "account_prospects.created_at"
+        },
+        activity: {
+          start_date: "2026-07-01",
+          end_date: "2026-07-12",
+          label: "Jul 1, 2026 - Jul 12, 2026",
+          field: "events.created_at"
+        },
+        filters: {
+          play_tag: "wine_campaign",
+          motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion" },
+          offer: { id: 4, prefix_id: "offr_one", name: "Wine Offer" },
+          icp: { id: 5, prefix_id: "icpp_one", name: "Wine ICP" },
+          account_user: { id: 42, name: "User One", email: "one@example.com" }
+        },
+        cohort_size: 47,
+        cohort_company_target_count: 28,
+        cohort_people_per_company_average: 1.7,
+        active_cohort_count: 31,
+        active_cohort_company_target_count: 20,
+        active_cohort_percentage: 66.0,
+        inactive_cohort_count: 16,
+        pipeline_stage_counts: [
+          { key: "connected", label: "Connected", count: 10 },
+          { key: "meeting_requested", label: "Meeting requested", count: 3 }
+        ],
+        breakdown_rows: [],
+        conversion_metrics: [],
+        connection_request_breakdown: [],
+        disposition_breakdown: [],
+        workflow_hold_breakdown: []
+      });
+    });
+
+    const exitCode = await run([
+      "analytics",
+      "dashboard",
+      "--cohort-start",
+      "2026-07-01",
+      "--cohort-end",
+      "2026-07-07",
+      "--play-tag",
+      "wine_campaign",
+      "--motion",
+      "motn_focus",
+      "--offer",
+      "offr_one",
+      "--icp",
+      "icpp_one",
+      "--user",
+      "me"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Dashboard analytics \(Jul 1, 2026 - Jul 7, 2026\)/);
+    assert.match(stdout.output, /Tag: wine_campaign/);
+    assert.match(stdout.output, /Motion: Focused Motion \(motn_focus\)/);
+    assert.match(stdout.output, /Prospects: 47/);
+    assert.match(stdout.output, /Companies: 28/);
+    assert.match(stdout.output, /People\/company: 1\.7/);
+    assert.match(stdout.output, /Active: 31 \(20 companies, 66%\)/);
+    assert.match(stdout.output, /Meeting requested\s+3/);
+  });
+});
+
+test("analytics dashboard supports campaigns alias and json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      kind: "dashboard",
+      filters: { play_tag: "wine_campaign" },
+      cohort_size: 10,
+      cohort_company_target_count: 6
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/dashboard.json");
+      assert.equal(url.searchParams.get("play_tag"), "wine_campaign");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["analytics", "campaigns", "--tag", "wine_campaign", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
   });
 });
 

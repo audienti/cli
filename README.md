@@ -57,21 +57,32 @@ creating, changing, or deleting data.
 Common inspection commands:
 
 ```bash
+audienti update check
 audienti operator next --plan
 audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
+audienti motions run-discovery <motn_id>
 audienti motions update <motn_id> --status paused
 audienti motions activate <motn_id>
 audienti motions delete <motn_id> --confirm yes
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned
+audienti prospects check --all --csv
 audienti prospects assign <prsp_id> --assigned-user me
 audienti users activity --window 7d
 audienti analytics prospects --window 24h
+audienti analytics dashboard --play-tag wine_campaign
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
+```
+
+To let an agent or operator check whether the local CLI is behind the latest
+published package:
+
+```bash
+audienti update check --json
 ```
 
 To work the supported prospect operator queue from the CLI, inspect the next move
@@ -100,6 +111,20 @@ produced-day cohort currently sits in the funnel:
 
 ```bash
 audienti motions analytics <motn_id>
+```
+
+To count the people and distinct companies currently targeted by one campaign
+tag without waiting on the web dashboard filter:
+
+```bash
+audienti analytics dashboard --play-tag wine_campaign --cohort-start 2026-07-01 --cohort-end 2026-07-07
+```
+
+To queue an immediate discovery run for a motion through the same launch gate
+used by the operator surface:
+
+```bash
+audienti motions run-discovery <motn_id>
 ```
 
 To audit one account user's outbound actions, optionally narrowed to one motion

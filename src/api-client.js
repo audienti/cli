@@ -51,6 +51,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["offers"]));
   }
 
+  offer(accountId, offerId) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId]));
+  }
+
   createOffer(accountId, body) {
     return this.requestJson(accountPath(accountId, ["offers"]), {
       method: "POST",
@@ -58,8 +62,25 @@ export class AudientiClient {
     });
   }
 
+  updateOffer(accountId, offerId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  deleteOffer(accountId, offerId) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId]), {
+      method: "DELETE"
+    });
+  }
+
   icps(accountId) {
     return this.requestJson(accountPath(accountId, ["icps"]));
+  }
+
+  icp(accountId, icpId) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId]));
   }
 
   createIcp(accountId, body) {
@@ -69,8 +90,33 @@ export class AudientiClient {
     });
   }
 
+  updateIcp(accountId, icpId, body) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  addIcpTag(accountId, icpId, body) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeIcpTag(accountId, icpId, body) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "remove_tag"]), {
+      method: "DELETE",
+      body
+    });
+  }
+
   companies(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["companies"], query));
+  }
+
+  tags(accountId) {
+    return this.requestJson(accountPath(accountId, ["tags"]));
   }
 
   lists(accountId) {
@@ -91,6 +137,20 @@ export class AudientiClient {
   updateList(accountId, listId, body) {
     return this.requestJson(accountPath(accountId, ["lists", listId]), {
       method: "PATCH",
+      body
+    });
+  }
+
+  addListTag(accountId, listId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeListTag(accountId, listId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "remove_tag"]), {
+      method: "DELETE",
       body
     });
   }
@@ -141,6 +201,20 @@ export class AudientiClient {
     });
   }
 
+  addMotionTag(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeMotionTag(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "remove_tag"]), {
+      method: "DELETE",
+      body
+    });
+  }
+
   deleteMotion(accountId, motionId) {
     return this.requestJson(accountPath(accountId, ["motions", motionId]), {
       method: "DELETE"
@@ -163,6 +237,13 @@ export class AudientiClient {
 
   motionStatus(accountId, motionId) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "status"]));
+  }
+
+  runMotionDiscovery(accountId, motionId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "run_discovery"]), {
+      method: "POST",
+      body
+    });
   }
 
   motionProspects(accountId, motionId, query = {}) {
@@ -203,6 +284,25 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "write_message"]), {
       method: "POST",
       body
+    });
+  }
+
+  rejectProspect(accountId, prospectId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "reject"]), {
+      method: "POST"
+    });
+  }
+
+  nurtureProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "nurture"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  restoreProspect(accountId, prospectId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "restore"]), {
+      method: "POST"
     });
   }
 
@@ -281,6 +381,10 @@ export class AudientiClient {
 
   analyticsContent(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["analytics", "content"], query));
+  }
+
+  analyticsDashboard(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "dashboard"], query));
   }
 
   async requestJson(path, { method = "GET", body } = {}) {

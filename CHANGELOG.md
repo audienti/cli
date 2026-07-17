@@ -4,11 +4,48 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.15] - 2026-07-16
+
+### Added
+
+- Add `audienti prospects check` for listing people missing certified company employment citations, with direct app URLs for operator review.
+- Add `audienti motions run-discovery` for queuing immediate discovery through the API launch gate.
+- Add `audienti analytics dashboard` for CLI access to campaign cohort counts, including distinct company targets filtered by play tag, motion, offer, ICP, or user.
+
+## [0.1.14] - 2026-07-16
+
+### Added
+
+- Add `audienti update check` for comparing the local CLI version to the latest published `@audienti/cli` package.
+
+## [0.1.13] - 2026-07-16
+
+### Added
+
+- Add ICP tags to `audienti icps list/create/update` and add `audienti icps add-tag/remove-tag`.
+- Include ICP usage in `audienti tags list` and `audienti tags show <tag>`.
+- Add `audienti icps show <icp_id>` for single ICP inspection.
+- Add full offer CLI/API CRUD with `audienti offers show/update/delete`.
+- Add `audienti prospects reject`, `audienti prospects nurture`, and `audienti prospects restore` through the shared prospect disposition paths.
+
+## [0.1.12] - 2026-07-16
+
+### Added
+
+- Add `audienti motions add-tag/remove-tag` and `audienti lists add-tag/remove-tag` for managing play and list tags through the CLI/API contract.
+- Allow tags to be sent during list create/update and motion create/update payloads.
+- Add `audienti tags list` to show normalized list and motion tags currently in use.
+- Add `audienti tags show <tag>` plus `--tag` filters for list and motion listing commands.
+
 ## [0.1.11] - 2026-07-15
 
 ### Added
 
 - Add `audienti users select <account_user_id|email|name|me>` to save a default account user for CLI commands that accept `me` or default to the current operator.
+
+### Changed
+
+- Restrict inbound motion creation to the executable LinkedIn and Reddit channels and reject undeployed channel names.
 
 ## [0.1.10] - 2026-07-15
 
