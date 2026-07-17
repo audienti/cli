@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-07-17
+
+### Added
+
+- Add `audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>]` to queue the LinkedIn Review / Blueprint report from the CLI.
+- Add `audienti tools list` to show available CLI-backed tools and their report inspection commands.
+- Add `audienti tools linkedin-review reports [--limit <n>]` to list recent LinkedIn Review reports and find report ids.
+- Add `audienti tools linkedin-review show <rprt_id>` to print completed report content in the terminal.
+- Add `audienti tools linkedin-review status <rprt_id>` to inspect report stage, run status, timestamps, and product URL while the profile review is building.
+
 ## [0.1.18] - 2026-07-17
 
 ### Added

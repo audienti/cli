@@ -465,6 +465,21 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["prospect_imports", importId]));
   }
 
+  linkedinReviewReports(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports"], query));
+  }
+
+  linkedinReview(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  linkedinReviewStatus(accountId, reportId) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports", reportId]));
+  }
+
   operatorQueue(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operator"], query));
   }

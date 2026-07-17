@@ -85,6 +85,11 @@ audienti analytics dashboard --play-tag wine_campaign
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
+audienti tools list
+audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <icp_id>
+audienti tools linkedin-review reports
+audienti tools linkedin-review show <rprt_id>
+audienti tools linkedin-review status <rprt_id>
 ```
 
 To let an agent or operator check whether the local CLI is behind the latest
@@ -170,6 +175,18 @@ audienti prospects add-profile <prsp_id> --url prospect@example.com
 audienti prospects add-profile <prsp_id> --url +12025550123
 audienti prospects add-profile <prsp_id> --url https://www.linkedin.com/in/example
 audienti prospects report-bad-profile <prsp_id> <prof_id>
+```
+
+To queue a personal LinkedIn profile authority review and ICP-fit positioning
+blueprint, then check whether it is waiting on enrichment, running, completed,
+or failed:
+
+```bash
+audienti tools list
+audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <icp_id>
+audienti tools linkedin-review reports
+audienti tools linkedin-review show <rprt_id>
+audienti tools linkedin-review status <rprt_id>
 ```
 
 To reassign or clear ownership for existing prospects:

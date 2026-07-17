@@ -54,6 +54,9 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti content approve <cpwi_id>/);
   assert.match(stdout.output, /audienti content comments/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
+  assert.match(stdout.output, /audienti tools list/);
+  assert.match(stdout.output, /audienti tools linkedin-review --url <linkedin_url> \[--icp <icp_id>\]/);
+  assert.match(stdout.output, /audienti tools linkedin-review reports/);
   assert.match(stdout.output, /More help:/);
   assert.match(stdout.output, /audienti <area> <command> help/);
   assert.equal(stderr.output, "");
@@ -3606,6 +3609,455 @@ test("tools get help documents email and phone lookup by LinkedIn URL", async ()
   assert.match(stdout.output, /Usage:\n  audienti tools get <email\|phone> --url <linkedin_url>/);
   assert.match(stdout.output, /Uses the existing prospect import enrichment pipeline/);
   assert.match(stdout.output, /phone lookup still depends on the email waterfall selecting an email first/);
+});
+
+test("tools list prints available tools and report commands", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "list"], { stdout });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /TOOL\s+COMMAND\s+REPORTS/);
+  assert.match(stdout.output, /get-email\s+audienti tools get email --url <linkedin_url>/);
+  assert.match(stdout.output, /linkedin-review\s+audienti tools linkedin-review --url <linkedin_url>/);
+  assert.match(stdout.output, /audienti tools linkedin-review reports/);
+});
+
+test("tools list supports json output", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "list", "--json"], { stdout });
+
+  assert.equal(exitCode, 0);
+  const payload = JSON.parse(stdout.output);
+  assert.deepEqual(payload.tools.map((tool) => tool.id), ["get-email", "get-phone", "linkedin-review"]);
+  assert.equal(payload.tools[2].reports_command, "audienti tools linkedin-review reports");
+  assert.equal(payload.tools[2].status_command, "audienti tools linkedin-review status <rprt_id>");
+  assert.equal(payload.tools[2].show_command, "audienti tools linkedin-review show <rprt_id>");
+});
+
+test("tools linkedin-review help documents the profile review command", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "linkedin-review", "help"], { stdout });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /Usage:\n  audienti tools linkedin-review --url <linkedin_url>/);
+  assert.match(stdout.output, /Queues the same LinkedIn Review \/ Blueprint report as the web tool/);
+  assert.match(stdout.output, /POST \/api\/v1\/accounts\/:account_id\/tools\/linkedin-review\/reports\.json/);
+});
+
+test("tools linkedin-review status help documents report progress inspection", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "linkedin-review", "status", "help"], { stdout });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /Usage:\n  audienti tools linkedin-review status <rprt_id>/);
+  assert.match(stdout.output, /waiting on enrichment, running, completed, or failed/);
+  assert.match(stdout.output, /GET \/api\/v1\/accounts\/:account_id\/tools\/linkedin-review\/reports\/:id\.json/);
+});
+
+test("tools linkedin-review reports help documents report discovery", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "linkedin-review", "reports", "help"], { stdout });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /Usage:\n  audienti tools linkedin-review reports/);
+  assert.match(stdout.output, /Lists recent LinkedIn Review reports/);
+  assert.match(stdout.output, /GET \/api\/v1\/accounts\/:account_id\/tools\/linkedin-review\/reports\.json/);
+});
+
+test("tools linkedin-review show help documents terminal report viewing", async () => {
+  const stdout = captureStream();
+
+  const exitCode = await run(["tools", "linkedin-review", "show", "help"], { stdout });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /Usage:\n  audienti tools linkedin-review show <rprt_id>/);
+  assert.match(stdout.output, /Prints the completed LinkedIn Review report content/);
+  assert.match(stdout.output, /JSON: \{ report, profile, run, queue, icp, content \}/);
+});
+
+test("tools linkedin-review queues a report and prints the report URL", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = {
+      queued: true,
+      report: {
+        prefix_id: "rprt_one",
+        status: "pending",
+        display_status: "pending",
+        stage: "waiting_for_enrichment",
+        url: "https://app.audienti.com/linkedin-review/reports/rprt_one"
+      },
+      profile: {
+        prefix_id: "prof_one",
+        identifier: "linkedin/profile",
+        url: "https://www.linkedin.com/in/pat-founder",
+        status: "pending"
+      },
+      icp: {
+        id: 42,
+        name: "Founder ICP"
+      },
+      run: {
+        id: 100,
+        status: "waiting"
+      },
+      queue: {
+        state: "ready",
+        pending_count: 1
+      }
+    };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        linkedin_url: "https://www.linkedin.com/in/pat-founder",
+        icp_id: "icpp_founder"
+      });
+
+      return jsonResponse(responseBody, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "tools",
+      "linkedin-review",
+      "--url",
+      "https://www.linkedin.com/in/pat-founder",
+      "--icp",
+      "icpp_founder"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /LinkedIn review queued: rprt_one/);
+    assert.match(stdout.output, /Status: pending/);
+    assert.match(stdout.output, /Stage: waiting_for_enrichment/);
+    assert.match(stdout.output, /Profile: https:\/\/www\.linkedin\.com\/in\/pat-founder/);
+    assert.match(stdout.output, /ICP: Founder ICP \(42\)/);
+    assert.match(stdout.output, /Run: waiting/);
+    assert.match(stdout.output, /Queue: ready \(1 pending\)/);
+    assert.match(stdout.output, /URL: https:\/\/app\.audienti\.com\/linkedin-review\/reports\/rprt_one/);
+    assert.match(stdout.output, /audienti tools linkedin-review status rprt_one/);
+  });
+});
+
+test("tools linkedin-review show renders report content", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports/rprt_one.json");
+      assert.equal(options.method, "GET");
+
+      return jsonResponse(linkedinReviewShowResponse());
+    });
+
+    const exitCode = await run(["tools", "linkedin-review", "show", "rprt_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /LinkedIn review report: rprt_one/);
+    assert.match(stdout.output, /Summary\n-------/);
+    assert.match(stdout.output, /Authority score: 88/);
+    assert.match(stdout.output, /Bottom line: Tighten the offer\./);
+    assert.match(stdout.output, /Strategy\n--------/);
+    assert.match(stdout.output, /Buyer persona: Founders/);
+    assert.match(stdout.output, /Recommended Rewrite\n-------------------/);
+    assert.match(stdout.output, /Headline: Hybrid headline/);
+    assert.match(stdout.output, /Lead Magnets\n------------/);
+    assert.match(stdout.output, /1\. Lead magnet 1 \(Guide\)/);
+  });
+});
+
+test("tools linkedin-review show supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = linkedinReviewShowResponse();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports/rprt_one.json");
+      assert.equal(options.method, "GET");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["tools", "linkedin-review", "show", "rprt_one", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("tools linkedin-review reports fetches and renders recent reports", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports.json?limit=2");
+      assert.equal(options.method, "GET");
+
+      return jsonResponse({
+        count: 1,
+        limit: 2,
+        reports: [
+          {
+            report: {
+              prefix_id: "rprt_one",
+              status: "processing",
+              display_status: "processing",
+              stage: "running_skill",
+              updated_at: "2026-07-17T13:00:00Z"
+            },
+            profile: {
+              display_name: "Pat Founder",
+              url: "https://www.linkedin.com/in/pat-founder"
+            },
+            run: { status: "waiting" },
+            queue: { state: "ready", pending_count: 1 },
+            icp: { id: 42, name: "Founder ICP" }
+          },
+          {
+            report: {
+              prefix_id: "rprt_orphan",
+              status: "pending",
+              display_status: "processing",
+              stage: "waiting_for_enrichment",
+              input_url: "https://www.linkedin.com/in/orphan-profile",
+              updated_at: "2026-07-17T12:00:00Z"
+            },
+            profile: null,
+            run: { status: "waiting" },
+            queue: { state: "none", pending_count: 0 },
+            icp: null
+          }
+        ]
+      });
+    });
+
+    const exitCode = await run(["tools", "linkedin-review", "reports", "--limit", "2"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /REPORT ID\s+STATUS\s+STAGE\s+PROFILE\s+UPDATED/);
+    assert.match(stdout.output, /rprt_one\s+processing\s+running_skill\s+Pat Founder\s+2026-07-17T13:00:00Z/);
+    assert.match(stdout.output, /rprt_orphan\s+processing\s+waiting_for_enrichment\s+https:\/\/www\.linkedin\.com\/in\/orphan-profile\s+2026-07-17T12:00:00Z/);
+    assert.match(stdout.output, /audienti tools linkedin-review status <rprt_id>/);
+  });
+});
+
+function linkedinReviewShowResponse() {
+  return {
+    queued: false,
+    report: {
+      prefix_id: "rprt_one",
+      status: "completed",
+      display_status: "completed",
+      stage: "completed",
+      title: "Projector Blueprint Profile",
+      updated_at: "2026-07-17T13:00:00Z",
+      url: "https://app.audienti.com/linkedin-review/reports/rprt_one"
+    },
+    profile: {
+      display_name: "Projector Blueprint Profile",
+      url: "https://www.linkedin.com/in/projector-blueprint-profile"
+    },
+    run: { status: "completed" },
+    queue: { state: "none", pending_count: 0 },
+    icp: { id: 42, name: "Founder ICP" },
+    content: {
+      payload: {
+        observed_profile: {
+          name: "Projector Blueprint Profile",
+          headline: "Founder",
+          location: "Washington, DC-Baltimore"
+        },
+        scores: {
+          authority_score: 88,
+          summary: "Strong base."
+        },
+        findings: {
+          bottom_line: "Tighten the offer.",
+          whats_working: [{ title: "Proof", description: "Visible track record." }],
+          revenue_leaks: [{ title: "Offer", description: "The offer is implied." }]
+        },
+        strategy: {
+          buyer_persona: "Founders",
+          strategic_gap: "Offer is implied",
+          strategic_opportunity: "Make the offer explicit",
+          fit_assessment: "Good",
+          next_steps: ["Rewrite headline"]
+        },
+        rewrite: {
+          recommended_headline: "Hybrid headline",
+          recommended_reason: "Balances proof and clarity",
+          recommended_bio: "A better bio.",
+          improvement_suggestions: ["Add explicit offer"]
+        },
+        lead_magnets: [
+          {
+            content_type: "Guide",
+            headline: "Lead magnet 1",
+            subheadline: "Subheadline",
+            description: "Description"
+          }
+        ]
+      },
+      flat_payload: {
+        authority_score: 88,
+        recommended_headline: "Hybrid headline"
+      }
+    }
+  };
+}
+
+test("tools linkedin-review reports supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = {
+      count: 1,
+      limit: 20,
+      reports: [{ report: { prefix_id: "rprt_json", status: "completed" } }]
+    };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports.json?limit=20");
+      assert.equal(options.method, "GET");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["tools", "linkedin-review", "reports", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("tools linkedin-review status fetches and renders current progress", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tools/linkedin-review/reports/rprt_one.json");
+      assert.equal(options.method, "GET");
+
+      return jsonResponse({
+        queued: false,
+        report: {
+          prefix_id: "rprt_one",
+          status: "processing",
+          display_status: "processing",
+          stage: "running_skill",
+          updated_at: "2026-07-17T13:00:00Z",
+          url: "https://app.audienti.com/linkedin-review/reports/rprt_one"
+        },
+        profile: {
+          url: "https://www.linkedin.com/in/pat-founder",
+          display_name: "Pat Founder"
+        },
+        run: {
+          id: 100,
+          status: "pending"
+        },
+        queue: {
+          state: "ready",
+          pending_count: 1
+        },
+        icp: {
+          id: 42,
+          name: "Founder ICP"
+        }
+      });
+    });
+
+    const exitCode = await run(["tools", "linkedin-review", "status", "rprt_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /LinkedIn review status: rprt_one/);
+    assert.match(stdout.output, /Status: processing/);
+    assert.match(stdout.output, /Stage: running_skill/);
+    assert.match(stdout.output, /Profile name: Pat Founder/);
+    assert.match(stdout.output, /Queue: ready \(1 pending\)/);
+    assert.match(stdout.output, /Updated: 2026-07-17T13:00:00Z/);
+  });
+});
+
+test("tools linkedin-review supports json output and positional URL", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = {
+      queued: true,
+      report: { prefix_id: "rprt_two", status: "processing" },
+      profile: { prefix_id: "prof_two", url: "https://www.linkedin.com/in/sam-founder" },
+      run: { id: 101, status: "pending" },
+      icp: null
+    };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/tools/linkedin-review/reports.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        linkedin_url: "https://www.linkedin.com/in/sam-founder"
+      });
+
+      return jsonResponse(responseBody, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "tools",
+      "linkedin-review",
+      "https://www.linkedin.com/in/sam-founder",
+      "--json"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
 });
 
 test("tools get email imports a LinkedIn URL, polls import status, and prints the selected email", async () => {

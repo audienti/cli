@@ -82,6 +82,11 @@ const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
 const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
+const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_REVIEW_STATUS_USAGE = "Usage: audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]";
 const COHORT_STAGE_ORDER = [
   "identified",
   "pre_connect",
@@ -247,7 +252,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "import-batch") return prospectsImportBatch(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "import-status") return prospectsImportStatus(rest, context, { accountOverride });
   if (normalizedResource === "writer" && action === "test-run") return writerTestRun(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "list") return toolsList(rest, context);
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "linkedin-review") return toolsLinkedinReview(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
@@ -2390,6 +2397,88 @@ async function toolsGet(args, context, { accountOverride } = {}) {
   if (response.import_id) writeLine(context.stdout, `Import: ${response.import_id}`);
 }
 
+async function toolsLinkedinReview(args, context, { accountOverride } = {}) {
+  if (args[0] === "reports") return toolsLinkedinReviewReports(args.slice(1), context, { accountOverride });
+  if (args[0] === "show") return toolsLinkedinReviewShow(args.slice(1), context, { accountOverride });
+  if (args[0] === "status") return toolsLinkedinReviewStatus(args.slice(1), context, { accountOverride });
+
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    url: { type: "string" },
+    icp: { type: "string" }
+  });
+  const linkedinUrl = (values.url || positionals[0] || "").trim();
+
+  if (!linkedinUrl || positionals.length > (values.url ? 0 : 1)) {
+    throw new CommandError(TOOLS_LINKEDIN_REVIEW_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinReview(accountId, {
+    linkedin_url: linkedinUrl,
+    icp_id: values.icp
+  });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewStarted(payload, context);
+}
+
+async function toolsList(args, context) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(TOOLS_LIST_USAGE);
+
+  const payload = { tools: availableTools() };
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderToolsList(payload.tools, context);
+}
+
+async function toolsLinkedinReviewReports(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    limit: { type: "string" }
+  });
+
+  if (positionals.length > 0) {
+    throw new CommandError(TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE);
+  }
+
+  const limit = boundedListLimit(values.limit);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinReviewReports(accountId, { limit });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewReports(payload, context);
+}
+
+async function toolsLinkedinReviewShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+
+  if (positionals.length !== 1) {
+    throw new CommandError(TOOLS_LINKEDIN_REVIEW_SHOW_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinReviewStatus(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewReport(payload, context);
+}
+
+async function toolsLinkedinReviewStatus(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+
+  if (positionals.length !== 1) {
+    throw new CommandError(TOOLS_LINKEDIN_REVIEW_STATUS_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinReviewStatus(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewStatus(payload, context);
+}
+
 async function operatorQueue(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, operatorFilterOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti operator queue [--json] [filters] [--account <acct_id>]");
@@ -2626,6 +2715,15 @@ function jsonOptions() {
   return {
     json: { type: "boolean" }
   };
+}
+
+function boundedListLimit(value) {
+  if (value === undefined || value === null || value === "") return DEFAULT_LIST_LIMIT;
+
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed) || parsed < 1) throw new CommandError("--limit must be a positive integer.");
+
+  return Math.min(parsed, API_MAX_LIST_LIMIT);
 }
 
 function operatorFilterOptions(extra = {}) {
@@ -4199,6 +4297,184 @@ function renderProspectImportStatus(payload, context) {
   writeLine(context.stdout, `Social profiles: ${socialCount}`);
 }
 
+function renderLinkedinReviewStarted(payload, context) {
+  renderLinkedinReviewStatus(payload, context, { title: "LinkedIn review queued" });
+  const reportId = payload?.report?.prefix_id;
+  if (reportId) writeLine(context.stdout, `Run \`audienti tools linkedin-review status ${reportId}\` to check progress.`);
+}
+
+function renderToolsList(tools, context) {
+  writeAlignedTable(context, ["TOOL", "COMMAND", "REPORTS"], tools.map((tool) => [
+    tool.id,
+    tool.command,
+    tool.reports_command || "-"
+  ]));
+}
+
+function renderLinkedinReviewReports(payload, context) {
+  const rows = Array.isArray(payload?.reports) ? payload.reports : [];
+  if (rows.length === 0) {
+    writeLine(context.stdout, "No LinkedIn review reports found.");
+    return;
+  }
+
+  writeAlignedTable(context, ["REPORT ID", "STATUS", "STAGE", "PROFILE", "UPDATED"], rows.map(linkedinReviewReportRow));
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Inspect one report with `audienti tools linkedin-review status <rprt_id>`.");
+}
+
+function linkedinReviewReportRow(entry) {
+  const report = entry?.report || {};
+  const profile = entry?.profile || {};
+
+  return [
+    display(report.prefix_id),
+    display(report.display_status || report.status),
+    display(report.stage),
+    display(profile.display_name || profile.url || profile.username || report.title || report.input_url),
+    display(report.updated_at)
+  ];
+}
+
+function renderLinkedinReviewStatus(payload, context, { title = "LinkedIn review status" } = {}) {
+  const report = payload?.report || {};
+  const profile = payload?.profile || {};
+  const run = payload?.run || {};
+  const queue = payload?.queue || {};
+  const icp = payload?.icp || {};
+
+  writeLine(context.stdout, `${title}: ${display(report.prefix_id)}`);
+  writeLine(context.stdout, `Status: ${display(report.display_status || report.status)}`);
+  if (report.stage) writeLine(context.stdout, `Stage: ${report.stage}`);
+  if (profile.url) writeLine(context.stdout, `Profile: ${profile.url}`);
+  if (profile.display_name) writeLine(context.stdout, `Profile name: ${profile.display_name}`);
+  if (icp.name || icp.id) writeLine(context.stdout, `ICP: ${display(icp.name)} (${display(icp.id)})`);
+  if (run.status) writeLine(context.stdout, `Run: ${run.status}`);
+  if (queue.state && queue.state !== "none") {
+    writeLine(context.stdout, `Queue: ${queue.state} (${display(queue.pending_count, 0)} pending)`);
+  }
+  if (report.updated_at) writeLine(context.stdout, `Updated: ${report.updated_at}`);
+  if (report.completed_at) writeLine(context.stdout, `Completed: ${report.completed_at}`);
+  if (report.url) writeLine(context.stdout, `URL: ${report.url}`);
+}
+
+function renderLinkedinReviewReport(payload, context) {
+  renderLinkedinReviewStatus(payload, context, { title: "LinkedIn review report" });
+
+  const report = payload?.report || {};
+  const content = payload?.content?.payload || {};
+  if (!content || Object.keys(content).length === 0) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, report.display_status === "completed" || report.status === "completed"
+      ? "No report content is available yet."
+      : "Report content is not available until the review completes.");
+    return;
+  }
+
+  const observed = objectValue(content.observed_profile);
+  const scores = objectValue(content.scores);
+  const findings = objectValue(content.findings);
+  const strategy = objectValue(content.strategy);
+  const rewrite = objectValue(content.rewrite);
+  const leadMagnets = Array.isArray(content.lead_magnets) ? content.lead_magnets : [];
+
+  writeSection(context, "Summary");
+  writeField(context, "Name", observed.name || report.title);
+  writeField(context, "Headline", observed.headline);
+  writeField(context, "Location", observed.location);
+  writeField(context, "Authority score", scores.authority_score);
+  writeField(context, "Score summary", scores.summary);
+  writeField(context, "Bottom line", findings.bottom_line);
+
+  writeSection(context, "Strategy");
+  writeField(context, "Buyer persona", strategy.buyer_persona);
+  writeField(context, "Strategic gap", strategy.strategic_gap);
+  writeField(context, "Opportunity", strategy.strategic_opportunity);
+  writeField(context, "Fit", strategy.fit_assessment);
+  writeBullets(context, "Next steps", strategy.next_steps);
+
+  writeSection(context, "Recommended Rewrite");
+  writeField(context, "Headline", rewrite.recommended_headline);
+  writeField(context, "Why", rewrite.recommended_reason);
+  writeField(context, "Bio", rewrite.recommended_bio);
+  writeBullets(context, "Improvement suggestions", rewrite.improvement_suggestions);
+
+  writeSection(context, "Findings");
+  writeBullets(context, "What's working", Array.isArray(findings.whats_working) ? findings.whats_working.map(summaryItem) : []);
+  writeBullets(context, "Revenue leaks", Array.isArray(findings.revenue_leaks) ? findings.revenue_leaks.map(summaryItem) : []);
+
+  writeSection(context, "Lead Magnets");
+  if (leadMagnets.length === 0) {
+    writeLine(context.stdout, "None");
+  } else {
+    leadMagnets.slice(0, 5).forEach((magnet, index) => {
+      const headline = display(magnet?.headline || magnet?.title, `Idea ${index + 1}`);
+      const contentType = magnet?.content_type ? ` (${magnet.content_type})` : "";
+      writeLine(context.stdout, `${index + 1}. ${headline}${contentType}`);
+      if (magnet?.subheadline) writeLine(context.stdout, `   ${magnet.subheadline}`);
+      if (magnet?.description) writeLine(context.stdout, `   ${magnet.description}`);
+    });
+  }
+}
+
+function objectValue(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function writeSection(context, title) {
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, title);
+  writeLine(context.stdout, "-".repeat(title.length));
+}
+
+function writeField(context, label, value) {
+  const text = String(display(value)).trim();
+  if (!text) return;
+
+  writeLine(context.stdout, `${label}: ${text}`);
+}
+
+function writeBullets(context, label, values) {
+  const rows = Array.isArray(values) ? values.map((value) => String(display(value)).trim()).filter(Boolean) : [];
+  if (rows.length === 0) return;
+
+  writeLine(context.stdout, `${label}:`);
+  rows.forEach((row) => writeLine(context.stdout, `- ${row}`));
+}
+
+function summaryItem(item) {
+  if (!item || typeof item !== "object") return item;
+
+  return [item.title, item.description].map((value) => String(display(value)).trim()).filter(Boolean).join(": ");
+}
+
+function availableTools() {
+  return [
+    {
+      id: "get-email",
+      command: "audienti tools get email --url <linkedin_url>",
+      description: "Find the first selected email for a LinkedIn person URL.",
+      reports_command: null,
+      status_command: null
+    },
+    {
+      id: "get-phone",
+      command: "audienti tools get phone --url <linkedin_url>",
+      description: "Find the first selected phone for a LinkedIn person URL.",
+      reports_command: null,
+      status_command: null
+    },
+    {
+      id: "linkedin-review",
+      command: "audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>]",
+      description: "Create a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
+      reports_command: "audienti tools linkedin-review reports",
+      status_command: "audienti tools linkedin-review status <rprt_id>",
+      show_command: "audienti tools linkedin-review show <rprt_id>"
+    }
+  ];
+}
+
 function writeProspectImportProspectLine(payload, context) {
   const prospect = payload?.prospect;
   if (!prospect) return;
@@ -5131,8 +5407,12 @@ const HELP_TOPICS = new Map([
     "    audienti analytics content --window week",
     "",
     "  Utilities",
+    "    audienti tools list",
     "    audienti tools get email --url <linkedin_url>",
     "    audienti tools get phone --url <linkedin_url>",
+    "    audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>]",
+    "    audienti tools linkedin-review reports",
+    "    audienti tools linkedin-review show <rprt_id>",
     "",
     "Common flows:",
     "  Work the next move:  audienti operator next --plan",
@@ -7189,12 +7469,36 @@ const HELP_TOPICS = new Map([
 
   ["tools", [
     "Usage:",
+    "  audienti tools list [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
+    "  audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json]",
+    "  audienti tools linkedin-review reports [--limit <n>] [--json]",
+    "  audienti tools linkedin-review show <rprt_id> [--json]",
+    "  audienti tools linkedin-review status <rprt_id> [--json]",
     "",
     "Status: implemented",
     "",
     "Commands:",
-    "  audienti tools get  Run a LinkedIn URL through the existing import and contact-enrichment pipeline, then return the first selected email or phone."
+    "  audienti tools list             Show available CLI tools and the report commands they support.",
+    "  audienti tools get              Run a LinkedIn URL through the existing import and contact-enrichment pipeline, then return the first selected email or phone.",
+    "  audienti tools linkedin-review  Queue a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
+    "  audienti tools linkedin-review reports  List recent LinkedIn Review reports for the active account.",
+    "  audienti tools linkedin-review show     View the completed report content in the terminal.",
+    "  audienti tools linkedin-review status  Show the current report stage and run status."
+  ].join("\n")],
+
+  ["tools list", [
+    "Usage:",
+    `  ${TOOLS_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Shows the available CLI-backed tools and which commands create or inspect reports.",
+    "",
+    "Output:",
+    "  Plain text: tool id, create command, and reports command",
+    "  JSON: { tools }"
   ].join("\n")],
 
   ["tools get", [
@@ -7221,6 +7525,98 @@ const HELP_TOPICS = new Map([
     "Output:",
     "  Plain text: the selected value on success, or a readable not-found message",
     "  JSON: { kind, url, found, value, import_id, status, ready, prospect, pipeline }"
+  ].join("\n")],
+
+  ["tools linkedin-review", [
+    "Usage:",
+    "  audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]",
+    "  audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]",
+    "  audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]",
+    "  audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queues the same LinkedIn Review / Blueprint report as the web tool for a LinkedIn person profile.",
+    "",
+    "Input shape:",
+    "  linkedin_url: url  LinkedIn person profile URL, not a company URL",
+    "  icp_id: icpp_ id or numeric id | optional buyer context for positioning rewrites",
+    "",
+    "Behavior:",
+    "  Creates a profile-backed LinkedIn Blueprint report, starts profile enrichment when needed, and queues the authority review once the profile is ready.",
+    "  The command returns the report URL and status command immediately; report generation continues in Audienti.",
+    "",
+    "Options:",
+    "  --url <linkedin_url>  LinkedIn person profile URL",
+    "  --icp <icp_id>        Optional ICP to tune positioning recommendations",
+    "",
+    "Output:",
+    "  Plain text: queued report id, status, profile, ICP, queue state, and product URL",
+    "  JSON: { report, profile, run, queue, icp, queued }",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/tools/linkedin-review/reports.json"
+  ].join("\n")],
+
+  ["tools linkedin-review reports", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Lists recent LinkedIn Review reports for the active account so you can find report ids and inspect progress.",
+    "",
+    "Options:",
+    "  --limit <n>  Number of recent reports to return. Default: 20, max: 100",
+    "",
+    "Output:",
+    "  Plain text: report id, status, stage, profile, and updated timestamp",
+    "  JSON: { reports, count, limit }",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tools/linkedin-review/reports.json"
+  ].join("\n")],
+
+  ["tools linkedin-review show", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_REVIEW_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Prints the completed LinkedIn Review report content in the terminal.",
+    "",
+    "Input shape:",
+    "  rprt_id: rprt_ report id from `audienti tools linkedin-review reports`",
+    "",
+    "Output:",
+    "  Plain text: summary, strategy, rewrite, findings, lead magnets, and report URL",
+    "  JSON: { report, profile, run, queue, icp, content }",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tools/linkedin-review/reports/:id.json"
+  ].join("\n")],
+
+  ["tools linkedin-review status", [
+    "Usage:",
+    "  audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Shows whether a LinkedIn Review report is waiting on enrichment, running, completed, or failed.",
+    "",
+    "Input shape:",
+    "  rprt_id: rprt_ report id returned by `audienti tools linkedin-review`",
+    "",
+    "Output:",
+    "  Plain text: report status, stage, run status, queue state, timestamps, and product URL",
+    "  JSON: { report, profile, run, queue, icp, queued }",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tools/linkedin-review/reports/:id.json"
   ].join("\n")],
 
   ["operator", [
