@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
 import { configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
 
@@ -28,16 +28,27 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
 ];
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
 const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "paused", "archived"]);
+const PROSPECT_STATUS_VALUES = new Set(["active", "nurture", "non_responsive", "not_fit", "rejected"]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
+const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected> [--json] [--account <acct_id>]";
 const PROSPECTS_REJECT_USAGE = "Usage: audienti prospects reject <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit>] [--json] [--account <acct_id>]";
 const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--json] [--account <acct_id>]";
+const PROSPECTS_LOCK_USAGE = "Usage: audienti prospects lock <prsp_id> [--note <text>] [--kind <protected_relationship|company_policy>] [--json] [--account <acct_id>]";
+const PROSPECTS_UNLOCK_USAGE = "Usage: audienti prospects unlock <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [filters] [--account <acct_id>]";
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
+const DNC_ADD_USAGE = "Usage: audienti dnc add <email|citation_id|profile_url> [--json] [--account <acct_id>]";
+const DNC_IMPORT_USAGE = "Usage: audienti dnc import --file <txt|csv> [--json] [--account <acct_id>]";
+const DNC_REMOVE_USAGE = "Usage: audienti dnc remove <dnc_entry_id> [--json] [--account <acct_id>]";
+const COMPANY_RULES_CREATE_USAGE = "Usage: audienti company-rules create (--linkedin-url <url> | --domain <domain>) --disposition <monitor|nurture|not_fit|reject> [--name <text>] [--user <account_user_id|email|me>] [--note <text>] [--json] [--account <acct_id>]";
+const COMPANY_RULES_UPDATE_USAGE = "Usage: audienti company-rules update <rule_id> [--linkedin-url <url>] [--domain <domain>] [--disposition <monitor|nurture|not_fit|reject>] [--name <text>] [--user <account_user_id|email|me|none>] [--note <text>] [--json] [--account <acct_id>]";
+const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_id> [--json] [--account <acct_id>]";
+const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
@@ -157,6 +168,15 @@ async function dispatch(argv, context) {
   if (normalizedResource === "icps" && action === "add-tag") return icpsTagMutation("add", rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "remove-tag") return icpsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "companies" && action === "search") return companiesSearch(rest, context, { accountOverride });
+  if (normalizedResource === "dnc" && action === "list") return dncList(rest, context, { accountOverride });
+  if (normalizedResource === "dnc" && action === "add") return dncAdd(rest, context, { accountOverride });
+  if (normalizedResource === "dnc" && action === "import") return dncImport(rest, context, { accountOverride });
+  if (normalizedResource === "dnc" && ["remove", "delete"].includes(action)) return dncRemove(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && action === "list") return companyRulesList(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && action === "create") return companyRulesCreate(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && action === "update") return companyRulesUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && ["remove", "delete"].includes(action)) return companyRulesRemove(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && action === "apply") return companyRulesApply(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "list") return listsList(rest, context, { accountOverride });
@@ -188,9 +208,12 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "check") return prospectsCheck(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "set-status") return prospectsSetStatus(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "reject") return prospectsDisposition("reject", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "nurture") return prospectsDisposition("nurture", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "restore") return prospectsDisposition("restore", rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "lock") return prospectsLock(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "unlock") return prospectsUnlock(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "timeline") return prospectsTimeline(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "message-types") return prospectsMessageTypes(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "write") return prospectsWrite(rest, context, { accountOverride });
@@ -263,6 +286,7 @@ function normalizeTopicParts(parts) {
 function normalizeResource(resource) {
   if (resource === "principals") return "users";
   if (resource === "writers") return "writer";
+  if (resource === "company_rules" || resource === "company-rules") return "company-rules";
   return resource === "plays" ? "motions" : resource;
 }
 
@@ -811,6 +835,134 @@ async function companiesSearch(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderCompanies(payload, context);
+}
+
+async function dncList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    limit: { type: "string" },
+    offset: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError("Usage: audienti dnc list [--limit <n>] [--offset <n>] [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.dncEntries(accountId, compactObject({ limit: values.limit, offset: values.offset }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderDncEntries(payload, context);
+}
+
+async function dncAdd(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(DNC_ADD_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createDncEntry(accountId, { value: positionals[0] });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `DNC entry ${display(payload?.status, "created")}: ${display(payload?.dnc_entry?.canonical_value || payload?.dnc_entry?.citation_id)} (${display(payload?.dnc_entry?.prefix_id || payload?.dnc_entry?.id)}).`);
+}
+
+async function dncImport(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    file: { type: "string" }
+  });
+  if (positionals.length > 0 || !values.file) throw new CommandError(DNC_IMPORT_USAGE);
+
+  const body = await readFile(values.file, "utf8");
+  const importValues = parseDncImportValues(body);
+  if (importValues.length === 0) throw new CommandError("DNC import file did not contain any values.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.importDncEntries(accountId, { values: importValues, filename: basename(values.file) });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Imported DNC entries. Accepted ${display(payload?.accepted_count, 0)}, skipped ${display(payload?.skipped_count, 0)}, invalid ${display(payload?.invalid_count, 0)}, matched ${display(payload?.matched_prospect_count, 0)}.`);
+}
+
+async function dncRemove(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(DNC_REMOVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteDncEntry(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Removed DNC entry ${display(payload?.prefix_id || payload?.id || positionals[0])}.`);
+}
+
+async function companyRulesList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError("Usage: audienti company-rules list [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.companyRules(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderCompanyRules(payload, context);
+}
+
+async function companyRulesCreate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, companyRuleOptions());
+  if (positionals.length > 0 || (!values["linkedin-url"] && !values.domain) || !values.disposition) {
+    throw new CommandError(COMPANY_RULES_CREATE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createCompanyRule(accountId, { company_rule: companyRulePayload(values) });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.company_rule;
+  writeLine(context.stdout, `Created company rule ${display(rule?.name || rule?.domain || rule?.linkedin_company_identifier)} (${display(rule?.prefix_id || rule?.id)}).`);
+  writeLine(context.stdout, `Disposition: ${display(rule?.disposition)} | Scope: ${companyRuleScopeLabel(rule)}`);
+}
+
+async function companyRulesUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, companyRuleOptions());
+  const hasUpdate = values.disposition || values.name !== undefined || values["linkedin-url"] !== undefined || values.domain !== undefined || values.user !== undefined || values.note !== undefined;
+  if (positionals.length !== 1 || !hasUpdate) throw new CommandError(COMPANY_RULES_UPDATE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateCompanyRule(accountId, positionals[0], { company_rule: companyRulePayload(values) });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.company_rule;
+  writeLine(context.stdout, `Updated company rule ${display(rule?.name || rule?.domain || rule?.linkedin_company_identifier)} (${display(rule?.prefix_id || rule?.id)}).`);
+  writeLine(context.stdout, `Disposition: ${display(rule?.disposition)} | Scope: ${companyRuleScopeLabel(rule)}`);
+}
+
+async function companyRulesRemove(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(COMPANY_RULES_REMOVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteCompanyRule(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Removed company rule ${display(payload?.company_rule?.prefix_id || payload?.company_rule?.id || positionals[0])}.`);
+}
+
+async function companyRulesApply(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    all: { type: "boolean" }
+  });
+  if ((values.all && positionals.length > 0) || (!values.all && positionals.length !== 1)) {
+    throw new CommandError(COMPANY_RULES_APPLY_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = values.all ?
+    await client.applyAllCompanyRules(accountId) :
+    await client.applyCompanyRule(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  if (values.all) {
+    writeLine(context.stdout, `Applied company rules. Matched ${display(payload?.matched_count, 0)}, changed ${display(payload?.applied_count, 0)}.`);
+  } else {
+    writeLine(context.stdout, `Applied company rule. Matched ${display(payload?.matched_count, 0)}, changed ${display(payload?.applied_count, 0)}.`);
+  }
 }
 
 async function tagsList(args, context, { accountOverride } = {}) {
@@ -1487,6 +1639,59 @@ async function prospectsDisposition(action, args, context, { accountOverride } =
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectDisposition(payload, context, { action });
+}
+
+async function prospectsSetStatus(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    status: { type: "string" }
+  });
+  const status = String(values.status || "").trim();
+  if (positionals.length !== 1 || !PROSPECT_STATUS_VALUES.has(status)) {
+    throw new CommandError(PROSPECTS_SET_STATUS_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await mutateProspectStatus(client, accountId, positionals[0], status);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectDisposition(payload, context, { action: "set-status" });
+}
+
+async function prospectsLock(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    kind: { type: "string" },
+    note: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(PROSPECTS_LOCK_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.lockProspect(accountId, positionals[0], compactObject({
+    lock_kind: values.kind,
+    lock_note: values.note
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectDisposition(payload, context, { action: "lock" });
+}
+
+async function prospectsUnlock(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(PROSPECTS_UNLOCK_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.unlockProspect(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectDisposition(payload, context, { action: "unlock" });
+}
+
+async function mutateProspectStatus(client, accountId, prospectId, status) {
+  if (status === "active") return client.restoreProspect(accountId, prospectId);
+  if (status === "rejected") return client.rejectProspect(accountId, prospectId);
+
+  return client.nurtureProspect(accountId, prospectId, { inactive_reason: status });
 }
 
 async function prospectsTimeline(args, context, { accountOverride } = {}) {
@@ -2599,6 +2804,43 @@ function tagList(value) {
     .filter((tag, index, tags) => tags.indexOf(tag) === index);
 }
 
+function companyRuleOptions() {
+  return {
+    ...jsonOptions(),
+    name: { type: "string" },
+    "linkedin-url": { type: "string" },
+    domain: { type: "string" },
+    disposition: { type: "string" },
+    user: { type: "string" },
+    note: { type: "string" }
+  };
+}
+
+function companyRulePayload(values) {
+  const userValue = values.user === undefined ? undefined : String(values.user || "").trim();
+  const userCleared = userValue && ["none", "account", "all"].includes(userValue.toLowerCase());
+
+  return compactObject({
+    name: values.name,
+    linkedin_company_url: values["linkedin-url"],
+    domain: values.domain,
+    disposition: values.disposition,
+    note: values.note,
+    scope_kind: userValue === undefined ? undefined : (userCleared ? "account" : "account_user"),
+    account_user_id: userValue === undefined ? undefined : (userCleared ? "" : userValue)
+  });
+}
+
+function parseDncImportValues(body) {
+  return String(body || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split(",")[0])
+    .map((value) => value.trim().replace(/^"|"$/g, ""))
+    .filter(Boolean);
+}
+
 function filterRecordsByTag(records, value, field) {
   const tag = tagList(value)?.[0];
   if (!tag) return records;
@@ -3117,6 +3359,54 @@ function renderCompanies(payload, context) {
   }
 }
 
+function renderDncEntries(payload, context) {
+  const entries = Array.isArray(payload?.dnc_entries) ? payload.dnc_entries : [];
+  if (entries.length === 0) return writeLine(context.stdout, "No DNC entries found.");
+
+  writeLine(context.stdout, "DNC ID\tKIND\tVALUE\tIDENTIFIER\tSOURCE\tPROSPECT");
+  for (const entry of entries) {
+    writeLine(
+      context.stdout,
+      [
+        display(entry.prefix_id || entry.id),
+        display(entry.key_kind),
+        display(entry.canonical_value || entry.citation_id),
+        display(entry.identifier),
+        display(entry.source_kind),
+        display(entry.prospect_id)
+      ].join("\t")
+    );
+  }
+}
+
+function renderCompanyRules(payload, context) {
+  const rules = Array.isArray(payload?.company_rules) ? payload.company_rules : [];
+  if (rules.length === 0) return writeLine(context.stdout, "No company rules found.");
+
+  writeLine(context.stdout, "RULE ID\tCOMPANY\tDOMAIN\tDISPOSITION\tSCOPE\tACTIVE");
+  for (const rule of rules) {
+    writeLine(
+      context.stdout,
+      [
+        display(rule.prefix_id || rule.id),
+        display(rule.name || rule.linkedin_company_identifier || rule.linkedin_company_url),
+        display(rule.domain),
+        display(rule.disposition),
+        companyRuleScopeLabel(rule),
+        rule.active ? "yes" : "no"
+      ].join("\t")
+    );
+  }
+}
+
+function companyRuleScopeLabel(rule) {
+  if (rule?.scope_kind === "account_user") {
+    return `user:${display(rule.account_user_email || rule.account_user_id)}`;
+  }
+
+  return "account";
+}
+
 async function performBulkMutation(perform) {
   try {
     return { payload: await perform(), rejected: false };
@@ -3265,12 +3555,18 @@ function renderProspectDisposition(payload, context, { action }) {
   const actionLabel = {
     reject: "Rejected",
     nurture: "Moved to nurture",
-    restore: "Restored"
+    restore: "Restored",
+    "set-status": "Set status for",
+    lock: "Locked",
+    unlock: "Unlocked"
   }[action] || display(payload?.status, "Updated");
 
   writeLine(context.stdout, `${actionLabel} prospect ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
   if (accountProspect.status) writeLine(context.stdout, `Status: ${accountProspect.status}`);
   if (accountProspect.inactive_reason) writeLine(context.stdout, `Inactive reason: ${accountProspect.inactive_reason}`);
+  if (accountProspect.locked_at) writeLine(context.stdout, `Locked at: ${accountProspect.locked_at}`);
+  if (accountProspect.lock_kind) writeLine(context.stdout, `Lock kind: ${accountProspect.lock_kind}`);
+  if (accountProspect.lock_note) writeLine(context.stdout, `Lock note: ${accountProspect.lock_note}`);
   if (payload?.system_list?.name) writeLine(context.stdout, `List: ${payload.system_list.name} (${display(payload.system_list.prefix_id)})`);
 }
 
@@ -4546,9 +4842,12 @@ const HELP_TOPICS = new Map([
     "    audienti prospects check [filters]",
     "    audienti prospects show <prsp_id>",
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
+    "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected>",
+    "    audienti prospects lock <prsp_id> [--note <text>]",
     "    audienti prospects reject <prsp_id>",
     "    audienti prospects nurture <prsp_id> [--reason <reason>]",
     "    audienti prospects restore <prsp_id>",
+    "    audienti prospects unlock <prsp_id>",
     "    audienti prospects timeline <prsp_id>",
     "    audienti prospects import <linkedin_url> [--motion <motn_id>]",
     "    audienti prospects import-batch --file <csv|jsonl|json>",
@@ -4572,6 +4871,10 @@ const HELP_TOPICS = new Map([
     "    audienti icps add-tag <icp_id> <tag>",
     "    audienti icps remove-tag <icp_id> <tag>",
     "    audienti companies search --query <text>",
+    "    audienti dnc list",
+    "    audienti dnc add <email|citation_id|profile_url>",
+    "    audienti company-rules list",
+    "    audienti company-rules create (--linkedin-url <url> | --domain <domain>) --disposition <state>",
     "",
     "  Writer",
     "    audienti writer test-run <prsp_id>",
@@ -5153,6 +5456,148 @@ const HELP_TOPICS = new Map([
     "  companies[].url: string",
     "  companies[].industry: string | null",
     "  companies[].location: string | null"
+  ].join("\n")],
+
+  ["dnc", [
+    "Usage:",
+    "  audienti dnc list [--json]",
+    `  ${DNC_ADD_USAGE.slice("Usage: ".length)}`,
+    `  ${DNC_IMPORT_USAGE.slice("Usage: ".length)}`,
+    `  ${DNC_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Manage account-level do-not-contact entries through the same settings/API path as the app."
+  ].join("\n")],
+
+  ["dnc list", [
+    "Usage:",
+    "  audienti dnc list [--limit <n>] [--offset <n>] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/dnc.json"
+  ].join("\n")],
+
+  ["dnc add", [
+    "Usage:",
+    `  ${DNC_ADD_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  value: email, citation ID, or supported person profile URL",
+    "",
+    "Behavior:",
+    "  Creates or reactivates an account DNC entry and retroactively rejects matching account prospects.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/dnc.json"
+  ].join("\n")],
+
+  ["dnc import", [
+    "Usage:",
+    `  ${DNC_IMPORT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  file: text or CSV file. The CLI sends one value per line using column one for CSV-like rows.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/dnc/import.json"
+  ].join("\n")],
+
+  ["dnc remove", [
+    "Usage:",
+    `  ${DNC_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/dnc/:id.json"
+  ].join("\n")],
+
+  ["company-rules", [
+    "Usage:",
+    "  audienti company-rules list [--json]",
+    `  ${COMPANY_RULES_CREATE_USAGE.slice("Usage: ".length)}`,
+    `  ${COMPANY_RULES_UPDATE_USAGE.slice("Usage: ".length)}`,
+    `  ${COMPANY_RULES_REMOVE_USAGE.slice("Usage: ".length)}`,
+    `  ${COMPANY_RULES_APPLY_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Manage account-wide and user-scoped company disposition rules keyed by LinkedIn company URL or domain."
+  ].join("\n")],
+
+  ["company-rules list", [
+    "Usage:",
+    "  audienti company-rules list [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/company_rules.json"
+  ].join("\n")],
+
+  ["company-rules create", [
+    "Usage:",
+    `  ${COMPANY_RULES_CREATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  linkedin-url: LinkedIn company URL | optional when domain is present",
+    "  domain: company domain | optional when linkedin-url is present",
+    "  disposition: monitor | nurture | not_fit | reject",
+    "  user: account user id, email, or me | optional. Omit for account-wide.",
+    "",
+    "Behavior:",
+    "  Matching prospects are always created first. Rule application then applies the disposition; monitor locks activity with lock_kind=company_policy until dedicated monitor mode exists.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/company_rules.json"
+  ].join("\n")],
+
+  ["company-rules update", [
+    "Usage:",
+    `  ${COMPANY_RULES_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  user: account user id, email, me, or none. none makes the rule account-wide.",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/company_rules/:id.json"
+  ].join("\n")],
+
+  ["company-rules remove", [
+    "Usage:",
+    `  ${COMPANY_RULES_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/company_rules/:id.json"
+  ].join("\n")],
+
+  ["company-rules apply", [
+    "Usage:",
+    `  ${COMPANY_RULES_APPLY_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Backfills active visible account prospects through the same company-rule applicator used after profile writes.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/company_rules/:id/apply.json",
+    "  POST /api/v1/accounts/:account_id/company_rules/apply_all.json"
   ].join("\n")],
 
   ["tags", [
@@ -5867,9 +6312,12 @@ const HELP_TOPICS = new Map([
     "  audienti prospects check [--json|--csv] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
+    "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected> [--json]",
     "  audienti prospects reject <prsp_id> [--json]",
     "  audienti prospects nurture <prsp_id> [--reason <reason>] [--json]",
     "  audienti prospects restore <prsp_id> [--json]",
+    "  audienti prospects lock <prsp_id> [--note <text>] [--json]",
+    "  audienti prospects unlock <prsp_id> [--json]",
     "  audienti prospects timeline <prsp_id> [--json]",
     "  audienti prospects message-types <prsp_id> [--json]",
     "  audienti prospects write <prsp_id> --type <surface_key> [--json]",
@@ -5883,7 +6331,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "",
-    "Status: read commands, assignment, disposition, per-prospect draft preview, sequence preview, and import implemented",
+    "Status: read commands, assignment, disposition, lock/unlock, per-prospect draft preview, sequence preview, and import implemented",
     "",
     "Filters:",
     "  --query <text>",
@@ -6012,6 +6460,27 @@ const HELP_TOPICS = new Map([
     "  }"
   ].join("\n")],
 
+  ["prospects set-status", [
+    "Usage:",
+    `  ${PROSPECTS_SET_STATUS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Set the account-scoped prospect disposition directly, without routing through a motion.",
+    "",
+    "Input shape:",
+    "  status: active | nurture | non_responsive | not_fit | rejected",
+    "",
+    "Behavior:",
+    "  active restores the prospect, rejected uses the rejection/DNC path, and nurture/non_responsive/not_fit use the shared inactive disposition path.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/restore.json",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/reject.json",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/nurture.json"
+  ].join("\n")],
+
   ["prospects show", [
     "Usage:",
     "  audienti prospects show <prsp_id> [--json] [--account <acct_id>]",
@@ -6065,6 +6534,36 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospects/:id/restore.json"
+  ].join("\n")],
+
+  ["prospects lock", [
+    "Usage:",
+    `  ${PROSPECTS_LOCK_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Lock one prospect immediately through the same protected-relationship path used by the prospect page.",
+    "",
+    "Input shape:",
+    "  kind: protected_relationship | company_policy. Defaults to protected_relationship.",
+    "  note: optional operator note explaining the lock.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/lock.json"
+  ].join("\n")],
+
+  ["prospects unlock", [
+    "Usage:",
+    `  ${PROSPECTS_UNLOCK_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Clear one prospect lock through the same unlock path used by the prospect page.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/unlock.json"
   ].join("\n")],
 
   ["prospects timeline", [
@@ -6776,9 +7275,12 @@ const HELP_TOPICS = new Map([
     "  audienti prospects add-profile <prsp_id> --url prospect@example.com",
     "  audienti prospects report-bad-profile <prsp_id> <prof_id>",
     "  audienti prospects add-note <prsp_id> --type steer --message \"Meeting will not happen\" --engagement-type action.meeting.canceled",
+    "  audienti prospects set-status <prsp_id> --status not_fit",
+    "  audienti prospects lock <prsp_id> --note \"Emergency hold\"",
     "  audienti prospects reject <prsp_id>",
     "  audienti prospects nurture <prsp_id>",
     "  audienti prospects restore <prsp_id>",
+    "  audienti prospects unlock <prsp_id>",
     "  audienti prospects sequence-preview <prsp_id>",
     "  audienti writer test-run <prsp_id>",
     "  audienti prospects sequence-export <prsp_id> --csv",

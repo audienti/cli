@@ -115,6 +115,66 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["companies"], query));
   }
 
+  dncEntries(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["dnc"], query));
+  }
+
+  createDncEntry(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["dnc"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  importDncEntries(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["dnc", "import"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  deleteDncEntry(accountId, entryId) {
+    return this.requestJson(accountPath(accountId, ["dnc", entryId]), {
+      method: "DELETE"
+    });
+  }
+
+  companyRules(accountId) {
+    return this.requestJson(accountPath(accountId, ["company_rules"]));
+  }
+
+  createCompanyRule(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["company_rules"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateCompanyRule(accountId, ruleId, body) {
+    return this.requestJson(accountPath(accountId, ["company_rules", ruleId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  deleteCompanyRule(accountId, ruleId) {
+    return this.requestJson(accountPath(accountId, ["company_rules", ruleId]), {
+      method: "DELETE"
+    });
+  }
+
+  applyCompanyRule(accountId, ruleId) {
+    return this.requestJson(accountPath(accountId, ["company_rules", ruleId, "apply"]), {
+      method: "POST"
+    });
+  }
+
+  applyAllCompanyRules(accountId) {
+    return this.requestJson(accountPath(accountId, ["company_rules", "apply_all"]), {
+      method: "POST"
+    });
+  }
+
   tags(accountId) {
     return this.requestJson(accountPath(accountId, ["tags"]));
   }
@@ -302,6 +362,19 @@ export class AudientiClient {
 
   restoreProspect(accountId, prospectId) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "restore"]), {
+      method: "POST"
+    });
+  }
+
+  lockProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "lock"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  unlockProspect(accountId, prospectId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "unlock"]), {
       method: "POST"
     });
   }

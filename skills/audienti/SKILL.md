@@ -53,6 +53,9 @@ audienti help agent-workflows
 audienti prospects list --query "name or company" --wide --json
 audienti prospects list --assigned-user unassigned --json
 audienti prospects assign <prsp_id> --assigned-user me --json
+audienti prospects set-status <prsp_id> --status not_fit --json
+audienti prospects lock <prsp_id> --note "Emergency hold" --json
+audienti prospects unlock <prsp_id> --json
 audienti users activity me --window 7d --json
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json

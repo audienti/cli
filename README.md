@@ -70,6 +70,10 @@ audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned
 audienti prospects check --all --csv
 audienti prospects assign <prsp_id> --assigned-user me
+audienti prospects set-status <prsp_id> --status not_fit
+audienti prospects lock <prsp_id> --note "Emergency hold"
+audienti dnc list
+audienti company-rules list
 audienti users activity --window 7d
 audienti analytics prospects --window 24h
 audienti analytics dashboard --play-tag wine_campaign
@@ -168,6 +172,25 @@ To reassign or clear ownership for existing prospects:
 ```bash
 audienti prospects assign <prsp_id> --assigned-user <account_user_id|me>
 audienti prospects assign <prsp_id> --assigned-user unassign
+```
+
+To make emergency prospect state changes without going through a motion:
+
+```bash
+audienti prospects set-status <prsp_id> --status nurture
+audienti prospects set-status <prsp_id> --status not_fit
+audienti prospects lock <prsp_id> --note "Emergency hold"
+audienti prospects unlock <prsp_id>
+```
+
+To manage account DNC and company disposition rules from the CLI:
+
+```bash
+audienti dnc add prospect@example.com
+audienti dnc import --file dnc.txt
+audienti company-rules create --linkedin-url https://www.linkedin.com/company/example --disposition monitor
+audienti company-rules create --domain example.com --disposition not_fit --user me
+audienti company-rules apply --all
 ```
 
 To import multiple LinkedIn people through the same per-prospect import path:

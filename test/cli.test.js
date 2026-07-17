@@ -44,6 +44,9 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
   assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status <active\|nurture\|non_responsive\|not_fit\|rejected>/);
+  assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
@@ -183,9 +186,12 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti motions add-prospects <motn_id> <prsp_id>/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url prospect@example.com/);
   assert.match(stdout.output, /audienti prospects report-bad-profile <prsp_id> <prof_id>/);
+  assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status not_fit/);
+  assert.match(stdout.output, /audienti prospects lock <prsp_id> --note "Emergency hold"/);
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
   assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti analytics prospects --window 24h/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
@@ -205,6 +211,9 @@ test("resource help lists child commands", async () => {
   assert.match(stdout.output, /audienti prospects list/);
   assert.match(stdout.output, /audienti prospects check/);
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects set-status <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
   assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
@@ -302,6 +311,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["companies", "search", "help"],
       expected: [/Usage:\n  audienti companies search --query <text>/, /GET \/api\/v1\/accounts\/:account_id\/companies\.json/]
+    },
+    {
+      args: ["dnc", "help"],
+      expected: [/Usage:\n  audienti dnc list/, /account-level do-not-contact entries/]
+    },
+    {
+      args: ["company-rules", "create", "help"],
+      expected: [/Usage:\n  audienti company-rules create/, /POST \/api\/v1\/accounts\/:account_id\/company_rules\.json/]
     },
     {
       args: ["lists", "create", "help"],
@@ -420,6 +437,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti prospects assign <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/assign\.json/]
     },
     {
+      args: ["prospects", "set-status", "help"],
+      expected: [/Usage:\n  audienti prospects set-status <prsp_id>/, /active restores the prospect/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
+    },
+    {
       args: ["prospects", "reject", "help"],
       expected: [/Usage:\n  audienti prospects reject <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/reject\.json/]
     },
@@ -430,6 +451,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "restore", "help"],
       expected: [/Usage:\n  audienti prospects restore <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/restore\.json/]
+    },
+    {
+      args: ["prospects", "lock", "help"],
+      expected: [/Usage:\n  audienti prospects lock <prsp_id>/, /protected_relationship/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/lock\.json/]
+    },
+    {
+      args: ["prospects", "unlock", "help"],
+      expected: [/Usage:\n  audienti prospects unlock <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/unlock\.json/]
     },
     {
       args: ["prospects", "message-types", "help"],
@@ -3187,6 +3216,159 @@ test("prospects disposition commands support json output", async () => {
   });
 });
 
+test("prospects set-status maps cleanup statuses to shared disposition endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      requests.push({ path: url.pathname, method: options.method, body: options.body ? JSON.parse(options.body) : undefined });
+
+      if (url.pathname.endsWith("/nurture.json")) {
+        return jsonResponse({
+          status: "nurtured",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "inactive", inactive_reason: "not_fit" },
+          system_list: { prefix_id: "list_inactive", name: "Inactive" }
+        });
+      }
+
+      if (url.pathname.endsWith("/reject.json")) {
+        return jsonResponse({
+          status: "rejected",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "rejected" }
+        });
+      }
+
+      if (url.pathname.endsWith("/restore.json")) {
+        return jsonResponse({
+          status: "restored",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "active" }
+        });
+      }
+
+      throw new Error(`unexpected request ${options.method || "GET"} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "not_fit"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Set status for prospect Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Inactive reason: not_fit/);
+
+    stdout.output = "";
+    exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "rejected"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Set status for prospect Pat Prospect \(prsp_one\)\./);
+
+    stdout.output = "";
+    exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "active"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Set status for prospect Pat Prospect \(prsp_one\)\./);
+
+    assert.deepEqual(requests, [
+      {
+        path: "/api/v1/accounts/acct_one/prospects/prsp_one/nurture.json",
+        method: "POST",
+        body: { inactive_reason: "not_fit" }
+      },
+      {
+        path: "/api/v1/accounts/acct_one/prospects/prsp_one/reject.json",
+        method: "POST",
+        body: undefined
+      },
+      {
+        path: "/api/v1/accounts/acct_one/prospects/prsp_one/restore.json",
+        method: "POST",
+        body: undefined
+      }
+    ]);
+  });
+});
+
+test("prospects set-status rejects unsupported statuses without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("status validation must happen before API calls");
+    });
+
+    const exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "paused"], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Usage: audienti prospects set-status <prsp_id>/);
+  });
+});
+
+test("prospects lock and unlock call shared account endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/lock.json") {
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), {
+          lock_kind: "protected_relationship",
+          lock_note: "Emergency hold"
+        });
+        return jsonResponse({
+          status: "locked",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: {
+            status: "active",
+            locked_at: "2026-07-17T12:00:00.000Z",
+            lock_kind: "protected_relationship",
+            lock_note: "Emergency hold"
+          }
+        });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/unlock.json") {
+        assert.equal(options.method, "POST");
+        assert.equal(options.body, undefined);
+        return jsonResponse({
+          status: "unlocked",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          account_prospect: { status: "active" }
+        });
+      }
+
+      throw new Error(`unexpected request ${options.method || "GET"} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["prospects", "lock", "prsp_one", "--kind", "protected_relationship", "--note", "Emergency hold"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Locked prospect Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Lock kind: protected_relationship/);
+    assert.match(stdout.output, /Lock note: Emergency hold/);
+
+    stdout.output = "";
+    exitCode = await run(["prospects", "unlock", "prsp_one"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Unlocked prospect Pat Prospect \(prsp_one\)\./);
+  });
+});
+
 test("prospects import-batch imports jsonl rows with command defaults", async () => {
   await withTempConfigHome(async ({ root, env }) => {
     await writeConfig({
@@ -3678,6 +3860,171 @@ test("companies search sends the query and renders persisted company profiles", 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /PROFILE ID\tCITATION ID\tNAME\tLINKEDIN\tINDUSTRY\tLOCATION/);
     assert.match(stdout.output, /prof_honeywell\tlinkedin\/company:honeywell\/12345\tHoneywell\thttps:\/\/www\.linkedin\.com\/company\/honeywell\tIndustrial Automation\tCharlotte, North Carolina, United States/);
+  });
+});
+
+test("dnc add and import call account dnc endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const importPath = join(root, "dnc.txt");
+    await writeFile(importPath, "import-one@example.com\nimport-two@example.com\n");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      if (calls.length === 1) {
+        assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/dnc.json");
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), { value: "person@example.com" });
+        return jsonResponse({
+          status: "created",
+          dnc_entry: {
+            id: 123,
+            canonical_value: "person@example.com",
+            citation_id: "email/profile:person@example.com"
+          }
+        }, { status: 201 });
+      }
+
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/dnc/import.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        values: ["import-one@example.com", "import-two@example.com"],
+        filename: "dnc.txt"
+      });
+      return jsonResponse({
+        accepted_count: 2,
+        skipped_count: 0,
+        invalid_count: 0,
+        matched_prospect_count: 1
+      });
+    });
+
+    let exitCode = await run(["dnc", "add", "person@example.com"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+
+    exitCode = await run(["dnc", "import", "--file", importPath], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /DNC entry created: person@example.com/);
+    assert.match(stdout.output, /Imported DNC entries\. Accepted 2, skipped 0, invalid 0, matched 1\./);
+  });
+});
+
+test("company-rules create and apply call account rule endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      if (calls.length === 1) {
+        assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/company_rules.json");
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), {
+          company_rule: {
+            name: "Competitor",
+            linkedin_company_url: "https://www.linkedin.com/company/competitor",
+            disposition: "monitor",
+            scope_kind: "account_user",
+            account_user_id: "me"
+          }
+        });
+        return jsonResponse({
+          company_rule: {
+            id: 7,
+            name: "Competitor",
+            disposition: "monitor",
+            scope_kind: "account_user",
+            account_user_id: 42,
+            account_user_email: "owner@example.com",
+            active: true
+          }
+        }, { status: 201 });
+      }
+
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/company_rules/7/apply.json");
+      assert.equal(options.method, "POST");
+      return jsonResponse({
+        policy_id: 7,
+        matched_count: 3,
+        applied_count: 2,
+        no_match_count: 10
+      });
+    });
+
+    let exitCode = await run([
+      "company-rules",
+      "create",
+      "--name",
+      "Competitor",
+      "--linkedin-url",
+      "https://www.linkedin.com/company/competitor",
+      "--disposition",
+      "monitor",
+      "--user",
+      "me"
+    ], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+
+    exitCode = await run(["company-rules", "apply", "7"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Created company rule Competitor \(7\)\./);
+    assert.match(stdout.output, /Applied company rule\. Matched 3, changed 2\./);
+  });
+});
+
+test("company-rules update accepts re-key-only domain and linkedin url updates", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      assert.equal(url.toString(), `https://app.audienti.com/api/v1/accounts/acct_one/company_rules/7.json`);
+      assert.equal(options.method, "PATCH");
+      if (calls.length === 1) {
+        assert.deepEqual(JSON.parse(options.body), {
+          company_rule: {
+            domain: "new.example"
+          }
+        });
+      } else {
+        assert.deepEqual(JSON.parse(options.body), {
+          company_rule: {
+            linkedin_company_url: "https://www.linkedin.com/company/new-co"
+          }
+        });
+      }
+      return jsonResponse({
+        company_rule: {
+          id: 7,
+          domain: "new.example",
+          disposition: "monitor",
+          scope_kind: "account",
+          active: true
+        }
+      });
+    });
+
+    let exitCode = await run(["company-rules", "update", "7", "--domain", "new.example"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+
+    exitCode = await run(["company-rules", "update", "7", "--linkedin-url", "https://www.linkedin.com/company/new-co"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Updated company rule/);
   });
 });
 

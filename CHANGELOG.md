@@ -4,6 +4,19 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-07-17
+
+### Added
+
+- Add `audienti dnc list/add/import/remove` for account DNC settings.
+- Add `audienti company-rules list/create/update/remove/apply` for account-wide and user-scoped company disposition policies.
+
+## [0.1.16] - 2026-07-17
+
+### Added
+
+- Add direct prospect emergency state commands: `audienti prospects set-status`, `audienti prospects lock`, and `audienti prospects unlock`.
+
 ## [0.1.15] - 2026-07-16
 
 ### Added
