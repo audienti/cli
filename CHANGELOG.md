@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-07-17
+
+### Added
+
+- Add ContentOps CLI commands for inspecting programs, reviewing plan rows, approving/scheduling/publishing work items, and handling comment tasks.
+- Add `audienti motions update <motn_id> --own-post-engagement <true|false>` to enable or disable owned-post engagement intake for inbound motions.
+
 ## [0.1.17] - 2026-07-17
 
 ### Added

@@ -63,8 +63,13 @@ audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
 audienti motions run-discovery <motn_id>
 audienti motions update <motn_id> --status paused
+audienti motions update <motn_id> --own-post-engagement true
 audienti motions activate <motn_id>
 audienti motions delete <motn_id> --confirm yes
+audienti content programs
+audienti content plan <cprg_id>
+audienti content approve <cpwi_id>
+audienti content comments
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned

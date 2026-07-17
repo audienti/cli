@@ -55,7 +55,17 @@ const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <te
 const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--json] [--account <acct_id>]";
+const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
+const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
+const CONTENT_FEEDBACK_USAGE = "Usage: audienti content feedback <cpwi_id> (--message <text> | --payload <file.json>) [--json] [--account <acct_id>]";
+const CONTENT_APPROVE_USAGE = "Usage: audienti content approve <cpwi_id> [--json] [--account <acct_id>]";
+const CONTENT_SCHEDULE_USAGE = "Usage: audienti content schedule <cpwi_id> --at <time> [--json] [--account <acct_id>]";
+const CONTENT_PUBLISH_USAGE = "Usage: audienti content publish <cpwi_id> --url <permalink> [--json] [--account <acct_id>]";
+const CONTENT_COMMENTS_USAGE = "Usage: audienti content comments [--unresolved] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const CONTENT_REPLY_USAGE = "Usage: audienti content reply <cctk_id> [--body <text>] [--json] [--account <acct_id>]";
+const CONTENT_DISMISS_USAGE = "Usage: audienti content dismiss <cctk_id> [--json] [--account <acct_id>]";
 const MOTIONS_ADD_TAG_USAGE = "Usage: audienti motions add-tag <motn_id> <tag> [--json] [--account <acct_id>]";
 const MOTIONS_REMOVE_TAG_USAGE = "Usage: audienti motions remove-tag <motn_id> <tag> [--json] [--account <acct_id>]";
 const MOTIONS_DELETE_USAGE = "Usage: audienti motions delete <motn_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
@@ -204,6 +214,16 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "clone") return motionsClone(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "run-discovery") return motionsRunDiscovery(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "programs") return contentPrograms(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "plan") return contentPlan(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "show") return contentShow(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "feedback") return contentFeedback(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "approve") return contentApprove(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "schedule") return contentSchedule(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "publish") return contentPublish(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "comments") return contentComments(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "reply") return contentReply(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "dismiss") return contentDismiss(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "check") return prospectsCheck(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
@@ -1360,9 +1380,10 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     status: { type: "string" },
-    tags: { type: "string" }
+    tags: { type: "string" },
+    "own-post-engagement": { type: "string" }
   });
-  const hasUpdateField = values.status || values.tags !== undefined;
+  const hasUpdateField = values.status || values.tags !== undefined || values["own-post-engagement"] !== undefined;
   if (positionals.length !== 1 || !hasUpdateField) {
     throw new CommandError(MOTIONS_UPDATE_USAGE);
   }
@@ -1370,7 +1391,8 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
   const normalizedStatus = normalizeMotionStatus(values.status);
   const motionAttributes = compactObject({
     status: normalizedStatus,
-    play_tags: values.tags !== undefined ? tagList(values.tags) : undefined
+    play_tags: values.tags !== undefined ? tagList(values.tags) : undefined,
+    own_post_engagement: values["own-post-engagement"] !== undefined ? parseBooleanString(values["own-post-engagement"], "--own-post-engagement") : undefined
   });
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
@@ -1411,6 +1433,149 @@ async function updateMotionStatus(motionId, status, context, { accountOverride, 
   renderMotion(motion, context);
 }
 
+async function contentPrograms(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    user: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(CONTENT_PROGRAMS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const programs = await client.contentPrograms(accountId, compactObject({ user: values.user }));
+  if (values.json) return writeJson(context.stdout, programs);
+
+  renderContentPrograms(programs, context);
+}
+
+async function contentPlan(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    week: { type: "string" },
+    due: { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError(CONTENT_PLAN_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.contentPlan(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const week = values.week ? Number.parseInt(values.week, 10) : null;
+  let rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  if (week) rows = rows.filter((row) => Number(row.week_number) === week);
+  if (values.due) rows = rows.filter((row) => ["researching", "drafting", "needs_operator_review", "needs_operator_approval", "scheduled", "ready_to_post"].includes(row.stage));
+  renderContentPlanRows(rows, context);
+}
+
+async function contentShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CONTENT_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const item = await client.contentWorkItem(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, item);
+
+  renderContentWorkItem(item, context);
+}
+
+async function contentFeedback(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    message: { type: "string" },
+    payload: { type: "string" }
+  });
+  if (positionals.length !== 1 || (!values.message && !values.payload)) throw new CommandError(CONTENT_FEEDBACK_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = values.payload ? await readJsonPayload(values.payload) : { draft_feedback: values.message };
+  const item = await client.contentFeedback(accountId, positionals[0], payload);
+  if (values.json) return writeJson(context.stdout, item);
+
+  writeLine(context.stdout, `Queued feedback for ${display(item?.prefix_id)}.`);
+  renderContentWorkItem(item, context);
+}
+
+async function contentApprove(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CONTENT_APPROVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const item = await client.contentApprove(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, item);
+
+  writeLine(context.stdout, `Approved ${display(item?.prefix_id)}.`);
+  renderContentWorkItem(item, context);
+}
+
+async function contentSchedule(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    at: { type: "string" }
+  });
+  if (positionals.length !== 1 || !values.at) throw new CommandError(CONTENT_SCHEDULE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const item = await client.contentSchedule(accountId, positionals[0], { scheduled_at: values.at });
+  if (values.json) return writeJson(context.stdout, item);
+
+  writeLine(context.stdout, `Scheduled ${display(item?.prefix_id)}.`);
+  renderContentWorkItem(item, context);
+}
+
+async function contentPublish(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    url: { type: "string" }
+  });
+  if (positionals.length !== 1 || !values.url) throw new CommandError(CONTENT_PUBLISH_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const item = await client.contentPublish(accountId, positionals[0], { permalink: values.url });
+  if (values.json) return writeJson(context.stdout, item);
+
+  writeLine(context.stdout, `Published ${display(item?.prefix_id)}.`);
+  renderContentWorkItem(item, context);
+}
+
+async function contentComments(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    unresolved: { type: "boolean" },
+    user: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(CONTENT_COMMENTS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const comments = await client.contentComments(accountId, compactObject({ unresolved: values.unresolved === false ? false : true, user: values.user }));
+  if (values.json) return writeJson(context.stdout, comments);
+
+  renderContentComments(comments, context);
+}
+
+async function contentReply(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    body: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(CONTENT_REPLY_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const comment = await client.contentReply(accountId, positionals[0], compactObject({ body: values.body }));
+  if (values.json) return writeJson(context.stdout, comment);
+
+  writeLine(context.stdout, `Sent reply for ${display(comment?.prefix_id)}.`);
+}
+
+async function contentDismiss(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CONTENT_DISMISS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const comment = await client.contentDismiss(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, comment);
+
+  writeLine(context.stdout, `Dismissed ${display(comment?.prefix_id)}.`);
+}
+
 function normalizeMotionStatus(status) {
   if (status === undefined) return undefined;
 
@@ -1420,6 +1585,14 @@ function normalizeMotionStatus(status) {
   }
 
   return normalizedStatus;
+}
+
+function parseBooleanString(value, flagName) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["true", "1", "yes", "y"].includes(normalized)) return true;
+  if (["false", "0", "no", "n"].includes(normalized)) return false;
+
+  throw new CommandError(`${flagName} must be true or false.`);
 }
 
 async function motionsTagMutation(action, args, context, { accountOverride } = {}) {
@@ -3451,6 +3624,7 @@ function renderMotion(motion, context) {
   if (motion?.offer?.name) writeLine(context.stdout, `Offer: ${motion.offer.name} (${display(motion.offer.prefix_id)})`);
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
   if (motion?.list?.name) writeLine(context.stdout, `List: ${motion.list.name} (${display(motion.list.prefix_id)})`);
+  writeLine(context.stdout, `Own-post engagement: ${motion?.own_post_engagement ? "enabled" : "disabled"}`);
   if (Array.isArray(motion?.play_tags)) writeLine(context.stdout, `Tags: ${display(motion.play_tags.join(", "), "-")}`);
   if (motion?.principal_account_user?.id) {
     writeLine(
@@ -3458,6 +3632,59 @@ function renderMotion(motion, context) {
       `Principal: ${display(motion.principal_account_user.name || motion.principal_account_user.email)} (${display(motion.principal_account_user.id)})`
     );
   }
+}
+
+function renderContentPrograms(programs, context) {
+  if (!Array.isArray(programs) || programs.length === 0) return writeLine(context.stdout, "No ContentOps programs found.");
+
+  writeAlignedTable(context, ["PROGRAM ID", "OWNER", "STAGE", "BLOCKED", "CURRENT", "SCHEDULED", "STALE"], programs.map((program) => [
+    display(program.prefix_id),
+    display(program.owner?.name || program.owner?.email),
+    display(program.stage),
+    display(program.blocking_reason, "-"),
+    display(program.current_piece?.prefix_id || program.current_piece?.piece_key, "-"),
+    display(program.scheduled_piece?.prefix_id || program.scheduled_piece?.piece_key, "-"),
+    program.plan_stale_motion_set ? "yes" : "no"
+  ]));
+}
+
+function renderContentPlanRows(rows, context) {
+  if (!Array.isArray(rows) || rows.length === 0) return writeLine(context.stdout, "No ContentOps plan rows found.");
+
+  writeAlignedTable(context, ["DAY", "DATE", "MOTION", "STAGE", "STATUS", "TITLE"], rows.map((row) => [
+    display(row.day_number),
+    display(row.planned_publish_on, "-"),
+    display(row.motion?.name || row.motion?.motion_prefix_id, "-"),
+    display(row.stage, "-"),
+    display(row.publish_status || row.workflow_phase, "-"),
+    display(row.title)
+  ]));
+}
+
+function renderContentWorkItem(item, context) {
+  writeLine(context.stdout, `Content item: ${display(item?.title)} (${display(item?.prefix_id)})`);
+  writeLine(context.stdout, `Stage: ${display(item?.stage)}`);
+  writeLine(context.stdout, `Blocking: ${display(item?.blocking_reason, "-")}`);
+  if (item?.motion?.name || item?.motion?.motion_prefix_id) writeLine(context.stdout, `Motion: ${display(item.motion.name || item.motion.motion_prefix_id)}`);
+  if (item?.scheduled_at) writeLine(context.stdout, `Scheduled: ${item.scheduled_at}`);
+  if (item?.permalink) writeLine(context.stdout, `Permalink: ${item.permalink}`);
+  if (item?.finalized_content) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, item.finalized_content);
+  }
+}
+
+function renderContentComments(comments, context) {
+  if (!Array.isArray(comments) || comments.length === 0) return writeLine(context.stdout, "No ContentOps comment tasks found.");
+
+  writeAlignedTable(context, ["TASK ID", "STATUS", "COMMENTER", "FIT", "OUTCOME", "COMMENT"], comments.map((comment) => [
+    display(comment.prefix_id),
+    display(comment.status),
+    display(comment.commenter?.name),
+    display(comment.fit_badge?.status || comment.fit_badge, "-"),
+    display(comment.promotion_outcome, "-"),
+    display(truncateCliText(comment.comment_body, 80))
+  ]));
 }
 
 function renderMotionStatus(status, context) {
@@ -4827,7 +5054,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions run-discovery <motn_id>",
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
-    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>]",
+    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>]",
     "    audienti motions add-tag <motn_id> <tag>",
     "    audienti motions remove-tag <motn_id> <tag>",
     "    audienti motions activate <motn_id>",
@@ -4836,6 +5063,15 @@ const HELP_TOPICS = new Map([
     "    audienti motions clone <motn_id> --name <text>",
     "    audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
     "    Tip: `plays` is accepted anywhere `motions` is accepted.",
+    "",
+    "  ContentOps",
+    "    audienti content programs",
+    "    audienti content plan <cprg_id>",
+    "    audienti content show <cpwi_id>",
+    "    audienti content feedback <cpwi_id> --message <text>",
+    "    audienti content approve <cpwi_id>",
+    "    audienti content publish <cpwi_id> --url <permalink>",
+    "    audienti content comments",
     "",
     "  Prospects",
     "    audienti prospects list [filters]",
@@ -5907,7 +6143,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
-    "  audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--json]",
+    "  audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--json]",
     "  audienti motions add-tag <motn_id> <tag> [--json]",
     "  audienti motions remove-tag <motn_id> <tag> [--json]",
     "  audienti motions activate <motn_id> [--json]",
@@ -5925,6 +6161,34 @@ const HELP_TOPICS = new Map([
     "ID shape:",
     "  motn_id: motn_ prefix id"
   ].join("\n")],
+
+  ["content", [
+    "Usage:",
+    "  audienti content programs [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti content plan <cprg_id> [--week <n>] [--due] [--json]",
+    "  audienti content show <cpwi_id> [--json]",
+    "  audienti content feedback <cpwi_id> --message <text> [--json]",
+    "  audienti content approve <cpwi_id> [--json]",
+    "  audienti content schedule <cpwi_id> --at <time> [--json]",
+    "  audienti content publish <cpwi_id> --url <permalink> [--json]",
+    "  audienti content comments [--unresolved] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti content reply <cctk_id> [--body <text>] [--json]",
+    "  audienti content dismiss <cctk_id> [--json]",
+    "",
+    "API:",
+    "  GET/POST /api/v1/accounts/:account_id/content_ops/..."
+  ].join("\n")],
+
+  ["content programs", [CONTENT_PROGRAMS_USAGE].join("\n")],
+  ["content plan", [CONTENT_PLAN_USAGE].join("\n")],
+  ["content show", [CONTENT_SHOW_USAGE].join("\n")],
+  ["content feedback", [CONTENT_FEEDBACK_USAGE].join("\n")],
+  ["content approve", [CONTENT_APPROVE_USAGE].join("\n")],
+  ["content schedule", [CONTENT_SCHEDULE_USAGE].join("\n")],
+  ["content publish", [CONTENT_PUBLISH_USAGE].join("\n")],
+  ["content comments", [CONTENT_COMMENTS_USAGE].join("\n")],
+  ["content reply", [CONTENT_REPLY_USAGE].join("\n")],
+  ["content dismiss", [CONTENT_DISMISS_USAGE].join("\n")],
 
   ["motions list", [
     "Usage:",

@@ -261,6 +261,46 @@ export class AudientiClient {
     });
   }
 
+  contentPrograms(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "programs"], query));
+  }
+
+  contentPlan(accountId, programId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "programs", programId, "plan"], query));
+  }
+
+  contentWorkItem(accountId, workItemId) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId]));
+  }
+
+  contentFeedback(accountId, workItemId, body) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "feedback"]), { method: "POST", body });
+  }
+
+  contentApprove(accountId, workItemId) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "approve"]), { method: "POST" });
+  }
+
+  contentSchedule(accountId, workItemId, body) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "schedule"]), { method: "POST", body });
+  }
+
+  contentPublish(accountId, workItemId, body) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "publish"]), { method: "POST", body });
+  }
+
+  contentComments(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "comment_tasks"], query));
+  }
+
+  contentReply(accountId, commentTaskId, body) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "comment_tasks", commentTaskId, "send_reply"]), { method: "POST", body });
+  }
+
+  contentDismiss(accountId, commentTaskId) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "comment_tasks", commentTaskId, "dismiss"]), { method: "POST" });
+  }
+
   addMotionTag(accountId, motionId, body) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "add_tag"]), {
       method: "POST",

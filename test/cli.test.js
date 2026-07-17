@@ -30,7 +30,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
   assert.match(stdout.output, /audienti motions run-discovery <motn_id>/);
-  assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\]/);
+  assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
   assert.match(stdout.output, /audienti motions add-tag <motn_id> <tag>/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
   assert.match(stdout.output, /audienti motions pause <motn_id>/);
@@ -50,6 +50,9 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
+  assert.match(stdout.output, /audienti content programs/);
+  assert.match(stdout.output, /audienti content approve <cpwi_id>/);
+  assert.match(stdout.output, /audienti content comments/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
   assert.match(stdout.output, /More help:/);
   assert.match(stdout.output, /audienti <area> <command> help/);
@@ -542,7 +545,15 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["plays", "update", "help"],
-      expected: [/Usage:\n  audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\]/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+      expected: [/Usage:\n  audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+    },
+    {
+      args: ["content", "help"],
+      expected: [/audienti content programs/, /audienti content approve <cpwi_id>/, /GET\/POST \/api\/v1\/accounts\/:account_id\/content_ops\/\.\.\./]
+    },
+    {
+      args: ["content", "comments", "help"],
+      expected: [/Usage: audienti content comments/, /--unresolved/]
     },
     {
       args: ["motions", "add-tag", "help"],
@@ -2359,6 +2370,41 @@ test("motions update can clear play tags", async () => {
   });
 });
 
+test("motions update patches own-post engagement setting", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "active",
+      kind: "inbound",
+      own_post_engagement: true
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          own_post_engagement: true
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--own-post-engagement", "true", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
 test("motions status shortcuts patch expected statuses", async () => {
   const cases = [
     { action: "activate", status: "active" },
@@ -2420,7 +2466,7 @@ test("motions update rejects invalid status without calling the api", async () =
 
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
-    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\]/);
+    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
   });
 });
 
