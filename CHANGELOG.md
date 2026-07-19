@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-07-19
+
+### Changed
+
+- Track the account API contract update that limits root account routes to supported actions and adds scoped account show responses.
+
 ## [0.1.19] - 2026-07-17
 
 ### Added
