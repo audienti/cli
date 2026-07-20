@@ -148,45 +148,23 @@ and one AccountProspect.created_at cohort:
 audienti analytics users --user me --start 2026-07-01 --end 2026-07-07 --cohort-start 2026-06-01 --cohort-end 2026-06-30 --motion <motn_id>
 ```
 
-To start a report-backed writer session for one prospect, including the no-reply
-path, planned actions, channel changes, and planned message rows:
+To run a writer campaign test for one prospect, including the no-reply path,
+planned actions, channel changes, and drafted messages:
 
 ```bash
 audienti writer test-run <prsp_id>
 ```
 
-The output includes a `Report: rprt_...` id. Treat that report id as the writing
-session handle while the generated report is retained.
-
-To draft every message into that report-backed session, opt into full report
-mode:
+For fast simulator work, plan the branches without drafting every message:
 
 ```bash
-audienti writer test-run <prsp_id> --mode report --report <rprt_id>
+audienti writer test-run <prsp_id> --mode plan
 ```
 
-For writer debugging, draft only one selected timeline row on one branch into
-the same report:
+For writer debugging, draft only one selected timeline row on one branch:
 
 ```bash
-audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id>
-```
-
-The CLI queues the report job on the API and polls until the report finishes, so
-slower writer calls do not depend on a single long HTTP request. Use
-`--timeout-seconds <n>` to adjust the CLI wait budget.
-
-To queue work into the report and come back later:
-
-```bash
-audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id> --no-wait
-```
-
-If the CLI stops waiting before the server job finishes, fetch the completed
-report later with:
-
-```bash
-audienti writer test-run show <prsp_id> <rprt_id>
+audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3
 ```
 
 To update a prospect's attached profile channels through the same paths used by

@@ -72,18 +72,4 @@ audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <
 audienti tools linkedin-review reports --json
 audienti tools linkedin-review show <rprt_id> --json
 audienti tools linkedin-review status <rprt_id> --json
-audienti writer test-run <prsp_id>
-audienti writer test-run <prsp_id> --mode report --report <rprt_id>
-audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id>
-audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id> --no-wait
-audienti writer test-run show <prsp_id> <rprt_id>
 ```
-
-`audienti writer test-run <prsp_id>` starts a report-backed writing session and
-builds the campaign timeline without drafting every message. The printed
-`Report: rprt_...` id is the session handle. Pass `--report <rprt_id>` when
-drafting every message with `--mode report` or one selected row with
-`--mode step`; the server report supplies prior drafted rows as context. Use
-`--timeout-seconds <n>` for longer waits, or `--no-wait` to launch and return
-immediately. Use `writer test-run show` with the report id to fetch the
-completed report later.

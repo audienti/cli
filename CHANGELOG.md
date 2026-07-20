@@ -4,12 +4,6 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
-## [0.1.21] - 2026-07-20
-
-### Changed
-
-- Show scoped help when a CLI command prefix is entered without the required remaining command or arguments, accept `account` as an alias for `accounts`, make `writer test-run` build the timeline without drafting every message by default, back writer test runs with a reusable report session instead of a CLI-local cache, run writer report work through a queued job that the CLI polls instead of holding one long HTTP request open, add `--report <rprt_id>` to continue a writer session, add `--no-wait` for launching queued writer work and coming back later, add `writer test-run show <prsp_id> <rprt_id>` to retrieve queued writer output after it finishes, let the workspace `bin/cli` reuse the global account selection without carrying bearer tokens across hosts, and explain API network failures with the configured host.
-
 ## [0.1.20] - 2026-07-19
 
 ### Changed

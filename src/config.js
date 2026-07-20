@@ -3,7 +3,6 @@ import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
 const CONFIG_FILENAME = "config.json";
-const ACCOUNT_CONFIG_KEYS = ["accountId", "accountName", "accountUserId", "accountUserName", "accountUserEmail"];
 
 export class ConfigError extends Error {
   constructor(message) {
@@ -20,25 +19,8 @@ export function configPath(env = process.env) {
   return join(configDirectory(env), CONFIG_FILENAME);
 }
 
-export function fallbackConfigDirectory(env = process.env) {
-  return env.AUDIENTI_CONFIG_FALLBACK_HOME || null;
-}
-
-export function fallbackConfigPath(env = process.env) {
-  const directory = fallbackConfigDirectory(env);
-  return directory ? join(directory, CONFIG_FILENAME) : null;
-}
-
 export async function readConfig({ env = process.env } = {}) {
-  const config = await readConfigFile(configPath(env));
-  const fallbackPath = fallbackConfigPath(env);
-  if (!fallbackPath || fallbackPath === configPath(env)) return applyConfigOverrides(config, env);
-
-  const fallbackConfig = await readConfigFile(fallbackPath);
-  return applyConfigOverrides(mergeFallbackConfig(config, fallbackConfig), env);
-}
-
-async function readConfigFile(filePath) {
+  const filePath = configPath(env);
 
   try {
     return JSON.parse(await readFile(filePath, "utf8"));
@@ -49,49 +31,6 @@ async function readConfigFile(filePath) {
     }
 
     throw error;
-  }
-}
-
-function mergeFallbackConfig(config, fallbackConfig) {
-  const merged = { ...config };
-
-  if (!merged.host && !merged.token && fallbackConfig.host && fallbackConfig.token) {
-    merged.host = fallbackConfig.host;
-    merged.token = fallbackConfig.token;
-  }
-
-  if (!merged.accountId && fallbackConfig.accountId) {
-    for (const key of ACCOUNT_CONFIG_KEYS) {
-      if (fallbackConfig[key]) merged[key] = fallbackConfig[key];
-    }
-  } else if (merged.accountId && merged.accountId === fallbackConfig.accountId) {
-    for (const key of ACCOUNT_CONFIG_KEYS) {
-      if (!merged[key] && fallbackConfig[key]) merged[key] = fallbackConfig[key];
-    }
-  }
-
-  return merged;
-}
-
-function applyConfigOverrides(config, env) {
-  if (!env.AUDIENTI_CONFIG_HOST_OVERRIDE) return config;
-
-  const overridden = {
-    ...config,
-    host: env.AUDIENTI_CONFIG_HOST_OVERRIDE
-  };
-  if (config.token && !sameCredentialOrigin(config.host, overridden.host)) delete overridden.token;
-
-  return overridden;
-}
-
-function sameCredentialOrigin(left, right) {
-  if (!left || !right) return false;
-
-  try {
-    return new URL(left).origin === new URL(right).origin;
-  } catch {
-    return String(left).replace(/\/+$/, "") === String(right).replace(/\/+$/, "");
   }
 }
 

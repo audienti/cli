@@ -6,19 +6,6 @@ import { readConfig, writeConfig } from "../src/config.js";
 import { run } from "../src/cli.js";
 import { captureStream, createFetch, jsonResponse, withTempConfigHome } from "./helpers.js";
 
-function completedSequenceExportJob(payload, report = {}) {
-  return {
-    report: {
-      prefix_id: "rprt_writer",
-      status: "completed",
-      ...report
-    },
-    content: {
-      payload
-    }
-  };
-}
-
 test("global help lists commands and points agents at command-specific shapes", async () => {
   const stdout = captureStream();
   const stderr = captureStream();
@@ -101,41 +88,6 @@ test("command help documents accepted options without calling the api", async ()
   assert.match(stdout.output, /Input shape:/);
 });
 
-test("incomplete command prefixes print scoped help without calling the api", async () => {
-  const cases = [
-    {
-      args: ["auth"],
-      expected: [/Usage:\n  audienti auth token <token>/, /audienti auth status/, /Run `audienti auth token help`/]
-    },
-    {
-      args: ["auth", "token"],
-      expected: [/Usage:\n  audienti auth token <token>/, /Input shape:/, /Validation:/]
-    },
-    {
-      args: ["motions", "run-discovery"],
-      expected: [/Usage:\n  audienti motions run-discovery <motn_id>/, /Motions::DiscoverJob/]
-    },
-    {
-      args: ["plays", "clone"],
-      expected: [/Usage:\n  audienti motions clone <motn_id> --name <text>/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/clone\.json/]
-    }
-  ];
-  const fetch = createFetch(() => {
-    throw new Error("incomplete command help must not call the API");
-  });
-
-  for (const { args, expected } of cases) {
-    const stdout = captureStream();
-    const stderr = captureStream();
-    const exitCode = await run(args, { stdout, stderr, fetch });
-
-    assert.equal(exitCode, 0);
-    assert.equal(stderr.output, "");
-    assert.doesNotMatch(stdout.output, /audienti <command> \[options\]/);
-    for (const pattern of expected) assert.match(stdout.output, pattern);
-  }
-});
-
 test("update check reports current when the registry version matches", async () => {
   const stdout = captureStream();
   const packageVersion = await currentPackageVersion();
@@ -195,30 +147,6 @@ test("update check returns unknown when the registry cannot be queried", async (
   assert.equal(payload.update_available, null);
   assert.equal(payload.latest_version, null);
   assert.equal(payload.error, "registry unavailable");
-});
-
-test("api network failures include configured host guidance", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "http://localhost:55050",
-      token: "saved-token",
-      accountId: "acct_one",
-      accountName: "One"
-    }, { env });
-
-    const stderr = captureStream();
-    const fetch = createFetch(() => {
-      throw new TypeError("fetch failed");
-    });
-
-    const exitCode = await run(["prospects", "show", "prsp_one"], { env, fetch, stderr });
-
-    assert.equal(exitCode, 1);
-    assert.match(stderr.output, /Unable to reach Audienti API at http:\/\/localhost:55050/);
-    assert.match(stderr.output, /start the workspace app server first/);
-    assert.match(stderr.output, /--host <url>/);
-    assert.match(stderr.output, /fetch failed/);
-  });
 });
 
 async function currentPackageVersion() {
@@ -329,10 +257,6 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["users", "activity", "help"],
       expected: [/Usage:\n  audienti users activity \[account_user_id\|me\]/, /GET \/api\/v1\/accounts\/:account_id\/operations\/users\/:user_id\/activity\.json/]
-    },
-    {
-      args: ["account", "select", "help"],
-      expected: [/Usage:\n  audienti accounts select <acct_id>/, /Saves accountId and accountName in local CLI config/]
     },
     {
       args: ["offers", "help"],
@@ -580,21 +504,11 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["writer", "help"],
-      expected: [/Usage:\n  audienti writer test-run <prsp_id>/, /Run a report-backed writer session/]
+      expected: [/Usage:\n  audienti writer test-run <prsp_id>/, /Run a writer campaign test/]
     },
     {
       args: ["writers", "test-run", "help"],
-      expected: [
-        /Usage:\n  audienti writer test-run <prsp_id>/,
-        /Creates or updates a server report/,
-        /Local workflow:/,
-        /direnv exec \. bin\/dev/,
-        /bin\/cli config list --json/,
-        /bin\/cli writer test-run <prsp_id> --mode step --branch no-accept --step <row_number\|step_key> --report <rprt_id>/,
-        /bin\/cli writer test-run show <prsp_id> <rprt_id>/,
-        /The report is the session cache/,
-        /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/sequence_export_jobs\.json/
-      ]
+      expected: [/Usage:\n  audienti writer test-run <prsp_id>/, /draft copy for message steps/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/sequence_export\.json/]
     },
     {
       args: ["prospects", "sequence-export", "help"],
@@ -821,36 +735,6 @@ test("accounts select persists only a visible prefixed account id", async () => 
     ]));
 
     const exitCode = await run(["accounts", "select", "acct_two"], { env, fetch, stdout });
-
-    assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Selected account Two \(acct_two\)\./);
-    assert.deepEqual(await readConfig({ env }), {
-      host: "https://app.audienti.com",
-      token: "saved-token",
-      accountId: "acct_two",
-      accountName: "Two"
-    });
-  });
-});
-
-test("account select aliases accounts select for common singular usage", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "https://app.audienti.com",
-      token: "saved-token"
-    }, { env });
-
-    const stdout = captureStream();
-    const fetch = createFetch((url, options) => {
-      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts.json");
-      assert.equal(options.headers.Authorization, "Bearer saved-token");
-      return jsonResponse([
-        { id: 1, prefix_id: "acct_one", name: "One" },
-        { id: 2, prefix_id: "acct_two", name: "Two" }
-      ]);
-    });
-
-    const exitCode = await run(["account", "select", "acct_two"], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Selected account Two \(acct_two\)\./);
@@ -5615,7 +5499,7 @@ test("prospects sequence-preview runs the report workflow and renders ordered st
   });
 });
 
-test("writer test-run report mode drafts every message in the campaign runner", async () => {
+test("writer test-run aliases the prospect sequence preview campaign runner", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
       host: "https://app.audienti.com",
@@ -5627,12 +5511,12 @@ test("writer test-run report mode drafts every message in the campaign runner", 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
       assert.equal(url.origin, "https://app.audienti.com");
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.equal(options.method, "POST");
       assert.equal(options.headers.Authorization, "Bearer saved-token");
       assert.deepEqual(JSON.parse(options.body), { branches: "both", draft_mode: "all" });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -5681,10 +5565,10 @@ test("writer test-run report mode drafts every message in the campaign runner", 
         meta: {
           draft_mode: "all"
         }
-      }, { prefix_id: "rprt_report" }));
+      });
     });
 
-    const exitCode = await run(["writer", "test-run", "prsp_one", "--mode", "report"], {
+    const exitCode = await run(["writer", "test-run", "prsp_one"], {
       env,
       fetch,
       stdout,
@@ -5694,7 +5578,6 @@ test("writer test-run report mode drafts every message in the campaign runner", 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Writer campaign simulator/);
     assert.match(stdout.output, /Prospect: Pat Prospect \(prsp_one\)/);
-    assert.match(stdout.output, /Report: rprt_report/);
     assert.match(stdout.output, /Mode: all/);
     assert.match(stdout.output, /Start: \d{4}-\d{2}-\d{2}/);
     assert.match(stdout.output, /Scenario: simulate the full path if the prospect does not reply\./);
@@ -5712,8 +5595,35 @@ test("writer test-run report mode drafts every message in the campaign runner", 
   });
 });
 
-test("writer test-run defaults to plan mode and renders the report-backed timeline without drafting", async () => {
-  await withTempConfigHome(async ({ env }) => {
+test("writer test-run plan mode skips drafts and renders planned statuses", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    const cacheDir = join(root, "writer-cache");
+    env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR = cacheDir;
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(join(cacheDir, "acct_one-prsp_one.json"), `${JSON.stringify({
+      version: 1,
+      account_id: "acct_one",
+      prospect_id: "prsp_one",
+      entries: {
+        "no_accept:public_comment": {
+          branch: "no_accept",
+          key: "public_comment",
+          stage: "Public comment",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          body: "Cached public comment body",
+          text: "Cached public comment body",
+          status: "success",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "local_cache",
+          target: {
+            url: "https://www.linkedin.com/feed/update/urn:li:activity:cached",
+            post_url: "https://www.linkedin.com/feed/update/urn:li:activity:cached"
+          }
+        }
+      }
+    }, null, 2)}\n`);
+
     await writeConfig({
       host: "https://app.audienti.com",
       token: "saved-token",
@@ -5723,13 +5633,29 @@ test("writer test-run defaults to plan mode and renders the report-backed timeli
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "both",
-        draft_mode: "plan"
+        draft_mode: "plan",
+        cached_drafts: [{
+          branch: "no_accept",
+          key: "public_comment",
+          stage: "Public comment",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          body: "Cached public comment body",
+          text: "Cached public comment body",
+          status: "success",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "local_cache",
+          target: {
+            url: "https://www.linkedin.com/feed/update/urn:li:activity:cached",
+            post_url: "https://www.linkedin.com/feed/update/urn:li:activity:cached"
+          }
+        }]
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -5744,6 +5670,14 @@ test("writer test-run defaults to plan mode and renders the report-backed timeli
           steps: [
             {
               kind: "message",
+              key: "public_comment",
+              stage: "Public comment",
+              channel: "LinkedIn",
+              status: "cached",
+              body: "Cached public comment body"
+            },
+            {
+              kind: "message",
               key: "connection_request",
               stage: "Connection request",
               channel: "LinkedIn",
@@ -5754,10 +5688,10 @@ test("writer test-run defaults to plan mode and renders the report-backed timeli
         meta: {
           draft_mode: "plan"
         }
-      }, { prefix_id: "rprt_plan" }));
+      });
     });
 
-    const exitCode = await run(["writer", "test-run", "prsp_one"], {
+    const exitCode = await run(["writer", "test-run", "prsp_one", "--mode", "plan"], {
       env,
       fetch,
       stdout,
@@ -5766,17 +5700,19 @@ test("writer test-run defaults to plan mode and renders the report-backed timeli
 
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Mode: plan/);
-    assert.match(stdout.output, /Report: rprt_plan/);
+    assert.match(stdout.output, /Cached drafts sent: 1/);
     assert.match(stdout.output, /Drafts are skipped; this run only plans the path and context\./);
     assert.match(stdout.output, /Start: \d{4}-\d{2}-\d{2}/);
     assert.match(stdout.output, /#\s+DATE\s+DOW\s+TYPE\s+ACTION\s+CH\s+STATUS/);
+    assert.match(stdout.output, /2026-07-12\s+Sun\s+MSG\s+Public comment\s+LI\s+cached/);
     assert.match(stdout.output, /2026-07-12\s+Sun\s+MSG\s+Connection request\s+LI\s+planned/);
     assert.doesNotMatch(stdout.output, /This can take a while/);
   });
 });
 
 test("writer test-run step mode posts one branch and target step", async () => {
-  await withTempConfigHome(async ({ env }) => {
+  await withTempConfigHome(async ({ root, env }) => {
+    env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR = join(root, "writer-cache");
     await writeConfig({
       host: "https://app.audienti.com",
       token: "saved-token",
@@ -5786,14 +5722,14 @@ test("writer test-run step mode posts one branch and target step", async () => {
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "public_comment"
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -5824,7 +5760,7 @@ test("writer test-run step mode posts one branch and target step", async () => {
           draft_mode: "target",
           target_step: "public_comment"
         }
-      }));
+      });
     });
 
     const exitCode = await run([
@@ -5855,206 +5791,6 @@ test("writer test-run step mode posts one branch and target step", async () => {
   });
 });
 
-test("writer test-run step mode explains failed async drafts", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "https://app.audienti.com",
-      token: "saved-token",
-      accountId: "acct_one",
-      accountName: "One"
-    }, { env });
-
-    const stderr = captureStream();
-    const fetch = createFetch(async (url, options, calls) => {
-      if (calls.length === 1) {
-        assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
-        assert.equal(options.method, "POST");
-        assert.deepEqual(JSON.parse(options.body), {
-          branches: "no-accept",
-          draft_mode: "target",
-          target_step: "5"
-        });
-
-        return jsonResponse({
-          report: {
-            prefix_id: "rprt_timeout",
-            status: "processing"
-          }
-        }, { status: 202 });
-      }
-
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs/rprt_timeout.json");
-      return jsonResponse({
-        report: {
-          prefix_id: "rprt_timeout",
-          status: "failed"
-        },
-        content: {
-          flat_payload: {
-            error: "writer step exceeded the server budget"
-          }
-        }
-      });
-    });
-
-    const exitCode = await run(["writer", "test-run", "prsp_one", "--mode", "step", "--branch", "no-accept", "--step", "5"], { env, fetch, stderr, sleep: async () => {} });
-
-    assert.equal(exitCode, 1);
-    assert.match(stderr.output, /Writer test run rprt_timeout failed: writer step exceeded the server budget/);
-  });
-});
-
-test("writer test-run step mode can launch without waiting and print the report handle", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "https://app.audienti.com",
-      token: "saved-token",
-      accountId: "acct_one",
-      accountName: "One"
-    }, { env });
-
-    const stdout = captureStream();
-    const fetch = createFetch(async (url, options, calls) => {
-      assert.equal(calls.length, 1);
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
-      assert.equal(options.method, "POST");
-      assert.deepEqual(JSON.parse(options.body), {
-        branches: "no-accept",
-        draft_mode: "target",
-        target_step: "5"
-      });
-
-      return jsonResponse({
-        report: {
-          prefix_id: "rprt_later",
-          status: "pending",
-          stage: "queued",
-          updated_at: "2026-07-20T12:00:00Z"
-        },
-        run: {
-          status: "pending"
-        },
-        queued: true
-      }, { status: 202 });
-    });
-
-    const exitCode = await run([
-      "writer",
-      "test-run",
-      "prsp_one",
-      "--mode",
-      "step",
-      "--branch",
-      "no-accept",
-      "--step",
-      "5",
-      "--no-wait"
-    ], { env, fetch, stdout });
-
-    assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Writer test run job/);
-    assert.match(stdout.output, /Report: rprt_later \(pending\)/);
-    assert.match(stdout.output, /Stage: queued/);
-    assert.match(stdout.output, /Check later: audienti writer test-run show prsp_one rprt_later/);
-  });
-});
-
-test("writer test-run show renders a completed queued step report", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "https://app.audienti.com",
-      token: "saved-token",
-      accountId: "acct_one",
-      accountName: "One"
-    }, { env });
-
-    const stdout = captureStream();
-    const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs/rprt_done.json");
-      assert.equal(options.method, "GET");
-      assert.equal(options.headers.Authorization, "Bearer saved-token");
-
-      return jsonResponse(completedSequenceExportJob({
-        prospect: {
-          prefix_id: "prsp_one",
-          display_name: "Pat Prospect"
-        },
-        branches: [{
-          key: "no_accept",
-          label: "No accept / no reply",
-          resolved_target_step: "connection_request",
-          summary: {
-            channel_sequence: ["LinkedIn"]
-          },
-          steps: [
-            {
-              kind: "message",
-              key: "connection_request",
-              stage: "Connection request",
-              channel: "LinkedIn",
-              status: "success",
-              body: "Finished queued connection request"
-            }
-          ]
-        }],
-        meta: {
-          draft_mode: "target",
-          target_step: "connection_request"
-        }
-      }, { prefix_id: "rprt_done" }));
-    });
-
-    const exitCode = await run(["writer", "test-run", "show", "prsp_one", "rprt_done"], {
-      env,
-      fetch,
-      stdout,
-      now: () => new Date("2026-07-12T12:00:00Z")
-    });
-
-    assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Writer campaign simulator/);
-    assert.match(stdout.output, /Drafted copy: Connection request \(connection_request\)/);
-    assert.match(stdout.output, /Finished queued connection request/);
-  });
-});
-
-test("writer test-run show prints status for unfinished queued step reports", async () => {
-  await withTempConfigHome(async ({ env }) => {
-    await writeConfig({
-      host: "https://app.audienti.com",
-      token: "saved-token",
-      accountId: "acct_one",
-      accountName: "One"
-    }, { env });
-
-    const stdout = captureStream();
-    const fetch = createFetch(async (url) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs/rprt_waiting.json");
-
-      return jsonResponse({
-        report: {
-          prefix_id: "rprt_waiting",
-          status: "processing",
-          stage: "generating",
-          updated_at: "2026-07-20T12:00:00Z"
-        },
-        run: {
-          status: "running"
-        }
-      });
-    });
-
-    const exitCode = await run(["writer", "test-run", "show", "prsp_one", "rprt_waiting"], { env, fetch, stdout });
-
-    assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Writer test run job/);
-    assert.match(stdout.output, /Report: rprt_waiting \(processing\)/);
-    assert.match(stdout.output, /Stage: generating/);
-    assert.match(stdout.output, /Run: running/);
-    assert.match(stdout.output, /Check later: audienti writer test-run show prsp_one rprt_waiting/);
-  });
-});
-
 test("writer test-run step mode renders the resolved target draft", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -6066,14 +5802,14 @@ test("writer test-run step mode renders the resolved target draft", async () => 
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "connection_request"
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -6110,7 +5846,7 @@ test("writer test-run step mode renders the resolved target draft", async () => 
           draft_mode: "target",
           target_step: "connection_request"
         }
-      }));
+      });
     });
 
     const exitCode = await run([
@@ -6122,7 +5858,8 @@ test("writer test-run step mode renders the resolved target draft", async () => 
       "--branch",
       "no-accept",
       "--step",
-      "connection_request"
+      "connection_request",
+      "--no-cache"
     ], {
       env,
       fetch,
@@ -6148,14 +5885,14 @@ test("writer test-run step mode renders target draft errors with warnings", asyn
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "connection_request"
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -6183,7 +5920,7 @@ test("writer test-run step mode renders target draft errors with warnings", asyn
           draft_mode: "target",
           target_step: "connection_request"
         }
-      }));
+      });
     });
 
     const exitCode = await run([
@@ -6195,7 +5932,8 @@ test("writer test-run step mode renders target draft errors with warnings", asyn
       "--branch",
       "no-accept",
       "--step",
-      "connection_request"
+      "connection_request",
+      "--no-cache"
     ], {
       env,
       fetch,
@@ -6223,14 +5961,14 @@ test("writer test-run step mode renders target quality failure reasons", async (
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "connection_request"
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -6262,7 +6000,7 @@ test("writer test-run step mode renders target quality failure reasons", async (
           draft_mode: "target",
           target_step: "connection_request"
         }
-      }));
+      });
     });
 
     const exitCode = await run([
@@ -6274,7 +6012,8 @@ test("writer test-run step mode renders target quality failure reasons", async (
       "--branch",
       "no-accept",
       "--step",
-      "connection_request"
+      "connection_request",
+      "--no-cache"
     ], {
       env,
       fetch,
@@ -6293,8 +6032,31 @@ test("writer test-run step mode renders target quality failure reasons", async (
   });
 });
 
-test("writer test-run step mode continues a report session for simulator context", async () => {
-  await withTempConfigHome(async ({ env }) => {
+test("writer test-run step mode sends cached prior drafts for simulator context", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    const cacheDir = join(root, "writer-cache");
+    env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR = cacheDir;
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(join(cacheDir, "acct_one-prsp_one.json"), `${JSON.stringify({
+      version: 1,
+      account_id: "acct_one",
+      prospect_id: "prsp_one",
+      entries: {
+        "no_accept:connection_request": {
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          body: "Cached connection request body",
+          text: "Cached connection request body",
+          status: "success",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "local_cache"
+        }
+      }
+    }, null, 2)}\n`);
+
     await writeConfig({
       host: "https://app.audienti.com",
       token: "saved-token",
@@ -6304,15 +6066,26 @@ test("writer test-run step mode continues a report session for simulator context
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "pending_request_inmail_voicemail",
-        session_report_id: "rprt_session"
+        cached_drafts: [{
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          body: "Cached connection request body",
+          text: "Cached connection request body",
+          status: "success",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "local_cache"
+        }]
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -6331,8 +6104,8 @@ test("writer test-run step mode continues a report session for simulator context
               stage: "Connection request",
               channel: "LinkedIn",
               status: "cached",
-              body: "Existing report-backed connection request",
-              metadata: { report_context: true }
+              body: "Cached connection request body",
+              metadata: { cached_draft: true }
             },
             {
               kind: "message",
@@ -6348,7 +6121,7 @@ test("writer test-run step mode continues a report session for simulator context
           draft_mode: "target",
           target_step: "pending_request_inmail_voicemail"
         }
-      }, { prefix_id: "rprt_session" }));
+      });
     });
 
     const exitCode = await run([
@@ -6360,26 +6133,50 @@ test("writer test-run step mode continues a report session for simulator context
       "--branch",
       "no-accept",
       "--step",
-      "pending_request_inmail_voicemail",
-      "--report",
-      "rprt_session"
+      "pending_request_inmail_voicemail"
     ], {
       env,
       fetch,
       stdout,
-      now: () => new Date("2026-07-12T12:00:00Z")
+      now: () => new Date("2026-07-12T12:00:00Z"),
+      cwd: root
     });
 
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Report: rprt_session/);
+    assert.match(stdout.output, /Cache: .*writer-cache.*acct_one-prsp_one\.json/);
+    assert.match(stdout.output, /Cached drafts sent: 1/);
     assert.match(stdout.output, /Connection request\s+LI\s+cached/);
     assert.match(stdout.output, /Drafted copy: Voicemail \(pending_request_inmail_voicemail\)/);
     assert.match(stdout.output, /Voicemail script based on prior messages/);
   });
 });
 
-test("writer test-run step mode sends the report session so the server can retry target quality failures", async () => {
-  await withTempConfigHome(async ({ env }) => {
+test("writer test-run step mode sends cached quality failures so the target can retry", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    const cacheDir = join(root, "writer-cache");
+    env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR = cacheDir;
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(join(cacheDir, "acct_one-prsp_one.json"), `${JSON.stringify({
+      version: 1,
+      account_id: "acct_one",
+      prospect_id: "prsp_one",
+      entries: {
+        "no_accept:connection_request": {
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          status: "quality_failure",
+          quality_codes: ["connection_request_too_many_sentences"],
+          blank_reason: "Connection request had too many sentences.",
+          writer_path: "connect_request.specialized",
+          writer_engine: "connection_request_llm_v1",
+          generated_at: "2026-07-12T12:00:00Z"
+        }
+      }
+    }, null, 2)}\n`);
+
     await writeConfig({
       host: "https://app.audienti.com",
       token: "saved-token",
@@ -6389,15 +6186,27 @@ test("writer test-run step mode sends the report session so the server can retry
 
     const stdout = captureStream();
     const fetch = createFetch(async (url, options) => {
-      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export_jobs.json");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/prospects/prsp_one/sequence_export.json");
       assert.deepEqual(JSON.parse(options.body), {
         branches: "no-accept",
         draft_mode: "target",
         target_step: "connection_request",
-        session_report_id: "rprt_retry"
+        cached_drafts: [{
+          branch: "no_accept",
+          key: "connection_request",
+          stage: "Connection request",
+          channel: "LinkedIn",
+          platform: "linkedin",
+          status: "quality_failure",
+          quality_codes: ["connection_request_too_many_sentences"],
+          blank_reason: "Connection request had too many sentences.",
+          writer_path: "connect_request.specialized",
+          generated_at: "2026-07-12T12:00:00Z",
+          writer_engine: "connection_request_llm_v1"
+        }]
       });
 
-      return jsonResponse(completedSequenceExportJob({
+      return jsonResponse({
         prospect: {
           prefix_id: "prsp_one",
           display_name: "Pat Prospect"
@@ -6424,7 +6233,7 @@ test("writer test-run step mode sends the report session so the server can retry
           draft_mode: "target",
           target_step: "connection_request"
         }
-      }, { prefix_id: "rprt_retry" }));
+      });
     });
 
     const exitCode = await run([
@@ -6436,18 +6245,17 @@ test("writer test-run step mode sends the report session so the server can retry
       "--branch",
       "no-accept",
       "--step",
-      "connection_request",
-      "--report",
-      "rprt_retry"
+      "connection_request"
     ], {
       env,
       fetch,
       stdout,
-      now: () => new Date("2026-07-12T12:00:00Z")
+      now: () => new Date("2026-07-12T12:00:00Z"),
+      cwd: root
     });
 
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Report: rprt_retry/);
+    assert.match(stdout.output, /Cached drafts sent: 1/);
     assert.match(stdout.output, /Recovered connection request/);
   });
 });
