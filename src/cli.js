@@ -1,6 +1,6 @@
 import { parseArgs } from "node:util";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
 import { configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
 
@@ -17,6 +17,8 @@ const DEFAULT_LIST_LIMIT = 20;
 const API_MAX_LIST_LIMIT = 100;
 const DEFAULT_LOOKUP_TIMEOUT_SECONDS = 60;
 const DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS = 2;
+const DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS = 180;
+const DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS = 2;
 const PACKAGE_NAME = "@audienti/cli";
 const DEFAULT_NPM_REGISTRY = "https://registry.npmjs.org";
 const DEFAULT_PROFILE_IDENTIFIERS = [
@@ -53,7 +55,8 @@ const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
 const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
-const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <report|plan|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--no-cache] [--clear-cache] [--account <acct_id>]";
+const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
+const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
 const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
@@ -103,7 +106,6 @@ const COHORT_STAGE_ORDER = [
   "cancel"
 ];
 const DAY_OF_WEEK_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const WRITER_TEST_RUN_CACHE_VERSION = 1;
 const SEQUENCE_EXPORT_CSV_COLUMNS = [
   "prospect_id",
   "prospect_name",
@@ -155,6 +157,12 @@ async function dispatch(argv, context) {
 
   if (helpTopic) {
     writeLine(context.stdout, helpFor(helpTopic));
+    return 0;
+  }
+
+  const implicitHelpTopic = incompleteHelpTopicFromArgs(args);
+  if (implicitHelpTopic) {
+    writeLine(context.stdout, helpFor(implicitHelpTopic));
     return 0;
   }
 
@@ -303,7 +311,42 @@ function helpTopicFromArgs(args) {
   return normalizeTopicParts(args.slice(0, helpIndex));
 }
 
+function incompleteHelpTopicFromArgs(args) {
+  if (args.length === 0 || args[0] === "help") return null;
+  if (args.some((arg) => arg === "--help" || arg === "-h" || arg.startsWith("-"))) return null;
+
+  const topicParts = normalizeTopicParts(args);
+  const topic = topicParts.join(" ").trim();
+  const helpText = HELP_TOPICS.get(topic);
+  if (!helpText) return null;
+
+  return usageAllowsExactCommand(helpText, topic) ? null : topicParts;
+}
+
+function usageAllowsExactCommand(helpText, topic) {
+  return usageCommandsFor(helpText).some((command) => usageCommandAllowsExactTopic(command, topic));
+}
+
+function usageCommandsFor(helpText) {
+  return helpText.split("\n").flatMap((line) => {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("audienti ")) return [trimmed.slice("audienti ".length)];
+
+    const oneLineUsage = trimmed.match(/^Usage:\s+audienti\s+(.+)$/);
+    return oneLineUsage ? [oneLineUsage[1]] : [];
+  });
+}
+
+function usageCommandAllowsExactTopic(command, topic) {
+  if (command === topic) return true;
+  if (!command.startsWith(`${topic} `)) return false;
+
+  const remainder = command.slice(topic.length).trimStart();
+  return remainder.startsWith("[");
+}
+
 function normalizeTopicParts(parts) {
+  if (parts[0] === "account") return ["accounts", ...parts.slice(1)];
   if (parts[0] === "plays") return ["motions", ...parts.slice(1)];
   if (parts[0] === "principals") return ["users", ...parts.slice(1)];
   if (parts[0] === "writers") return ["writer", ...parts.slice(1)];
@@ -311,6 +354,7 @@ function normalizeTopicParts(parts) {
 }
 
 function normalizeResource(resource) {
+  if (resource === "account") return "accounts";
   if (resource === "principals") return "users";
   if (resource === "writers") return "writer";
   if (resource === "company_rules" || resource === "company-rules") return "company-rules";
@@ -2000,6 +2044,10 @@ async function prospectsSequencePreview(args, context, { accountOverride } = {})
 }
 
 async function writerTestRun(args, context, { accountOverride } = {}) {
+  if (["show", "status"].includes(args[0])) {
+    return writerTestRunShow(args.slice(1), context, { accountOverride });
+  }
+
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     branch: { type: "string" },
@@ -2007,8 +2055,10 @@ async function writerTestRun(args, context, { accountOverride } = {}) {
     mode: { type: "string" },
     step: { type: "string" },
     "angle-index": { type: "string" },
-    "no-cache": { type: "boolean" },
-    "clear-cache": { type: "boolean" }
+    report: { type: "string" },
+    "timeout-seconds": { type: "string" },
+    "poll-interval-seconds": { type: "string" },
+    "no-wait": { type: "boolean" }
   });
   if (positionals.length !== 1) throw new CommandError(WRITER_TEST_RUN_USAGE);
   if (values.branch && values.branches) throw new CommandError("Choose one branch filter: use either --branch or --branches.");
@@ -2019,26 +2069,60 @@ async function writerTestRun(args, context, { accountOverride } = {}) {
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const prospectId = positionals[0];
   const branchFilter = values.branches || values.branch || "both";
-  const useCache = ["plan", "target"].includes(draftMode) && !values["no-cache"];
-  if (useCache && values["clear-cache"]) await clearWriterTestRunCache(context, { accountId, prospectId });
-  const cache = useCache ? await loadWriterTestRunCache(context, { accountId, prospectId }) : emptyWriterTestRunCache(context, { accountId, prospectId });
-  const cachedDrafts = useCache ? writerCachedDraftsForRequest(cache, branchFilter) : [];
-
-  const payload = await client.prospectSequenceExport(accountId, prospectId, compactObject({
+  const requestBody = compactObject({
     branches: branchFilter,
     angle_index: values["angle-index"],
     draft_mode: draftMode,
     target_step: values.step,
-    cached_drafts: cachedDrafts.length ? cachedDrafts : undefined
-  }));
-  if (useCache) {
-    payload.meta ||= {};
-    payload.meta.cache = writerCacheMeta(cache, cachedDrafts);
-    await persistWriterDraftsFromPayload(context, { cache, payload });
+    session_report_id: values.report
+  });
+
+  let payload;
+  try {
+    const startedPayload = await client.createProspectSequenceExportJob(accountId, prospectId, requestBody);
+    if (values["no-wait"]) {
+      if (values.json) return writeJson(context.stdout, startedPayload);
+
+      return renderWriterTestRunJobStatus(startedPayload, context, {
+        prospectId,
+        reportId: startedPayload?.report?.prefix_id || startedPayload?.report?.id
+      });
+    }
+
+    payload = await waitForProspectSequenceExportJob(client, accountId, prospectId, startedPayload, {
+      timeoutSeconds: normalizePositiveInteger(values["timeout-seconds"]) || DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS,
+      pollIntervalSeconds: normalizePositiveInteger(values["poll-interval-seconds"]) || DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS,
+      sleepImpl: context.sleep
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new CommandError(writerReportApiUnavailableMessage({ host: client.host }));
+    }
+
+    if (error instanceof ApiError && error.status === 504 && draftMode === "target") {
+      throw new CommandError(writerTestRunStepTimeoutMessage({ prospectId, branchFilter, step: values.step }));
+    }
+
+    throw error;
   }
   if (values.json) return writeJson(context.stdout, payload);
 
   renderWriterTestRun(payload, context);
+}
+
+async function writerTestRunShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(WRITER_TEST_RUN_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const [prospectId, reportId] = positionals;
+  const response = await client.prospectSequenceExportJob(accountId, prospectId, reportId);
+  if (values.json) return writeJson(context.stdout, response);
+
+  const payload = sequenceExportJobResultPayload(response);
+  if (payload) return renderWriterTestRun(payload, context);
+
+  renderWriterTestRunJobStatus(response, context, { prospectId, reportId });
 }
 
 async function runSequencePreviewCommand(args, context, { accountOverride, usageText, title }) {
@@ -2090,7 +2174,7 @@ async function prospectsSequenceExport(args, context, { accountOverride } = {}) 
 }
 
 function normalizeWriterTestRunMode(value) {
-  const normalized = String(value || "report").trim().toLowerCase();
+  const normalized = String(value || "plan").trim().toLowerCase();
   if (["report", "draft", "drafts", "all", "full"].includes(normalized)) return "all";
   if (normalized === "plan") return "plan";
   if (["step", "target"].includes(normalized)) return "target";
@@ -2098,159 +2182,20 @@ function normalizeWriterTestRunMode(value) {
   throw new CommandError("Unsupported writer test-run mode. Use report, plan, or step.");
 }
 
-function emptyWriterTestRunCache(context, { accountId, prospectId }) {
-  return {
-    version: WRITER_TEST_RUN_CACHE_VERSION,
-    account_id: accountId,
-    prospect_id: prospectId,
-    path: writerTestRunCachePath(context, { accountId, prospectId }),
-    entries: {}
-  };
+function writerTestRunStepTimeoutMessage({ prospectId, branchFilter, step }) {
+  return [
+    `Timed out while drafting writer step ${display(step)} on branch ${display(branchFilter)}.`,
+    "The timeline command is working; this timeout happened during the selected writer generation, not account selection or API connectivity.",
+    `Inspect the timeline with \`audienti writer test-run ${prospectId}\`, then retry the row or use its step key, for example \`--step connection_request\`.`
+  ].join(" ");
 }
 
-async function loadWriterTestRunCache(context, { accountId, prospectId }) {
-  const cache = emptyWriterTestRunCache(context, { accountId, prospectId });
-
-  try {
-    const parsed = JSON.parse(await readFile(cache.path, "utf8"));
-    if (parsed?.version !== WRITER_TEST_RUN_CACHE_VERSION) return cache;
-
-    return {
-      ...cache,
-      entries: parsed.entries && typeof parsed.entries === "object" ? parsed.entries : {}
-    };
-  } catch (error) {
-    if (error.code === "ENOENT") return cache;
-    if (error instanceof SyntaxError) return cache;
-
-    throw error;
-  }
-}
-
-async function clearWriterTestRunCache(context, { accountId, prospectId }) {
-  await rm(writerTestRunCachePath(context, { accountId, prospectId }), { force: true });
-}
-
-function writerTestRunCachePath(context, { accountId, prospectId }) {
-  const dir = context.env.AUDIENTI_WRITER_TEST_RUN_CACHE_DIR || join(context.cwd, "tmp", "writer-test-run-cache");
-  return join(dir, `${safeCacheSegment(accountId)}-${safeCacheSegment(prospectId)}.json`);
-}
-
-function safeCacheSegment(value) {
-  return String(value || "unknown").replace(/[^a-zA-Z0-9_.-]/g, "_");
-}
-
-function writerCachedDraftsForRequest(cache, branchFilter) {
-  const branchKeys = writerRequestedBranchKeys(branchFilter);
-  return Object.values(cache.entries || {})
-    .filter((entry) => branchKeys.includes(entry.branch))
-    .filter((entry) => entry.key && (entry.body || entry.text || entry.subject || writerCacheQualityFailure(entry)))
-    .map((entry) => compactObject({
-      branch: entry.branch,
-      key: entry.key,
-      stage: entry.stage,
-      channel: entry.channel,
-      platform: entry.platform,
-      message_mode: entry.message_mode,
-      subject: entry.subject,
-      body: entry.body,
-      text: entry.text,
-      status: entry.status,
-      quality_codes: entry.quality_codes,
-      blank_reason: entry.blank_reason,
-      writer_path: entry.writer_path,
-      generated_at: entry.generated_at,
-      writer_engine: entry.writer_engine,
-      target: entry.target,
-      metadata: entry.metadata
-    }));
-}
-
-function writerRequestedBranchKeys(branchFilter) {
-  const values = String(branchFilter || "both").split(",").map((value) => value.trim()).filter(Boolean);
-  if (values.length === 0 || values.includes("both")) return ["no_accept", "accepted"];
-
-  return values.map((value) => {
-    const normalized = value.replaceAll("-", "_");
-    if (["default", "no_accept", "not_connected"].includes(normalized)) return "no_accept";
-    if (normalized === "accepted") return "accepted";
-    return normalized;
-  });
-}
-
-function writerCacheMeta(cache, cachedDrafts) {
-  return {
-    enabled: true,
-    path: cache.path,
-    entry_count: Object.keys(cache.entries || {}).length,
-    sent_draft_count: cachedDrafts.length
-  };
-}
-
-async function persistWriterDraftsFromPayload(context, { cache, payload }) {
-  const entries = { ...(cache.entries || {}) };
-  let changed = false;
-
-  for (const branch of Array.isArray(payload?.branches) ? payload.branches : []) {
-    const branchKey = String(branch?.key || "").trim();
-    if (!branchKey) continue;
-
-    for (const step of Array.isArray(branch?.steps) ? branch.steps : []) {
-      const entry = writerCacheEntryFromStep(step, { branchKey, generatedAt: branch.generated_at || payload?.generated_at });
-      if (!entry) continue;
-
-      entries[writerCacheEntryKey(entry)] = entry;
-      changed = true;
-    }
-  }
-
-  if (!changed) return;
-
-  const nextCache = {
-    version: WRITER_TEST_RUN_CACHE_VERSION,
-    account_id: cache.account_id,
-    prospect_id: cache.prospect_id,
-    updated_at: new Date().toISOString(),
-    entries
-  };
-  await mkdir(dirname(cache.path), { recursive: true });
-  await writeFile(cache.path, `${JSON.stringify(nextCache, null, 2)}\n`, "utf8");
-  cache.entries = entries;
-}
-
-function writerCacheEntryFromStep(step, { branchKey, generatedAt }) {
-  if (step?.kind !== "message") return null;
-  if (!step.key) return null;
-  if (!(step.body || step.text || step.subject || writerCacheQualityFailure(step))) return null;
-  if (step.status === "planned" || step.status === "unavailable" || step.status === "error") return null;
-
-  return compactObject({
-    branch: branchKey,
-    key: step.key,
-    stage: step.stage,
-    channel: step.channel,
-    platform: step.platform,
-    message_mode: step.message_mode,
-    subject: step.subject,
-    body: step.body,
-    text: step.text,
-    status: step.status,
-    quality_codes: Array.isArray(step.quality_codes) ? step.quality_codes.filter(Boolean) : undefined,
-    blank_reason: step.blank_reason,
-    writer_path: step.writer_path,
-    generated_at: step.generated_at || generatedAt || new Date().toISOString(),
-    writer_engine: step.writer_engine || step?.metadata?.writer_engine,
-    target: step.target,
-    metadata: step.metadata
-  });
-}
-
-function writerCacheEntryKey(entry) {
-  return `${entry.branch}:${entry.key}`;
-}
-
-function writerCacheQualityFailure(entry) {
-  return String(entry?.status || "") === "quality_failure";
+function writerReportApiUnavailableMessage({ host }) {
+  return [
+    `The configured Audienti API at ${host} does not support report-backed writer sessions yet.`,
+    "This CLI expects the /sequence_export_jobs writer report API.",
+    "Use a local app server running this branch and re-auth with `audienti auth token <token> --host <url>`, or deploy this branch before pointing the CLI at production."
+  ].join(" ");
 }
 
 async function prospectsImport(args, context, { accountOverride } = {}) {
@@ -3260,6 +3205,79 @@ function importFinished(payload) {
   return payload?.ready === true || payload?.status === "completed" || payload?.status === "failed";
 }
 
+async function waitForProspectSequenceExportJob(client, accountId, prospectId, startedPayload, {
+  timeoutSeconds = DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS,
+  pollIntervalSeconds = DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS,
+  sleepImpl = sleep
+} = {}) {
+  const firstResult = sequenceExportJobResultPayload(startedPayload);
+  if (firstResult) return firstResult;
+
+  const reportId = startedPayload?.report?.prefix_id || startedPayload?.report?.id;
+  if (!reportId) {
+    throw new CommandError("Writer test run did not return a sequence export job id.");
+  }
+  if (sequenceExportJobFailed(startedPayload)) {
+    throw new CommandError(writerTestRunJobFailureMessage(startedPayload, { reportId }));
+  }
+
+  const timeoutAt = Date.now() + (timeoutSeconds * 1000);
+  let latest = startedPayload;
+
+  while (Date.now() < timeoutAt) {
+    await sleepImpl(pollIntervalSeconds * 1000);
+    latest = await client.prospectSequenceExportJob(accountId, prospectId, reportId);
+    const result = sequenceExportJobResultPayload(latest);
+    if (result) return result;
+    if (sequenceExportJobFailed(latest)) {
+      throw new CommandError(writerTestRunJobFailureMessage(latest, { reportId }));
+    }
+  }
+
+  throw new CommandError(`Timed out after ${timeoutSeconds} seconds waiting for writer test run ${reportId}. The server job may still finish. Check it with: audienti writer test-run show ${prospectId} ${reportId}`);
+}
+
+function sequenceExportJobResultPayload(payload) {
+  if (payload?.report?.status !== "completed") return null;
+
+  const result = payload?.content?.payload;
+  if (!result || typeof result !== "object") return null;
+
+  result.meta ||= {};
+  result.meta.report_id = payload?.report?.prefix_id || payload?.report?.id || result.meta.report_id;
+  return result;
+}
+
+function sequenceExportJobFailed(payload) {
+  const status = payload?.report?.status || payload?.run?.status;
+  return status === "failed" || status === "canceled";
+}
+
+function writerTestRunJobFailureMessage(payload, { reportId }) {
+  const reason = payload?.content?.flat_payload?.error || payload?.error || "The sequence export job failed.";
+  return `Writer test run ${reportId} failed: ${reason}`;
+}
+
+function renderWriterTestRunJobStatus(payload, context, { prospectId, reportId }) {
+  const report = payload?.report || {};
+  const run = payload?.run || {};
+  const status = report.status || run.status || "unknown";
+
+  writeLine(context.stdout, "Writer test run job");
+  writeLine(context.stdout, `Report: ${display(report.prefix_id || reportId)} (${display(status)})`);
+  if (report.stage) writeLine(context.stdout, `Stage: ${display(report.stage)}`);
+  if (run.status) writeLine(context.stdout, `Run: ${display(run.status)}`);
+  if (report.updated_at) writeLine(context.stdout, `Updated: ${display(report.updated_at)}`);
+
+  const error = payload?.content?.flat_payload?.error || payload?.error;
+  if (error) {
+    writeLine(context.stdout, `Error: ${display(error)}`);
+    return;
+  }
+
+  writeLine(context.stdout, `Not complete yet. Check later: audienti writer test-run show ${prospectId} ${report.prefix_id || reportId}`);
+}
+
 function parseProspectTotalLimit(value) {
   const parsed = normalizePositiveInteger(value);
   if (parsed === null) return MAX_ALL_PROSPECTS;
@@ -4035,6 +4053,7 @@ function renderWriterTestRun(payload, context) {
 
   writeLine(context.stdout, "Writer campaign simulator");
   writeLine(context.stdout, `Prospect: ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)})`);
+  if (payload?.meta?.report_id) writeLine(context.stdout, `Report: ${display(payload.meta.report_id)}`);
   if (payload?.context?.source) writeLine(context.stdout, `Context: ${payload.context.source}`);
   if (payload?.context?.message) writeLine(context.stdout, payload.context.message);
   if (payload?.context?.motion_name) writeLine(context.stdout, `Motion: ${payload.context.motion_name}`);
@@ -4042,10 +4061,6 @@ function renderWriterTestRun(payload, context) {
   if (payload?.context?.offer_name) writeLine(context.stdout, `Offer: ${payload.context.offer_name}`);
   writeLine(context.stdout, `Mode: ${display(draftMode)}`);
   if (targetStep) writeLine(context.stdout, `Target step: ${display(targetStep)}`);
-  if (payload?.meta?.cache?.enabled) {
-    writeLine(context.stdout, `Cache: ${display(payload.meta.cache.path)}`);
-    writeLine(context.stdout, `Cached drafts sent: ${display(payload.meta.cache.sent_draft_count || 0)}`);
-  }
   writeLine(context.stdout, `Start: ${isoDate(currentDate(context))}`);
   writeLine(context.stdout, "DATE: step execution date; for WAIT rows, the wait clears on that date.");
   writeLine(context.stdout, "Scenario: simulate the full path if the prospect does not reply.");
@@ -7318,10 +7333,11 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Run a writer campaign test for one prospect: resolve their current context, simulate the full no-reply path, and draft each message step.",
+    "  Run a report-backed writer session for one prospect: resolve current context, build the no-reply timeline, and optionally draft selected rows.",
     "",
     "Commands:",
     "  audienti writer test-run <prsp_id>",
+    "  audienti writer test-run show <prsp_id> <rprt_id>",
     "",
     "Alias:",
     "  audienti writers test-run <prsp_id>"
@@ -7334,26 +7350,60 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Run the prospect-scoped writer test run for a single prospect.",
+    "  Run or continue the prospect-scoped writer session report for a single prospect.",
+    "",
+    "Commands:",
+    "  audienti writer test-run <prsp_id>",
+    "  audienti writer test-run show <prsp_id> <rprt_id>",
     "",
     "Behavior:",
-    "  Uses the same Prospects::SequencePreview simulator as the app, resolves the prospect's motion/agent/ICP/offer context, runs no-reply branches, and returns the full campaign path with actions, waits, channel changes, drafted message bodies, and terminal disposition.",
+    "  Creates or updates a server report for the writing session. The default plan mode writes the timeline to that report without drafting every message. Step mode drafts one selected row against the same report when --report <rprt_id> is passed. Drafting every message requires --mode report.",
+    "",
+    "Local workflow:",
+    "  1. Start the local app server for the workspace, for example: direnv exec . bin/dev",
+    "  2. Confirm bin/cli is pointed at the local API: bin/cli config list --json",
+    "  3. Start or reopen the timeline report: bin/cli writer test-run <prsp_id>",
+    "  4. Save the printed Report id, then draft one row into that same session:",
+    "     bin/cli writer test-run <prsp_id> --mode step --branch no-accept --step <row_number|step_key> --report <rprt_id>",
+    "  5. To launch work and come back later, add --no-wait, then inspect it with:",
+    "     bin/cli writer test-run show <prsp_id> <rprt_id>",
+    "",
+    "Report workflow:",
+    "  The report is the session cache. Plan mode writes the timeline to the report. Step mode reads prior drafted rows from the same report and writes the selected row back to it. Reports expire after the server retention window.",
     "",
     "Options:",
-    "  --mode <mode>    report drafts every message, plan skips drafting, step drafts one selected step",
+    "  --mode <mode>    plan skips drafting, report drafts every message, step drafts one selected step",
     "  --branch <branch>  Optional branch filter: both | no-accept | accepted",
     "  --step <step_key|row_number>  Required with --mode step. Row numbers come from the # column.",
-    "  --no-cache       Plan/step modes ignore locally cached simulator drafts",
-    "  --clear-cache    Plan/step modes clear locally cached simulator drafts before running",
+    "  --report <rprt_id>  Continue an existing writer session report",
+    "  --no-wait       Queue the writer report job, print the report id, and exit",
+    "  --timeout-seconds <n>  Wait budget before the command fails. Default: 180",
+    "  --poll-interval-seconds <n>  Status poll interval. Default: 2",
     "",
     "Output shape:",
     "  branches[].key: no_accept | accepted",
     "  branches[].steps[]: ordered wait/action/message/terminal steps for that simulated path",
-    "  branches[].steps[].body: draft copy for message steps when the writer can generate one",
+    "  branches[].steps[].body: draft copy for message steps only in report mode, step mode, or when already present in the report",
     "  branches[].summary: channel sequence, touch counts, duration, terminal disposition",
     "",
     "API:",
-    "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_export.json"
+    "  POST /api/v1/accounts/:account_id/prospects/:id/sequence_export_jobs.json, then poll GET /api/v1/accounts/:account_id/prospects/:id/sequence_export_jobs/:job_id.json"
+  ].join("\n")],
+
+  ["writer test-run show", [
+    "Usage:",
+    `  ${WRITER_TEST_RUN_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Fetch a writer session report by report id and render the saved output when it is complete.",
+    "",
+    "Behavior:",
+    "  Completed jobs render the same campaign simulator output as the original test-run command. Pending or processing jobs print report status and the check-later command. Failed jobs print the persisted failure reason.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/prospects/:id/sequence_export_jobs/:job_id.json"
   ].join("\n")],
 
   ["prospects sequence-export", [
