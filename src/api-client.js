@@ -1,11 +1,12 @@
 export const DEFAULT_HOST = "https://app.audienti.com";
 
 export class ApiError extends Error {
-  constructor(message, { status, body } = {}) {
+  constructor(message, { status, body, cause } = {}) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.body = body;
+    this.cause = cause;
   }
 }
 
@@ -433,6 +434,17 @@ export class AudientiClient {
     });
   }
 
+  createProspectSequenceExportJob(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sequence_export_jobs"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  prospectSequenceExportJob(accountId, prospectId, jobId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sequence_export_jobs", jobId]));
+  }
+
   addProspectNote(accountId, prospectId, body) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "add_note"]), {
       method: "POST",
@@ -516,11 +528,18 @@ export class AudientiClient {
   }
 
   async requestJson(path, { method = "GET", body } = {}) {
-    const response = await this.fetchImpl(new URL(path, `${this.host}/`), {
-      method,
-      headers: this.headers(body),
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
+    const url = new URL(path, `${this.host}/`);
+    let response;
+
+    try {
+      response = await this.fetchImpl(url, {
+        method,
+        headers: this.headers(body),
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+    } catch (error) {
+      throw new ApiError(networkErrorMessage(url, error), { cause: error });
+    }
 
     const responseBody = await parseBody(response);
 
@@ -607,4 +626,14 @@ function errorMessage(status, body) {
   }
 
   return `Audienti API request failed with HTTP ${status}.`;
+}
+
+function networkErrorMessage(url, error) {
+  const detail = error?.message ? ` (${error.message})` : "";
+  return [
+    `Unable to reach Audienti API at ${url.origin}.`,
+    "Check that the app is running and the configured host is correct.",
+    "For workspace-local CLI auth, start the workspace app server first or pass `--host <url>` to `auth token`.",
+    detail
+  ].join(" ").trim();
 }
