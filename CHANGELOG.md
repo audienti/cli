@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-07-21
+
+### Changed
+
+- Expose authoritative delivery state, blocking reason, provider error, and retry timing for ContentOps comment tasks.
+
 ## [0.1.22] - 2026-07-21
 
 ### Added
