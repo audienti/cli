@@ -1097,7 +1097,7 @@ test("users activity fetches a user activity feed", async () => {
 
     const stdout = captureStream();
     const fetch = createFetch((url, options) => {
-      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/operations/users/me/activity.json?window=7d&platform=linkedin&limit=5&page=2");
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/operations/users/me/activity.json?mode=related&window=7d&platform=linkedin&limit=5&page=2");
       assert.equal(options.headers.Authorization, "Bearer saved-token");
       return jsonResponse({
         account_user: { id: 42, name: "User One", email: "one@example.com" },
@@ -1123,6 +1123,8 @@ test("users activity fetches a user activity feed", async () => {
       "users",
       "activity",
       "me",
+      "--mode",
+      "related",
       "--window",
       "7d",
       "--platform",

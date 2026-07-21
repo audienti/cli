@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-07-21
+
+### Added
+
+- Add `related` mode to `audienti users activity` for inspecting human work performed through the selected user's connected accounts.
+
 ## [0.1.21] - 2026-07-20
 
 ### Changed

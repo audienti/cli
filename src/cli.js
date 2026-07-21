@@ -51,7 +51,7 @@ const COMPANY_RULES_CREATE_USAGE = "Usage: audienti company-rules create (--link
 const COMPANY_RULES_UPDATE_USAGE = "Usage: audienti company-rules update <rule_id> [--linkedin-url <url>] [--domain <domain>] [--disposition <monitor|nurture|not_fit|reject>] [--name <text>] [--user <account_user_id|email|me|none>] [--note <text>] [--json] [--account <acct_id>]";
 const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_id> [--json] [--account <acct_id>]";
 const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
-const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
+const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage|related>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
 const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
@@ -5679,7 +5679,7 @@ const HELP_TOPICS = new Map([
     "",
     "Input shape:",
     "  account_user_id: integer account user id, or me for the saved default account user when configured",
-    "  mode: actor | account_usage",
+    "  mode: actor | account_usage | related",
     "  window: 24h | 7d | 30d",
     "  platform: linkedin | email | gmail",
     "",
