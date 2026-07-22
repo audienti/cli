@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-07-22
+
+### Changed
+
+- Preserve operator outcome source metadata and return the authoritative disposition event for API nurture actions.
+
 ## [0.1.23] - 2026-07-21
 
 ### Changed

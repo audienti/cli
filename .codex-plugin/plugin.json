@@ -1,6 +1,6 @@
 {
   "name": "audienti-cli",
-  "version": "0.1.23",
+  "version": "0.1.24",
   "description": "Use the Audienti production API through a local, agent-first CLI.",
   "author": {
     "name": "Audienti",
