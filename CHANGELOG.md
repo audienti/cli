@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-07-22
+
+### Added
+
+- Add `bad_data_404` support to prospect disposition commands.
+
 ## [0.1.24] - 2026-07-22
 
 ### Changed

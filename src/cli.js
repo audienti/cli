@@ -30,15 +30,16 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
 ];
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
 const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "paused", "archived"]);
-const PROSPECT_STATUS_VALUES = new Set(["active", "nurture", "non_responsive", "not_fit", "rejected"]);
+const PROSPECT_INACTIVE_REASON_VALUES = new Set(["nurture", "non_responsive", "not_fit", "bad_data_404"]);
+const PROSPECT_STATUS_VALUES = new Set(["active", ...PROSPECT_INACTIVE_REASON_VALUES, "rejected"]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
-const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected> [--json] [--account <acct_id>]";
+const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json] [--account <acct_id>]";
 const PROSPECTS_REJECT_USAGE = "Usage: audienti prospects reject <prsp_id> [--json] [--account <acct_id>]";
-const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit>] [--json] [--account <acct_id>]";
+const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit|bad_data_404>] [--json] [--account <acct_id>]";
 const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_LOCK_USAGE = "Usage: audienti prospects lock <prsp_id> [--note <text>] [--kind <protected_relationship|company_policy>] [--json] [--account <acct_id>]";
 const PROSPECTS_UNLOCK_USAGE = "Usage: audienti prospects unlock <prsp_id> [--json] [--account <acct_id>]";
@@ -1849,7 +1850,12 @@ async function prospectsDisposition(action, args, context, { accountOverride } =
     ...jsonOptions(),
     reason: { type: "string" }
   });
-  if (positionals.length !== 1 || (action !== "nurture" && values.reason)) {
+  const inactiveReason = values.reason ? String(values.reason).trim() : undefined;
+  if (
+    positionals.length !== 1 ||
+    (action !== "nurture" && inactiveReason) ||
+    (action === "nurture" && inactiveReason && !PROSPECT_INACTIVE_REASON_VALUES.has(inactiveReason))
+  ) {
     throw new CommandError(usageText);
   }
 
@@ -1859,7 +1865,7 @@ async function prospectsDisposition(action, args, context, { accountOverride } =
     await client.rejectProspect(accountId, prospectId) :
     action === "restore" ?
       await client.restoreProspect(accountId, prospectId) :
-      await client.nurtureProspect(accountId, prospectId, compactObject({ inactive_reason: values.reason }));
+      await client.nurtureProspect(accountId, prospectId, compactObject({ inactive_reason: inactiveReason }));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectDisposition(payload, context, { action });
@@ -5372,7 +5378,7 @@ const HELP_TOPICS = new Map([
     "    audienti prospects check [filters]",
     "    audienti prospects show <prsp_id>",
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
-    "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected>",
+    "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected>",
     "    audienti prospects lock <prsp_id> [--note <text>]",
     "    audienti prospects reject <prsp_id>",
     "    audienti prospects nurture <prsp_id> [--reason <reason>]",
@@ -6874,7 +6880,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects check [--json|--csv] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
-    "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|rejected> [--json]",
+    "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json]",
     "  audienti prospects reject <prsp_id> [--json]",
     "  audienti prospects nurture <prsp_id> [--reason <reason>] [--json]",
     "  audienti prospects restore <prsp_id> [--json]",
@@ -7032,10 +7038,10 @@ const HELP_TOPICS = new Map([
     "  Set the account-scoped prospect disposition directly, without routing through a motion.",
     "",
     "Input shape:",
-    "  status: active | nurture | non_responsive | not_fit | rejected",
+    "  status: active | nurture | non_responsive | not_fit | bad_data_404 | rejected",
     "",
     "Behavior:",
-    "  active restores the prospect, rejected uses the rejection/DNC path, and nurture/non_responsive/not_fit use the shared inactive disposition path.",
+    "  active restores the prospect, rejected uses the rejection/DNC path, and nurture/non_responsive/not_fit/bad_data_404 use the shared inactive disposition path.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospects/:id/restore.json",
@@ -7079,7 +7085,7 @@ const HELP_TOPICS = new Map([
     "  Move one prospect to an inactive nurture disposition through the shared disposition path.",
     "",
     "Input shape:",
-    "  reason: nurture | non_responsive | not_fit. Defaults to nurture.",
+    "  reason: nurture | non_responsive | not_fit | bad_data_404. Defaults to nurture.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospects/:id/nurture.json"

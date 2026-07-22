@@ -57,7 +57,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
   assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
-  assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status <active\|nurture\|non_responsive\|not_fit\|rejected>/);
+  assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status <active\|nurture\|non_responsive\|not_fit\|bad_data_404\|rejected>/);
   assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
@@ -520,7 +520,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["prospects", "set-status", "help"],
-      expected: [/Usage:\n  audienti prospects set-status <prsp_id>/, /active restores the prospect/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
+      expected: [/Usage:\n  audienti prospects set-status <prsp_id>/, /bad_data_404/, /active restores the prospect/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
     },
     {
       args: ["prospects", "reject", "help"],
@@ -528,7 +528,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["prospects", "nurture", "help"],
-      expected: [/Usage:\n  audienti prospects nurture <prsp_id>/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
+      expected: [/Usage:\n  audienti prospects nurture <prsp_id>/, /bad_data_404/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
     },
     {
       args: ["prospects", "restore", "help"],
@@ -3315,11 +3315,11 @@ test("prospects disposition commands call shared account endpoints", async () =>
 
       if (url.pathname === "/api/v1/accounts/acct_one/prospects/prsp_one/nurture.json") {
         assert.equal(options.method, "POST");
-        assert.deepEqual(JSON.parse(options.body), { inactive_reason: "non_responsive" });
+        assert.deepEqual(JSON.parse(options.body), { inactive_reason: "bad_data_404" });
         return jsonResponse({
           status: "nurtured",
           prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
-          account_prospect: { status: "inactive", inactive_reason: "non_responsive" },
+          account_prospect: { status: "inactive", inactive_reason: "bad_data_404" },
           system_list: { prefix_id: "list_inactive", name: "Inactive" }
         });
       }
@@ -3343,10 +3343,10 @@ test("prospects disposition commands call shared account endpoints", async () =>
     assert.match(stdout.output, /List: Rejected \(list_rejected\)/);
 
     stdout.output = "";
-    exitCode = await run(["prospects", "nurture", "prsp_one", "--reason", "non_responsive"], { env, fetch, stdout });
+    exitCode = await run(["prospects", "nurture", "prsp_one", "--reason", "bad_data_404"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Moved to nurture prospect Pat Prospect \(prsp_one\)\./);
-    assert.match(stdout.output, /Inactive reason: non_responsive/);
+    assert.match(stdout.output, /Inactive reason: bad_data_404/);
 
     stdout.output = "";
     exitCode = await run(["prospects", "restore", "prsp_one"], { env, fetch, stdout });
@@ -3383,6 +3383,27 @@ test("prospects disposition commands support json output", async () => {
   });
 });
 
+test("prospects nurture rejects unsupported inactive reasons without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("reason validation must happen before API calls");
+    });
+
+    const exitCode = await run(["prospects", "nurture", "prsp_one", "--reason", "paused"], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Usage: audienti prospects nurture <prsp_id>/);
+  });
+});
+
 test("prospects set-status maps cleanup statuses to shared disposition endpoints", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -3398,10 +3419,11 @@ test("prospects set-status maps cleanup statuses to shared disposition endpoints
       requests.push({ path: url.pathname, method: options.method, body: options.body ? JSON.parse(options.body) : undefined });
 
       if (url.pathname.endsWith("/nurture.json")) {
+        const body = JSON.parse(options.body);
         return jsonResponse({
           status: "nurtured",
           prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
-          account_prospect: { status: "inactive", inactive_reason: "not_fit" },
+          account_prospect: { status: "inactive", inactive_reason: body.inactive_reason },
           system_list: { prefix_id: "list_inactive", name: "Inactive" }
         });
       }
@@ -3431,6 +3453,12 @@ test("prospects set-status maps cleanup statuses to shared disposition endpoints
     assert.match(stdout.output, /Inactive reason: not_fit/);
 
     stdout.output = "";
+    exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "bad_data_404"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Set status for prospect Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Inactive reason: bad_data_404/);
+
+    stdout.output = "";
     exitCode = await run(["prospects", "set-status", "prsp_one", "--status", "rejected"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Set status for prospect Pat Prospect \(prsp_one\)\./);
@@ -3445,6 +3473,11 @@ test("prospects set-status maps cleanup statuses to shared disposition endpoints
         path: "/api/v1/accounts/acct_one/prospects/prsp_one/nurture.json",
         method: "POST",
         body: { inactive_reason: "not_fit" }
+      },
+      {
+        path: "/api/v1/accounts/acct_one/prospects/prsp_one/nurture.json",
+        method: "POST",
+        body: { inactive_reason: "bad_data_404" }
       },
       {
         path: "/api/v1/accounts/acct_one/prospects/prsp_one/reject.json",
