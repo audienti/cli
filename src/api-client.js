@@ -180,6 +180,23 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["tags"]));
   }
 
+  tasks(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tasks"], query));
+  }
+
+  createTask(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tasks"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  completeTask(accountId, taskId) {
+    return this.requestJson(accountPath(accountId, ["tasks", taskId, "complete"]), {
+      method: "PATCH"
+    });
+  }
+
   lists(accountId) {
     return this.requestJson(accountPath(accountId, ["lists"]));
   }
@@ -553,6 +570,13 @@ export class AudientiClient {
 
   analyticsDashboard(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["analytics", "dashboard"], query));
+  }
+
+  createAnalyticsCohortList(accountId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "cohort_lists"]), {
+      method: "POST",
+      body
+    });
   }
 
   async requestJson(path, { method = "GET", body } = {}) {

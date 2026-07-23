@@ -4,6 +4,14 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-07-23
+
+### Added
+
+- Add `audienti analytics cohorts create-list` to materialize event-date cohorts as reusable analytics list filters.
+- Add `--list <list_id>` to prospects, dashboard, users, and prospect cohort-analysis analytics commands.
+- Add `audienti tasks list`, `audienti tasks manage`, `audienti tasks add`, and `audienti tasks complete` for plain operator reminders.
+
 ## [0.1.28] - 2026-07-23
 
 ### Added

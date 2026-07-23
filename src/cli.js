@@ -57,6 +57,9 @@ const COMPANY_RULES_CREATE_USAGE = "Usage: audienti company-rules create (--link
 const COMPANY_RULES_UPDATE_USAGE = "Usage: audienti company-rules update <rule_id> [--linkedin-url <url>] [--domain <domain>] [--disposition <monitor|nurture|not_fit|reject>] [--name <text>] [--user <account_user_id|email|me|none>] [--note <text>] [--json] [--account <acct_id>]";
 const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_id> [--json] [--account <acct_id>]";
 const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
+const TASKS_LIST_USAGE = "Usage: audienti tasks list [--status <open|completed>] [--limit <n>] [--json] [--account <acct_id>]";
+const TASKS_ADD_USAGE = "Usage: audienti tasks add --title <text> --due <time> [--prospect <prsp_id>] [--list <list_id>] [--assigned-user <id|me>] [--notes <text>] [--json] [--account <acct_id>]";
+const TASKS_COMPLETE_USAGE = "Usage: audienti tasks complete <ptsk_id> [--json] [--account <acct_id>]";
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage|related>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
@@ -87,10 +90,11 @@ const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json]
 const ICPS_REMOVE_TAG_USAGE = "Usage: audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_ADD_TAG_USAGE = "Usage: audienti lists add-tag <list_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_REMOVE_TAG_USAGE = "Usage: audienti lists remove-tag <list_id> <tag> [--json] [--account <acct_id>]";
-const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
-const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
-const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
-const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
+const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
 const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
@@ -208,6 +212,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "company-rules" && action === "apply") return companyRulesApply(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
+  if (normalizedResource === "tasks" && ["list", "manage"].includes(action)) return tasksList(rest, context, { accountOverride });
+  if (normalizedResource === "tasks" && action === "add") return tasksAdd(rest, context, { accountOverride });
+  if (normalizedResource === "tasks" && action === "complete") return tasksComplete(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "list") return listsList(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "create") return listsCreate(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "show") return listsShow(rest, context, { accountOverride });
@@ -281,6 +288,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["dashboard", "campaign", "campaigns"].includes(action)) return analyticsDashboard(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["cohorts", "cohort"].includes(action)) return analyticsCohorts(rest, context, { accountOverride });
 
   throw new CommandError(usage(), { exitCode: resource ? 1 : 0 });
 }
@@ -1074,6 +1082,55 @@ async function tagsShow(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderTagDetails(payload, context);
+}
+
+async function tasksList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, taskListOptions());
+  if (positionals.length > 0) throw new CommandError(TASKS_LIST_USAGE);
+  validateTaskStatus(values.status);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.tasks(accountId, compactObject({
+    status: values.status,
+    limit: values.limit ? boundedListLimit(values.limit) : undefined
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderTasks(payload, context);
+}
+
+async function tasksAdd(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, taskAddOptions());
+  if (positionals.length > 0 || !values.title || !values.due) throw new CommandError(TASKS_ADD_USAGE);
+  if (values.prospect && values.list) throw new CommandError("Use either --prospect or --list, not both.");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const task = compactObject({
+    title: values.title,
+    due_at: values.due,
+    notes: values.notes,
+    prospect_id: values.prospect,
+    list_id: values.list,
+    assignee_account_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride })
+  });
+  const payload = await client.createTask(accountId, { task });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Created task ${display(payload?.prefix_id || payload?.id)}.`);
+  writeLine(context.stdout, `Title: ${display(payload?.title)}`);
+  if (payload?.notes) writeLine(context.stdout, `Description: ${payload.notes}`);
+  writeLine(context.stdout, `Due: ${display(payload?.due_at, "-")} | Association: ${taskAssociationLabel(payload)}`);
+}
+
+async function tasksComplete(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(TASKS_COMPLETE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.completeTask(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Completed task ${display(payload?.prefix_id || payload?.id || positionals[0])}.`);
 }
 
 async function listsCreate(args, context, { accountOverride } = {}) {
@@ -2608,6 +2665,7 @@ async function analyticsProspectsCohortAnalysis(args, context, { accountOverride
     weeks: { type: "string" },
     window: { type: "string" },
     motion: { type: "string" },
+    list: { type: "string" },
     provenance: { type: "string" },
     user: { type: "string" }
   });
@@ -2623,6 +2681,7 @@ async function analyticsProspectsCohortAnalysis(args, context, { accountOverride
       window: values.window,
       account_user_id: resolveAccountUserId(values.user, config, { accountOverride }),
       motion_id: values.motion,
+      list_id: values.list,
       provenance: values.provenance,
       cohort_start: cohort.start_date,
       cohort_end: cohort.end_date
@@ -2635,6 +2694,7 @@ async function analyticsProspectsCohortAnalysis(args, context, { accountOverride
     weeks,
     window: values.window || "24h",
     motion: rows.find((row) => row.motion)?.motion || motionPayload(values.motion),
+    list: rows.find((row) => row.list)?.list || listPayload(values.list),
     provenance: rows.find((row) => row.provenance)?.provenance || provenancePayload(values.provenance),
     account_user: rows.find((row) => row.account_user)?.account_user || null,
     cohorts: rows
@@ -2689,6 +2749,33 @@ async function analyticsDashboard(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsDashboard(payload, context);
+}
+
+async function analyticsCohorts(args, context, { accountOverride } = {}) {
+  const action = args[0];
+  if (action !== "create-list") throw new CommandError(ANALYTICS_COHORT_LIST_USAGE);
+
+  const { values, positionals } = parseCommandArgs(args.slice(1), analyticsCohortListOptions());
+  if (positionals.length > 0 || !values.name || !values.start || !values.end) {
+    throw new CommandError(ANALYTICS_COHORT_LIST_USAGE);
+  }
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createAnalyticsCohortList(accountId, compactObject({
+    name: values.name,
+    start_date: values.start,
+    end_date: values.end,
+    event_type: values.event || "connection_request_sent",
+    account_user_id: resolveAccountUserId(values.user, config, { accountOverride }),
+    note_mode: values["note-mode"],
+    motion_id: values.motion,
+    offer_id: values.offer,
+    icp_id: values.icp,
+    play_tag: values["play-tag"] || values.tag
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsCohortList(payload, context);
 }
 
 function parseCommandArgs(args, options) {
@@ -2772,6 +2859,31 @@ function boundedListLimit(value) {
   if (!Number.isFinite(parsed) || parsed < 1) throw new CommandError("--limit must be a positive integer.");
 
   return Math.min(parsed, API_MAX_LIST_LIMIT);
+}
+
+function taskListOptions() {
+  return {
+    ...jsonOptions(),
+    status: { type: "string" },
+    limit: { type: "string" }
+  };
+}
+
+function taskAddOptions() {
+  return {
+    ...jsonOptions(),
+    title: { type: "string" },
+    due: { type: "string" },
+    prospect: { type: "string" },
+    list: { type: "string" },
+    "assigned-user": { type: "string" },
+    notes: { type: "string" }
+  };
+}
+
+function validateTaskStatus(status) {
+  if (!status) return;
+  if (!["open", "completed"].includes(status)) throw new CommandError("--status must be open or completed.");
 }
 
 function operatorFilterOptions(extra = {}) {
@@ -2875,6 +2987,7 @@ function analyticsProspectsOptions() {
     "cohort-start": { type: "string" },
     "cohort-end": { type: "string" },
     motion: { type: "string" },
+    list: { type: "string" },
     provenance: { type: "string" }
   };
 }
@@ -2889,6 +3002,7 @@ function analyticsUsersOptions() {
     "cohort-start": { type: "string" },
     "cohort-end": { type: "string" },
     motion: { type: "string" },
+    list: { type: "string" },
     provenance: { type: "string" },
     platform: { type: "string" },
     channel: { type: "string" }
@@ -2903,9 +3017,27 @@ function analyticsDashboardOptions() {
     "play-tag": { type: "string" },
     tag: { type: "string" },
     motion: { type: "string" },
+    list: { type: "string" },
     offer: { type: "string" },
     icp: { type: "string" },
     user: { type: "string" }
+  };
+}
+
+function analyticsCohortListOptions() {
+  return {
+    ...jsonOptions(),
+    name: { type: "string" },
+    start: { type: "string" },
+    end: { type: "string" },
+    event: { type: "string" },
+    user: { type: "string" },
+    "note-mode": { type: "string" },
+    motion: { type: "string" },
+    offer: { type: "string" },
+    icp: { type: "string" },
+    "play-tag": { type: "string" },
+    tag: { type: "string" }
   };
 }
 
@@ -2915,6 +3047,7 @@ function analyticsQuery(values, config = {}, { accountOverride } = {}) {
     cohort_start: values["cohort-start"],
     cohort_end: values["cohort-end"],
     motion_id: values.motion,
+    list_id: values.list,
     provenance: values.provenance,
     account_user_id: resolveAccountUserId(values.user, config, { accountOverride })
   });
@@ -2930,6 +3063,7 @@ function analyticsUsersQuery(values, config = {}, { accountOverride } = {}) {
     cohort_start: values["cohort-start"],
     cohort_end: values["cohort-end"],
     motion_id: values.motion,
+    list_id: values.list,
     provenance: values.provenance,
     platform: values.platform || values.channel
   });
@@ -2941,6 +3075,7 @@ function analyticsDashboardQuery(values, config = {}, { accountOverride } = {}) 
     cohort_end_date: values["cohort-end"],
     play_tag: values["play-tag"] || values.tag,
     motion_id: values.motion,
+    list_id: values.list,
     offer_id: values.offer,
     icp_id: values.icp,
     account_user_id: resolveAccountUserId(values.user, config, { accountOverride })
@@ -3027,6 +3162,7 @@ function cohortAnalysisRow(payload, fallbackCohort) {
     label: `${display(cohort.start_date)} to ${display(cohort.end_date)}`,
     total_count: payload?.cohort_prospects_count ?? payload?.prospects_added_count ?? 0,
     motion: payload?.motion || null,
+    list: payload?.list || null,
     provenance: payload?.provenance || null,
     account_user: payload?.account_user || null,
     stages,
@@ -3048,6 +3184,12 @@ function provenancePayload(provenance) {
     label: humanize(provenance),
     field: "account_prospects.intake_source"
   };
+}
+
+function listPayload(listId) {
+  if (!listId) return null;
+
+  return { prefix_id: listId, name: listId };
 }
 
 function compactObject(object) {
@@ -3652,6 +3794,38 @@ function renderTagDetails(payload, context) {
   writeLine(context.stdout);
   writeLine(context.stdout, "Motions");
   renderMotions(motions, context);
+}
+
+function renderTasks(payload, context) {
+  const tasks = Array.isArray(payload?.tasks) ? payload.tasks : [];
+  const meta = payload?.meta || {};
+
+  writeLine(context.stdout, `Tasks: ${display(meta.status, "open")} (${display(tasks.length, 0)} shown, ${display(meta.open_count, 0)} open, ${display(meta.completed_count, 0)} completed)`);
+  if (tasks.length === 0) return writeLine(context.stdout, "No tasks found.");
+
+  writeAlignedTable(
+    context,
+    ["TASK ID", "STATUS", "DUE", "ASSOCIATION", "TITLE"],
+    tasks.map((task) => [
+      display(task.prefix_id || task.id),
+      display(task.status_label || task.status),
+      display(task.due_at, "-"),
+      taskAssociationLabel(task),
+      display(task.title)
+    ])
+  );
+
+  for (const task of tasks) {
+    if (task?.notes) writeLine(context.stdout, `${display(task.prefix_id || task.id)} description: ${task.notes}`);
+  }
+}
+
+function taskAssociationLabel(task) {
+  const association = task?.association || {};
+  if (!association.type || association.type === "none") return "No association";
+
+  const name = association.name || association.id;
+  return `${association.type}:${display(name)}`;
 }
 
 function renderUsers(users, context) {
@@ -4933,12 +5107,23 @@ function renderAnalyticsDashboard(payload, context) {
   writeCountTable(context, "Current pipeline stages", payload?.pipeline_stage_counts, ["STAGE", "COUNT"], countRow);
 }
 
+function renderAnalyticsCohortList(payload, context) {
+  const list = payload?.list || {};
+  writeLine(context.stdout, `Created analytics cohort list ${display(list.name)} (${display(list.prefix_id)}).`);
+  writeLine(context.stdout, `Matched prospects: ${display(payload?.matched_count, 0)}`);
+  const query = payload?.query || {};
+  if (query.event_type) writeLine(context.stdout, `Event: ${display(query.event_type)}`);
+  if (query.start_date || query.end_date) writeLine(context.stdout, `Activity: ${display(query.start_date)} to ${display(query.end_date)} (${display(query.date_field, "events.created_at")})`);
+  if (query.note_mode && query.note_mode !== "any") writeLine(context.stdout, `Note mode: ${display(query.note_mode)}`);
+}
+
 function renderAnalyticsProspectCohortAnalysis(payload, context) {
   const cohorts = Array.isArray(payload?.cohorts) ? payload.cohorts : [];
   writeLine(context.stdout, `Prospect cohort analysis (${display(payload?.weeks, cohorts.length)} weeks)`);
   writeLine(context.stdout, `Activity window: ${display(payload?.window, "24h")}`);
   writeLine(context.stdout, "Cohorts: account_prospects.created_at, calendar weeks, oldest first");
   writeAnalyticsMotion(payload, context);
+  writeAnalyticsList(payload, context);
   writeAnalyticsProvenance(payload, context);
   if (payload?.account_user) {
     writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
@@ -4999,6 +5184,7 @@ function renderAnalyticsContent(payload, context) {
 
 function writeAnalyticsScope(payload, context) {
   writeAnalyticsMotion(payload, context);
+  writeAnalyticsList(payload, context);
   writeAnalyticsProvenance(payload, context);
   if (payload?.account_user) {
     writeLine(context.stdout, `User: ${entityLabel(payload.account_user)}`);
@@ -5011,6 +5197,7 @@ function writeDashboardFilters(payload, context) {
   const filters = payload?.filters || {};
   if (filters.motion) writeLine(context.stdout, `Motion: ${entityLabel(filters.motion)}`);
   if (filters.play_tag) writeLine(context.stdout, `Tag: ${filters.play_tag}`);
+  if (filters.list) writeLine(context.stdout, `List: ${entityLabel(filters.list)}`);
   if (filters.offer) writeLine(context.stdout, `Offer: ${entityLabel(filters.offer)}`);
   if (filters.icp) writeLine(context.stdout, `ICP: ${entityLabel(filters.icp)}`);
   if (filters.account_user) {
@@ -5032,6 +5219,12 @@ function writeAnalyticsMotion(payload, context) {
   if (!payload?.motion) return;
 
   writeLine(context.stdout, `Motion: ${entityLabel(payload.motion)}`);
+}
+
+function writeAnalyticsList(payload, context) {
+  if (!payload?.list) return;
+
+  writeLine(context.stdout, `List: ${entityLabel(payload.list)}`);
 }
 
 function writeAnalyticsProvenance(payload, context) {
@@ -5688,6 +5881,9 @@ const HELP_TOPICS = new Map([
     "    audienti lists remove-tag <list_id> <tag>",
     "    audienti tags list",
     "    audienti tags show <tag>",
+    "    audienti tasks list [--status open]",
+    "    audienti tasks add --title <text> --due <time>",
+    "    audienti tasks complete <ptsk_id>",
     "    audienti offers list",
     "    audienti offers show <offr_id>",
     "    audienti offers update <offr_id> [--name <text>]",
@@ -5718,6 +5914,7 @@ const HELP_TOPICS = new Map([
     "  Analytics",
     "    audienti analytics prospects --window 24h",
     "    audienti analytics dashboard --play-tag <tag>",
+    "    audienti analytics cohorts create-list --name \"Blank note test\" --start 2026-07-20 --end 2026-07-20 --note-mode blank",
     "    audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>",
     "    audienti analytics users --user me --window 30d",
     "    audienti analytics visibility --window 24h --user me",
@@ -5738,6 +5935,7 @@ const HELP_TOPICS = new Map([
     "  Analyze one motion:  audienti motions analytics <motn_id>",
     "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
     "  Audit your work:     audienti analytics users --user me --window 30d",
+    "  Review reminders:    audienti tasks list",
     "",
     "Global options:",
     "  --account <acct_id>  Use an account for one command without saving it",
@@ -6485,6 +6683,82 @@ const HELP_TOPICS = new Map([
     "  icps[]: ICP rows whose tags include tag",
     "  lists[]: list rows whose tags include tag",
     "  motions[]: motion rows whose play_tags include tag"
+  ].join("\n")],
+
+  ["tasks", [
+    "Usage:",
+    `  ${TASKS_LIST_USAGE.slice("Usage: ".length)}`,
+    `  ${TASKS_ADD_USAGE.slice("Usage: ".length)}`,
+    `  ${TASKS_COMPLETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add and manage plain reminders for the current account user, optionally associated with a prospect or list.",
+    "",
+    "Run `audienti tasks list help`, `audienti tasks add help`, or `audienti tasks complete help` for details."
+  ].join("\n")],
+
+  ["tasks list", [
+    "Usage:",
+    `  ${TASKS_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Options:",
+    "  --status <open|completed>  Defaults to open",
+    "  --limit <n>                 Defaults to 20, capped at 100",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tasks.json",
+    "",
+    "Output shape:",
+    "  tasks[].prefix_id: ptsk_ task id",
+    "  tasks[].title: string",
+    "  tasks[].notes: task description | null",
+    "  tasks[].due_at: ISO timestamp",
+    "  tasks[].association: prospect, list, or none"
+  ].join("\n")],
+
+  ["tasks manage", [
+    "Usage:",
+    `  ${TASKS_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Alias:",
+    "  `audienti tasks manage` is the same as `audienti tasks list`."
+  ].join("\n")],
+
+  ["tasks add", [
+    "Usage:",
+    `  ${TASKS_ADD_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  title: short reminder name",
+    "  due: timestamp string accepted by the app",
+    "  notes: optional task description",
+    "  prospect: optional prsp_ id",
+    "  list: optional list_ id",
+    "  assigned-user: account user id or me; defaults to the current account user",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/tasks.json"
+  ].join("\n")],
+
+  ["tasks complete", [
+    "Usage:",
+    `  ${TASKS_COMPLETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Input shape:",
+    "  task_id: ptsk_ prefix id or numeric id for a task assigned to the current account user",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/tasks/:id/complete.json"
   ].join("\n")],
 
   ["lists", [
@@ -8166,10 +8440,11 @@ const HELP_TOPICS = new Map([
 
   ["analytics", [
     "Usage:",
-    "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
-    "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--json]",
-    "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--user <account_user_id|email|name|me>] [--json]",
-    "  audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--platform <linkedin|email|gmail>] [--json]",
+    "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
+    "  audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--note-mode <any|with_note|blank>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--platform <linkedin|email|gmail>] [--json]",
     "  audienti analytics visibility [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics visops [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics content [--window 24h] [--user <account_user_id|email|name|me>] [--json]",
@@ -8181,10 +8456,12 @@ const HELP_TOPICS = new Map([
     "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  For user analytics, select the events.created_at activity range instead of --window.",
     "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort while --window or --start/--end selects the activity period.",
     "  --motion <motn_id>  For prospect and user analytics, filter AccountProspect.motion_id to one motion/play.",
+    "  --list <list_id>  Filter analytics to prospects in one list, including analytics cohort lists.",
     "  --play-tag <tag>  For dashboard analytics, filter to motions/lists tagged with a campaign tag.",
     "  --provenance <source>  Optional lower-level AccountProspect.intake_source filter.",
     "  --platform <linkedin|email|gmail>  For user analytics, filter events.platform. --channel is accepted as an alias.",
     "  cohort-analysis loops over recent weekly AccountProspect.created_at cohorts and compares their current stages.",
+    "  cohorts create-list materializes an events.created_at cohort as a normal account list for reuse in dashboard, prospects, and users analytics.",
     "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. For prospect analytics, this means prospects assigned to that account user. Email/name partials are accepted when they match exactly one account user.",
     "",
     "Output:",
@@ -8204,6 +8481,7 @@ const HELP_TOPICS = new Map([
     "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort.",
     "  --play-tag <tag>  Filter to motions/lists tagged with a campaign tag. --tag is accepted as an alias.",
     "  --motion <motn_id>  Filter to one motion/play.",
+    "  --list <list_id>  Filter to prospects in one list, including analytics cohort lists.",
     "  --offer <offr_id>  Filter to one offer.",
     "  --icp <icp_id>  Filter to one ICP.",
     "  --user <account_user_id|email|name|me>  Filter to prospects assigned to one account user.",
@@ -8221,8 +8499,8 @@ const HELP_TOPICS = new Map([
 
   ["analytics prospects", [
     "Usage:",
-    "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
-    "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]",
+    `  ${ANALYTICS_PROSPECTS_USAGE.slice("Usage: ".length)}`,
+    `  ${ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
@@ -8230,6 +8508,7 @@ const HELP_TOPICS = new Map([
     "  window: activity/event period for actions",
     "  cohort: selected AccountProspect.created_at cohort when cohort dates are provided",
     "  motion: selected motion/play when --motion is provided",
+    "  list: selected list when --list is provided",
     "  provenance: selected AccountProspect.intake_source when --provenance is provided",
     "  prospects_added_count: account prospects added in the window, or cohort size when cohort dates are provided",
     "  cohort_prospects_count: selected AccountProspect.created_at cohort size when cohort dates are provided",
@@ -8255,6 +8534,7 @@ const HELP_TOPICS = new Map([
     "  --weeks <n>   Number of calendar-week cohorts to inspect. Defaults to 4. Maximum 26.",
     "  --window <w>  Activity window passed through to each analytics call. Defaults to 24h.",
     "  --motion <motn_id>  Optional motion/play filter.",
+    "  --list <list_id>  Optional list filter.",
     "  --provenance <source>  Optional AccountProspect.intake_source filter.",
     "  --user <id>   Optional account-user filter.",
     "",
@@ -8284,6 +8564,7 @@ const HELP_TOPICS = new Map([
     "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  Explicit events.created_at activity range.",
     "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Optional AccountProspect.created_at cohort filter.",
     "  --motion <motn_id>                      Optional motion/play filter.",
+    "  --list <list_id>                        Optional list filter.",
     "  --provenance <source>                   Optional AccountProspect.intake_source filter.",
     "  --platform <linkedin|email|gmail>        Optional events.platform filter. `email` includes email and gmail rows; --channel is an alias.",
     "",
@@ -8297,6 +8578,34 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/analytics/users.json"
+  ].join("\n")],
+
+  ["analytics cohorts", [
+    "Usage:",
+    `  ${ANALYTICS_COHORT_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Materialize an events.created_at cohort as a normal account list so dashboard, prospects, and users analytics can filter by that list later.",
+    "",
+    "Options:",
+    "  --name <text>       Required list name.",
+    "  --start <YYYY-MM-DD> --end <YYYY-MM-DD>  Required activity date range.",
+    "  --event connection_request_sent          Event selector. This is the supported event today.",
+    "  --note-mode <any|with_note|blank>        Optional connection-request note selector.",
+    "  --user <account_user_id|email|name|me>   Optional actor filter for the event sender.",
+    "  --motion <motn_id>, --offer <offr_id>, --icp <icp_id>, --play-tag <tag>  Optional prospect/motion filters.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/analytics/cohort_lists.json"
+  ].join("\n")],
+
+  ["analytics cohorts create-list", [
+    "Usage:",
+    `  ${ANALYTICS_COHORT_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Alias for `audienti analytics cohorts`."
   ].join("\n")],
 
   ["analytics user", [
@@ -8416,6 +8725,7 @@ const HELP_TOPICS = new Map([
     "  audienti users activity me --window 7d",
     "  audienti analytics prospects --window 24h",
     "  audienti analytics dashboard --play-tag wine_campaign",
+    "  audienti analytics cohorts create-list --name \"Connection requests 2026-07-20\" --start 2026-07-20 --end 2026-07-20",
     "  audienti analytics users --user me --window 30d",
     "  audienti analytics visibility --window 24h --user me",
     "  audienti analytics content --window week",

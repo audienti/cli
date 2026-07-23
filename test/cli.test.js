@@ -50,6 +50,9 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/);
   assert.match(stdout.output, /audienti motions clone <motn_id> --name <text>/);
   assert.match(stdout.output, /audienti tags list/);
+  assert.match(stdout.output, /audienti tasks list \[--status open\]/);
+  assert.match(stdout.output, /audienti tasks add --title <text> --due <time>/);
+  assert.match(stdout.output, /audienti tasks complete <ptsk_id>/);
   assert.match(stdout.output, /audienti offers show <offr_id>/);
   assert.match(stdout.output, /audienti offers delete <offr_id> --confirm <yes\|true\|Y\|y>/);
   assert.match(stdout.output, /audienti icps show <icp_id>/);
@@ -67,6 +70,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti operator failed-drafts requeue <row_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
+  assert.match(stdout.output, /audienti analytics cohorts create-list --name "Blank note test"/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti content programs/);
   assert.match(stdout.output, /audienti content approve <cpwi_id>/);
@@ -440,6 +444,26 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti tags show <tag>/, /GET \/api\/v1\/accounts\/:account_id\/icps\.json/]
     },
     {
+      args: ["tasks", "help"],
+      expected: [/Usage:\n  audienti tasks list/, /Add and manage plain reminders/]
+    },
+    {
+      args: ["tasks", "list", "help"],
+      expected: [/Usage:\n  audienti tasks list/, /GET \/api\/v1\/accounts\/:account_id\/tasks\.json/]
+    },
+    {
+      args: ["tasks", "manage", "help"],
+      expected: [/Usage:\n  audienti tasks list/, /same as `audienti tasks list`/]
+    },
+    {
+      args: ["tasks", "add", "help"],
+      expected: [/Usage:\n  audienti tasks add --title <text> --due <time>/, /POST \/api\/v1\/accounts\/:account_id\/tasks\.json/]
+    },
+    {
+      args: ["tasks", "complete", "help"],
+      expected: [/Usage:\n  audienti tasks complete <ptsk_id>/, /PATCH \/api\/v1\/accounts\/:account_id\/tasks\/:id\/complete\.json/]
+    },
+    {
       args: ["lists", "delete", "help"],
       expected: [/Usage:\n  audienti lists delete <list_id> --confirm <yes\|true\|Y\|y>/, /DELETE \/api\/v1\/accounts\/:account_id\/lists\/:id\.json/]
     },
@@ -485,7 +509,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["analytics", "help"],
-      expected: [/audienti analytics prospects/, /audienti analytics dashboard/, /audienti analytics users/, /audienti analytics visops/, /--start <YYYY-MM-DD> --end <YYYY-MM-DD>/, /--window <24h\|7d\|1w\|day\|week>/, /--play-tag <tag>/, /--user <account_user_id\|email\|name\|me>/]
+      expected: [/audienti analytics prospects/, /audienti analytics dashboard/, /audienti analytics cohorts create-list/, /audienti analytics users/, /audienti analytics visops/, /--start <YYYY-MM-DD> --end <YYYY-MM-DD>/, /--window <24h\|7d\|1w\|day\|week>/, /--play-tag <tag>/, /--list <list_id>/, /--user <account_user_id\|email\|name\|me>/]
     },
     {
       args: ["analytics", "prospects", "help"],
@@ -514,6 +538,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["analytics", "dashboard", "help"],
       expected: [/Usage:\n  audienti analytics dashboard/, /cohort_company_target_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/dashboard\.json/]
+    },
+    {
+      args: ["analytics", "cohorts", "help"],
+      expected: [/Usage:\n  audienti analytics cohorts create-list/, /Materialize an events\.created_at cohort/, /POST \/api\/v1\/accounts\/:account_id\/analytics\/cohort_lists\.json/]
     },
     {
       args: ["prospects", "import", "help"],
@@ -1724,6 +1752,15 @@ test("account read commands call the expected api endpoints with json output", a
       body: { prefix_id: "list_one", name: "Owned list", prospect_count: 3 }
     },
     {
+      args: ["tasks", "list", "--status", "completed", "--json"],
+      path: "/api/v1/accounts/acct_one/tasks.json",
+      query: { status: "completed" },
+      body: {
+        tasks: [{ prefix_id: "ptsk_one", title: "Review", notes: "Read the latest update.", status: "completed" }],
+        meta: { status: "completed", open_count: 0, completed_count: 1 }
+      }
+    },
+    {
       args: ["motions", "list", "--json"],
       path: "/api/v1/accounts/acct_one/motions.json",
       body: [{ prefix_id: "motn_one", name: "Motion One", kind: "outbound", status: "active" }]
@@ -1864,6 +1901,122 @@ test("tags list renders a readable table", async () => {
     assert.match(stdout.output, /TAG\tICPS\tLISTS\tMOTIONS\tTOTAL/);
     assert.match(stdout.output, /matt\t0\t1\t2\t3/);
     assert.match(stdout.output, /sarit\t1\t2\t1\t4/);
+  });
+});
+
+test("tasks list renders reminders with descriptions", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/tasks.json");
+      assert.equal(url.searchParams.get("status"), "open");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        tasks: [{
+          prefix_id: "ptsk_one",
+          title: "Follow up with Cristina",
+          notes: "Ask whether the renewal date moved.",
+          status_label: "Open",
+          due_at: "2026-07-23T14:00:00Z",
+          association: { type: "prospect", id: "prsp_one", name: "Cristina Ventura" }
+        }],
+        meta: { status: "open", open_count: 1, completed_count: 0 }
+      });
+    });
+
+    const exitCode = await run(["tasks", "manage", "--status", "open"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Tasks: open \(1 shown, 1 open, 0 completed\)/);
+    assert.match(stdout.output, /ptsk_one/);
+    assert.match(stdout.output, /prospect:Cristina Ventura/);
+    assert.match(stdout.output, /Follow up with Cristina/);
+    assert.match(stdout.output, /ptsk_one description: Ask whether the renewal date moved\./);
+  });
+});
+
+test("tasks add posts a plain reminder payload", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "7"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "ptsk_one",
+      title: "Review target account",
+      notes: "Use the newest notes before outreach.",
+      due_at: "2026-07-24T15:00:00Z",
+      association: { type: "list", id: "list_one", name: "Renewals" }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tasks.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        task: {
+          title: "Review target account",
+          due_at: "2026-07-24T11:00",
+          notes: "Use the newest notes before outreach.",
+          list_id: "list_one",
+          assignee_account_user_id: "7"
+        }
+      });
+      return jsonResponse(responseBody, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "tasks",
+      "add",
+      "--title",
+      "Review target account",
+      "--due",
+      "2026-07-24T11:00",
+      "--notes",
+      "Use the newest notes before outreach.",
+      "--list",
+      "list_one",
+      "--assigned-user",
+      "me"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Created task ptsk_one\./);
+    assert.match(stdout.output, /Description: Use the newest notes before outreach\./);
+    assert.match(stdout.output, /Association: list:Renewals/);
+  });
+});
+
+test("tasks complete calls the complete endpoint", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/tasks/ptsk_one/complete.json");
+      assert.equal(options.method, "PATCH");
+      return jsonResponse({ prefix_id: "ptsk_one", status: "completed" });
+    });
+
+    const exitCode = await run(["tasks", "complete", "ptsk_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Completed task ptsk_one\./);
   });
 });
 
@@ -7729,6 +7882,45 @@ test("analytics prospects sends cohort dates and renders cohort-scoped summary",
   });
 });
 
+test("analytics prospects sends list filter and renders selected list", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/prospects.json");
+      assert.equal(url.searchParams.get("window"), "24h");
+      assert.equal(url.searchParams.get("list_id"), "list_blank_notes");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        kind: "prospects",
+        window: { key: "24h" },
+        list: {
+          id: 123,
+          prefix_id: "list_blank_notes",
+          name: "Blank note requests",
+          field: "list_prospects.list_id"
+        },
+        account_user: null,
+        prospects_added_count: 5,
+        actions: { total_count: 2, automated_count: 1, automated_percentage: 50.0, breakdown: [] },
+        queue_stages: [{ key: "pre_connect", label: "Pre connect", count: 5 }]
+      });
+    });
+
+    const exitCode = await run(["analytics", "prospects", "--window", "24h", "--list", "list_blank_notes"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /List: Blank note requests \(list_blank_notes\)/);
+    assert.match(stdout.output, /Prospects added: 5/);
+  });
+});
+
 test("analytics prospects cohort-analysis loops recent weekly cohorts and renders stage comparison", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -7752,6 +7944,7 @@ test("analytics prospects cohort-analysis loops recent weekly cohorts and render
       assert.equal(url.searchParams.get("window"), "7d");
       assert.equal(url.searchParams.get("account_user_id"), "me");
       assert.equal(url.searchParams.get("motion_id"), "motn_focus");
+      assert.equal(url.searchParams.get("list_id"), "list_focus");
       assert.equal(url.searchParams.get("cohort_start"), start);
       assert.equal(url.searchParams.get("cohort_end"), end);
       assert.equal(options.headers.Authorization, "Bearer saved-token");
@@ -7771,6 +7964,11 @@ test("analytics prospects cohort-analysis loops recent weekly cohorts and render
           name: "Focused Motion",
           kind: "outbound",
           status: "active"
+        },
+        list: {
+          id: 77,
+          prefix_id: "list_focus",
+          name: "Focused List"
         },
         prospects_added_count: total,
         cohort_prospects_count: total,
@@ -7793,6 +7991,8 @@ test("analytics prospects cohort-analysis loops recent weekly cohorts and render
       "7d",
       "--motion",
       "motn_focus",
+      "--list",
+      "list_focus",
       "--user",
       "me"
     ], {
@@ -7807,10 +8007,93 @@ test("analytics prospects cohort-analysis loops recent weekly cohorts and render
     assert.match(stdout.output, /Prospect cohort analysis \(4 weeks\)/);
     assert.match(stdout.output, /Activity window: 7d/);
     assert.match(stdout.output, /Motion: Focused Motion \(motn_focus\)/);
+    assert.match(stdout.output, /List: Focused List \(list_focus\)/);
     assert.match(stdout.output, /User: User One \(42\)/);
     assert.match(stdout.output, /COHORT                    TOTAL  Identified  Pre Connect  Connected  Meeting Requested/);
     assert.match(stdout.output, /2026-06-15 to 2026-06-21     25           1            2         12                 10/);
     assert.match(stdout.output, /2026-07-06 to 2026-07-12     40          24           14          2                  0/);
+  });
+});
+
+test("analytics cohorts create-list posts event cohort filters and renders created list", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(async (url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/cohort_lists.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        name: "Blank note requests",
+        start_date: "2026-07-20",
+        end_date: "2026-07-20",
+        event_type: "connection_request_sent",
+        account_user_id: "42",
+        note_mode: "blank",
+        motion_id: "motn_focus",
+        offer_id: "offr_one",
+        icp_id: "icpp_one",
+        play_tag: "wine_campaign"
+      });
+
+      return jsonResponse({
+        kind: "analytics_cohort_list",
+        list: {
+          id: 55,
+          prefix_id: "list_blank_notes",
+          name: "Blank note requests",
+          prospect_count: 18
+        },
+        matched_count: 18,
+        query: {
+          event_type: "connection_request_sent",
+          start_date: "2026-07-20",
+          end_date: "2026-07-20",
+          date_field: "events.created_at",
+          note_mode: "blank"
+        }
+      }, { status: 201 });
+    });
+
+    const exitCode = await run([
+      "analytics",
+      "cohorts",
+      "create-list",
+      "--name",
+      "Blank note requests",
+      "--start",
+      "2026-07-20",
+      "--end",
+      "2026-07-20",
+      "--note-mode",
+      "blank",
+      "--user",
+      "me",
+      "--motion",
+      "motn_focus",
+      "--offer",
+      "offr_one",
+      "--icp",
+      "icpp_one",
+      "--play-tag",
+      "wine_campaign"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Created analytics cohort list Blank note requests \(list_blank_notes\)\./);
+    assert.match(stdout.output, /Matched prospects: 18/);
+    assert.match(stdout.output, /Event: connection_request_sent/);
+    assert.match(stdout.output, /Note mode: blank/);
   });
 });
 
@@ -7834,6 +8117,7 @@ test("analytics dashboard sends tag cohort filters and renders company target co
       assert.equal(url.searchParams.get("cohort_end_date"), "2026-07-07");
       assert.equal(url.searchParams.get("play_tag"), "wine_campaign");
       assert.equal(url.searchParams.get("motion_id"), "motn_focus");
+      assert.equal(url.searchParams.get("list_id"), "list_blank_notes");
       assert.equal(url.searchParams.get("offer_id"), "offr_one");
       assert.equal(url.searchParams.get("icp_id"), "icpp_one");
       assert.equal(url.searchParams.get("account_user_id"), "42");
@@ -7856,6 +8140,7 @@ test("analytics dashboard sends tag cohort filters and renders company target co
         filters: {
           play_tag: "wine_campaign",
           motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion" },
+          list: { id: 55, prefix_id: "list_blank_notes", name: "Blank note requests" },
           offer: { id: 4, prefix_id: "offr_one", name: "Wine Offer" },
           icp: { id: 5, prefix_id: "icpp_one", name: "Wine ICP" },
           account_user: { id: 42, name: "User One", email: "one@example.com" }
@@ -7890,6 +8175,8 @@ test("analytics dashboard sends tag cohort filters and renders company target co
       "wine_campaign",
       "--motion",
       "motn_focus",
+      "--list",
+      "list_blank_notes",
       "--offer",
       "offr_one",
       "--icp",
@@ -7902,6 +8189,7 @@ test("analytics dashboard sends tag cohort filters and renders company target co
     assert.match(stdout.output, /Dashboard analytics \(Jul 1, 2026 - Jul 7, 2026\)/);
     assert.match(stdout.output, /Tag: wine_campaign/);
     assert.match(stdout.output, /Motion: Focused Motion \(motn_focus\)/);
+    assert.match(stdout.output, /List: Blank note requests \(list_blank_notes\)/);
     assert.match(stdout.output, /Prospects: 47/);
     assert.match(stdout.output, /Companies: 28/);
     assert.match(stdout.output, /People\/company: 1\.7/);

@@ -2,7 +2,8 @@
 
 Audienti CLI is the agent-first command-line client for the Audienti production
 API. It lets local coding agents and operators inspect accounts, create and
-manage plays, import prospects, build lists, and work supported operator flows.
+manage plays, import prospects, build lists, manage task reminders, and work
+supported operator flows.
 
 ## Install
 
@@ -77,11 +78,15 @@ audienti prospects check --all --csv
 audienti prospects assign <prsp_id> --assigned-user me
 audienti prospects set-status <prsp_id> --status not_fit
 audienti prospects lock <prsp_id> --note "Emergency hold"
+audienti tasks list
+audienti tasks add --title "Review Cristina" --due 2026-07-24T11:00 --prospect <prsp_id> --notes "Check the renewal note before replying."
+audienti tasks complete <ptsk_id>
 audienti dnc list
 audienti company-rules list
 audienti users activity --window 7d
 audienti analytics prospects --window 24h
 audienti analytics dashboard --play-tag wine_campaign
+audienti analytics cohorts create-list --name "Blank note test" --start 2026-07-20 --end 2026-07-20 --note-mode blank
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
@@ -107,6 +112,15 @@ audienti operator next --plan
 audienti operator next --done --note "Connection request sent."
 ```
 
+To manage simple reminders for yourself:
+
+```bash
+audienti tasks list
+audienti tasks list --status completed
+audienti tasks add --title "Review target account" --due 2026-07-24T11:00 --list <list_id> --notes "Check the latest notes."
+audienti tasks complete <ptsk_id>
+```
+
 To inspect activity for prospects that entered the account during a specific
 cohort while keeping a separate activity window:
 
@@ -119,6 +133,23 @@ To compare recent weekly prospect cohorts by their current pipeline stages:
 ```bash
 audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>
 ```
+
+To materialize a connection-request activity cohort as a reusable list selector,
+then reuse it in analytics:
+
+```bash
+audienti analytics cohorts create-list --name "Connection requests 2026-07-01 to 2026-07-07" --event connection_request_sent --start 2026-07-01 --end 2026-07-07
+audienti analytics dashboard --list <list_id>
+audienti analytics prospects --list <list_id> --window 30d
+audienti analytics users --user me --list <list_id> --start 2026-07-01 --end 2026-07-31
+```
+
+Use `--cohort-start` and `--cohort-end` when the cohort is based on when people
+entered Audienti, a motion, or a receiving segment. Use `analytics cohorts
+create-list` followed by `--list` when the cohort is based on an event that
+happened later, such as connection requests sent in a date range. Rebuild the
+list when the event definition or date window changes so the analytics question
+stays auditable.
 
 To see whether one motion is producing prospects by day, and where each
 produced-day cohort currently sits in the funnel:
