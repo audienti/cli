@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-07-23
+
+### Added
+
+- Add `audienti prospects reenrich` for dry-running or queueing one forced LinkedIn person profile re-enrichment.
+- Add `audienti prospects refresh-queue` for dry-running or applying account-scoped next-action and operator draft cache repair for one prospect.
+
 ## [0.1.27] - 2026-07-22
 
 ### Added

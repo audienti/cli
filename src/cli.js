@@ -39,6 +39,8 @@ const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
 const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json] [--account <acct_id>]";
 const PROSPECTS_REPLAN_USAGE = "Usage: audienti prospects replan <prsp_id> [--apply] [--json] [--account <acct_id>]";
+const PROSPECTS_REENRICH_USAGE = "Usage: audienti prospects reenrich <prsp_id> [--profile <prof_id|citation_id>] [--apply] [--json] [--account <acct_id>]";
+const PROSPECTS_REFRESH_QUEUE_USAGE = "Usage: audienti prospects refresh-queue <prsp_id> [--apply] [--json] [--account <acct_id>]";
 const PROSPECTS_REJECT_USAGE = "Usage: audienti prospects reject <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit|bad_data_404>] [--json] [--account <acct_id>]";
 const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--json] [--account <acct_id>]";
@@ -247,6 +249,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "set-status") return prospectsSetStatus(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "replan") return prospectsReplan(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "reenrich") return prospectsReenrich(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "refresh-queue") return prospectsRefreshQueue(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "reject") return prospectsDisposition("reject", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "nurture") return prospectsDisposition("nurture", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "restore") return prospectsDisposition("restore", rest, context, { accountOverride });
@@ -1859,6 +1863,40 @@ async function prospectsReplan(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectReplan(payload, context);
+}
+
+async function prospectsReenrich(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    apply: { type: "boolean" },
+    profile: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(PROSPECTS_REENRICH_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.reenrichProspect(accountId, positionals[0], compactObject({
+    apply: values.apply,
+    profile_id: values.profile
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectReenrich(payload, context);
+}
+
+async function prospectsRefreshQueue(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    apply: { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError(PROSPECTS_REFRESH_QUEUE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.refreshProspectQueue(accountId, positionals[0], compactObject({
+    apply: values.apply
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectRefreshQueue(payload, context);
 }
 
 async function prospectsDisposition(action, args, context, { accountOverride } = {}) {
@@ -3998,6 +4036,61 @@ function renderProspectReplan(payload, context) {
   if (payload?.status === "coach_error") writeLine(context.stdout, "The plan was not persisted. Fix the coach error and rerun with --apply.");
 }
 
+function renderProspectReenrich(payload, context) {
+  const prospect = payload?.prospect || {};
+  const profile = payload?.profile || {};
+  const completeness = payload?.completeness || {};
+  const enrichment = payload?.enrichment || {};
+  const status = payload?.status === "queued" ? "queued" : (payload?.status === "not_queued" ? "not queued" : "dry run");
+
+  writeLine(context.stdout, `Re-enrich ${status} for ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
+  writeLine(context.stdout, `Profile: ${display(profile.prefix_id)} ${display(profile.identifier)} ${display(profile.url)}`);
+  writeLine(context.stdout, `Profile status: ${display(profile.status)}`);
+  writeLine(context.stdout, `Thin profile signals: ${completeness.thin_profile_signals ? "yes" : "no"}`);
+  writeLine(context.stdout, `Experience entries: ${sumObjectValues(completeness.experience_counts)}`);
+  writeLine(context.stdout, `Substantive bio length: ${display(completeness.substantive_bio_length, 0)}`);
+  if (profile.invalid_reason) writeLine(context.stdout, `Invalid reason: ${profile.invalid_reason}`);
+  if (enrichment.retry_counter_reset) writeLine(context.stdout, "A stale enrichment retry counter will be cleared.");
+  if (enrichment.next_enrichment_at) writeLine(context.stdout, `Next enrichment at: ${enrichment.next_enrichment_at}`);
+  if (payload?.status === "dry_run") writeLine(context.stdout, "Run again with --apply to queue full enrichment.");
+  if (payload?.status === "not_queued") writeLine(context.stdout, "The profile was not queued, usually because an active enrichment is already running.");
+}
+
+function renderProspectRefreshQueue(payload, context) {
+  const prospect = payload?.prospect || {};
+  const draftCache = payload?.draft_cache || {};
+  const coachCache = payload?.coach_cache || {};
+  const refresh = payload?.queue_refresh || {};
+  const status = payload?.status === "applied" ? "applied" : "dry run";
+
+  writeLine(context.stdout, `Refresh queue ${status} for ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
+  writeLine(context.stdout, `Coach cache: ${coachCache.present ? "present" : "empty"}`);
+  if (coachCache.evaluated_at) writeLine(context.stdout, `Coach evaluated at: ${coachCache.evaluated_at}`);
+  writeLine(context.stdout, `Draft cache rows: ${display(draftCache.count, 0)}`);
+  writeLine(context.stdout, `Draft statuses: ${formatObjectCounts(draftCache.by_status)}`);
+  writeLine(context.stdout, `Action types: ${Array.isArray(draftCache.action_types) && draftCache.action_types.length > 0 ? draftCache.action_types.join(", ") : "none"}`);
+  if (payload?.applied) {
+    writeLine(context.stdout, `Deleted draft rows: ${display(draftCache.deleted_count, 0)}`);
+    writeLine(context.stdout, `Draft prewarm queued: ${display(refresh?.draft_prewarm?.enqueued_rows, 0)}`);
+  } else {
+    writeLine(context.stdout, "Run again with --apply to clear coach/draft cache and rebuild the queue row.");
+  }
+}
+
+function sumObjectValues(value) {
+  if (!value || typeof value !== "object") return 0;
+
+  return Object.values(value).reduce((sum, item) => sum + Number(item || 0), 0);
+}
+
+function formatObjectCounts(value) {
+  if (!value || typeof value !== "object" || Object.keys(value).length === 0) return "none";
+
+  return Object.entries(value)
+    .map(([key, count]) => `${key}:${count}`)
+    .join(", ");
+}
+
 function replanStatusLabel(payload) {
   if (payload?.status === "dry_run") return "dry run";
   if (payload?.status === "coach_error") return "coach error";
@@ -5575,6 +5668,8 @@ const HELP_TOPICS = new Map([
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
     "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected>",
     "    audienti prospects replan <prsp_id> [--apply]",
+    "    audienti prospects reenrich <prsp_id> [--apply]",
+    "    audienti prospects refresh-queue <prsp_id> [--apply]",
     "    audienti prospects lock <prsp_id> [--note <text>]",
     "    audienti prospects reject <prsp_id>",
     "    audienti prospects nurture <prsp_id> [--reason <reason>]",
@@ -7080,6 +7175,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
     "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json]",
     "  audienti prospects replan <prsp_id> [--apply] [--json]",
+    "  audienti prospects reenrich <prsp_id> [--profile <prof_id|citation_id>] [--apply] [--json]",
+    "  audienti prospects refresh-queue <prsp_id> [--apply] [--json]",
     "  audienti prospects reject <prsp_id> [--json]",
     "  audienti prospects nurture <prsp_id> [--reason <reason>] [--json]",
     "  audienti prospects restore <prsp_id> [--json]",
@@ -7276,6 +7373,51 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospects/:id/replan.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"apply\": true",
+    "  }"
+  ].join("\n")],
+
+  ["prospects reenrich", [
+    "Usage:",
+    `  ${PROSPECTS_REENRICH_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Force a full LinkedIn person profile enrichment for one prospect from the CLI.",
+    "",
+    "Behavior:",
+    "  Defaults to a dry-run showing the selected profile, completeness signals, and whether a stale retry counter would be cleared.",
+    "  Pass --apply to queue ProfileEnrichJob with a maintenance origin and schedule expansion after enrichment.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/reenrich.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"apply\": true,",
+    "    \"profile_id\": \"prof_abc123\"",
+    "  }"
+  ].join("\n")],
+
+  ["prospects refresh-queue", [
+    "Usage:",
+    `  ${PROSPECTS_REFRESH_QUEUE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Clear stale next-action coach and operator draft cache for one account prospect, then rebuild the queue row.",
+    "",
+    "Behavior:",
+    "  Defaults to a dry-run showing coach-cache and draft-cache state.",
+    "  Pass --apply to delete this prospect's account-scoped ProspectDraft rows, clear AccountProspect coach cache, and force the queue refresher.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/refresh_queue.json",
     "",
     "JSON body:",
     "  {",

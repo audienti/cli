@@ -59,6 +59,8 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status <active\|nurture\|non_responsive\|not_fit\|bad_data_404\|rejected>/);
   assert.match(stdout.output, /audienti prospects replan <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects reenrich <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects refresh-queue <prsp_id>/);
   assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti operator failed-drafts/);
@@ -295,6 +297,8 @@ test("resource help lists child commands", async () => {
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
   assert.match(stdout.output, /audienti prospects set-status <prsp_id>/);
   assert.match(stdout.output, /audienti prospects replan <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects reenrich <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects refresh-queue <prsp_id>/);
   assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
@@ -534,6 +538,14 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "replan", "help"],
       expected: [/Usage:\n  audienti prospects replan <prsp_id>/, /dry-run/, /--apply/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/replan\.json/]
+    },
+    {
+      args: ["prospects", "reenrich", "help"],
+      expected: [/Usage:\n  audienti prospects reenrich <prsp_id>/, /full LinkedIn person profile enrichment/, /--profile/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/reenrich\.json/]
+    },
+    {
+      args: ["prospects", "refresh-queue", "help"],
+      expected: [/Usage:\n  audienti prospects refresh-queue <prsp_id>/, /Clear stale next-action coach and operator draft cache/, /--apply/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/refresh_queue\.json/]
     },
     {
       args: ["prospects", "reject", "help"],
@@ -3635,6 +3647,195 @@ test("prospects replan shows coach errors as not persisted", async () => {
     assert.match(stdout.output, /Reason: coach_error/);
     assert.match(stdout.output, /The plan was not persisted\. Fix the coach error and rerun with --apply\./);
     assert.doesNotMatch(stdout.output, /Run again with --apply to persist this plan\./);
+  });
+});
+
+test("prospects reenrich dry-runs profile enrichment details", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/reenrich.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { profile_id: "prof_one" });
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        status: "dry_run",
+        applied: false,
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        profile: {
+          prefix_id: "prof_one",
+          identifier: "linkedin/profile",
+          url: "https://www.linkedin.com/in/pat",
+          status: "enriched"
+        },
+        enrichment: {
+          queued: false,
+          retry_counter_reset: true
+        },
+        completeness: {
+          thin_profile_signals: true,
+          experience_counts: { experience: 0, experiences: 0, currentPosition: 0 },
+          substantive_bio_length: 12
+        }
+      });
+    });
+
+    const exitCode = await run(["prospects", "reenrich", "prsp_one", "--profile", "prof_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Re-enrich dry run for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Profile: prof_one linkedin\/profile https:\/\/www\.linkedin\.com\/in\/pat/);
+    assert.match(stdout.output, /Thin profile signals: yes/);
+    assert.match(stdout.output, /A stale enrichment retry counter will be cleared\./);
+    assert.match(stdout.output, /Run again with --apply to queue full enrichment\./);
+  });
+});
+
+test("prospects reenrich applies and supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      status: "queued",
+      applied: true,
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      profile: { prefix_id: "prof_one", identifier: "linkedin/profile", status: "queued" },
+      enrichment: { queued: true }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/reenrich.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { apply: true });
+
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["prospects", "reenrich", "prsp_one", "--apply", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("prospects reenrich reports active enrichment locks as not queued", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      status: "not_queued",
+      applied: false,
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      profile: { prefix_id: "prof_one", identifier: "linkedin/profile", status: "enriching" },
+      enrichment: { queued: false },
+      completeness: { thin_profile_signals: true, experience_counts: {}, substantive_bio_length: 0 }
+    }));
+
+    const exitCode = await run(["prospects", "reenrich", "prsp_one", "--apply"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Re-enrich not queued for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /active enrichment is already running/);
+  });
+});
+
+test("prospects refresh-queue dry-runs cache state", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/refresh_queue.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {});
+
+      return jsonResponse({
+        status: "dry_run",
+        applied: false,
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        coach_cache: { present: true, evaluated_at: "2026-07-22T12:00:00Z" },
+        draft_cache: {
+          count: 2,
+          by_status: { quality_failure: 1, ready: 1 },
+          action_types: ["connect_request"],
+          deleted_count: 0
+        }
+      });
+    });
+
+    const exitCode = await run(["prospects", "refresh-queue", "prsp_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Refresh queue dry run for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Coach cache: present/);
+    assert.match(stdout.output, /Draft cache rows: 2/);
+    assert.match(stdout.output, /Draft statuses: quality_failure:1, ready:1/);
+    assert.match(stdout.output, /Run again with --apply to clear coach\/draft cache and rebuild the queue row\./);
+  });
+});
+
+test("prospects refresh-queue applies and reports prewarm count", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/refresh_queue.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { apply: true });
+
+      return jsonResponse({
+        status: "applied",
+        applied: true,
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        coach_cache: { present: true, cleared: true },
+        draft_cache: {
+          count: 1,
+          by_status: { quality_failure: 1 },
+          action_types: ["connect_request"],
+          deleted_count: 1
+        },
+        queue_refresh: {
+          draft_prewarm: { enqueued_rows: 1 }
+        }
+      });
+    });
+
+    const exitCode = await run(["prospects", "refresh-queue", "prsp_one", "--apply"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Refresh queue applied for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Deleted draft rows: 1/);
+    assert.match(stdout.output, /Draft prewarm queued: 1/);
   });
 });
 

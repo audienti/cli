@@ -373,6 +373,20 @@ export class AudientiClient {
     });
   }
 
+  reenrichProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "reenrich"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  refreshProspectQueue(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "refresh_queue"]), {
+      method: "POST",
+      body
+    });
+  }
+
   assignProspects(accountId, body) {
     return this.requestJson(accountPath(accountId, ["prospects", "assign"]), {
       method: "POST",
