@@ -4,6 +4,22 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-07-22
+
+### Added
+
+- Add `audienti operator failed-drafts` and `audienti operator failed-drafts requeue` for listing failed prospect operator drafts and queueing async rewrites.
+
+### Fixed
+
+- Show prospect replan coach errors as not persisted instead of displaying failed `--apply` runs as dry runs.
+
+## [0.1.26] - 2026-07-22
+
+### Added
+
+- Add `audienti prospects replan <prsp_id> [--apply]` for dry-running or persisting refreshed next-action coach plans.
+
 ## [0.1.25] - 2026-07-22
 
 ### Added

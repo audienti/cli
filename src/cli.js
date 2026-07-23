@@ -38,6 +38,7 @@ const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
 const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json] [--account <acct_id>]";
+const PROSPECTS_REPLAN_USAGE = "Usage: audienti prospects replan <prsp_id> [--apply] [--json] [--account <acct_id>]";
 const PROSPECTS_REJECT_USAGE = "Usage: audienti prospects reject <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_NURTURE_USAGE = "Usage: audienti prospects nurture <prsp_id> [--reason <nurture|non_responsive|not_fit|bad_data_404>] [--json] [--account <acct_id>]";
 const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--json] [--account <acct_id>]";
@@ -45,6 +46,8 @@ const PROSPECTS_LOCK_USAGE = "Usage: audienti prospects lock <prsp_id> [--note <
 const PROSPECTS_UNLOCK_USAGE = "Usage: audienti prospects unlock <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [filters] [--account <acct_id>]";
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
+const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
+const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
 const DNC_ADD_USAGE = "Usage: audienti dnc add <email|citation_id|profile_url> [--json] [--account <acct_id>]";
 const DNC_IMPORT_USAGE = "Usage: audienti dnc import --file <txt|csv> [--json] [--account <acct_id>]";
 const DNC_REMOVE_USAGE = "Usage: audienti dnc remove <dnc_entry_id> [--json] [--account <acct_id>]";
@@ -243,6 +246,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "set-status") return prospectsSetStatus(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "replan") return prospectsReplan(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "reject") return prospectsDisposition("reject", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "nurture") return prospectsDisposition("nurture", rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "restore") return prospectsDisposition("restore", rest, context, { accountOverride });
@@ -264,6 +268,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "tools" && action === "list") return toolsList(rest, context);
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "linkedin-review") return toolsLinkedinReview(rest, context, { accountOverride });
+  if (normalizedResource === "operator" && action === "failed-drafts") return operatorFailedDrafts(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
@@ -1840,6 +1845,22 @@ async function prospectsShow(args, context, { accountOverride } = {}) {
   renderProspect(prospect, context);
 }
 
+async function prospectsReplan(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    apply: { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError(PROSPECTS_REPLAN_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.replanProspect(accountId, positionals[0], compactObject({
+    apply: values.apply
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspectReplan(payload, context);
+}
+
 async function prospectsDisposition(action, args, context, { accountOverride } = {}) {
   const usageText = {
     reject: PROSPECTS_REJECT_USAGE,
@@ -2444,6 +2465,41 @@ async function operatorQueue(args, context, { accountOverride } = {}) {
   renderOperatorQueue(payload, context);
 }
 
+async function operatorFailedDrafts(args, context, { accountOverride } = {}) {
+  if (args[0] === "requeue") {
+    return operatorFailedDraftsRequeue(args.slice(1), context, { accountOverride });
+  }
+
+  const { values, positionals } = parseCommandArgs(args, operatorFailedDraftOptions());
+  if (positionals.length > 0) throw new CommandError(OPERATOR_FAILED_DRAFTS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.operatorQueue(accountId, operatorFailedDraftQuery(values));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderOperatorFailedDrafts(payload, context);
+}
+
+async function operatorFailedDraftsRequeue(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, operatorFailedDraftOptions({
+    all: { type: "boolean" },
+    limit: { type: "string" }
+  }));
+  if (values.all && positionals.length > 0) throw new CommandError("Choose either --all or row ids, not both.");
+  if (!values.all && positionals.length === 0) throw new CommandError(OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.requeueOperatorFailedDrafts(accountId, compactObject({
+    ...operatorFailedDraftQuery(values),
+    all: values.all || undefined,
+    limit: values.limit,
+    row_ids: positionals.length > 0 ? positionals : undefined
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderOperatorFailedDraftRequeue(payload, context);
+}
+
 async function operatorNext(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, operatorNextOptions());
   if (positionals.length > 0) throw new CommandError("Usage: audienti operator next [--json|--plan|--done|--skip|--fail|--return] [filters] [--note <text>] [--account <acct_id>]");
@@ -2705,6 +2761,18 @@ function operatorNextOptions() {
   });
 }
 
+function operatorFailedDraftOptions(extra = {}) {
+  return {
+    ...jsonOptions(),
+    principal: { type: "string" },
+    motion: { type: "string" },
+    list: { type: "string" },
+    stage: { type: "string" },
+    query: { type: "string" },
+    ...extra
+  };
+}
+
 function operatorQuery(values) {
   return compactObject({
     principal_account_user_id: values.principal,
@@ -2713,6 +2781,18 @@ function operatorQuery(values) {
     stage: values.stage,
     opportunity_kind: values["opportunity-kind"],
     writing_status: values["writing-status"]
+  });
+}
+
+function operatorFailedDraftQuery(values) {
+  return compactObject({
+    principal_account_user_id: values.principal,
+    motion_id: values.motion,
+    list_id: values.list,
+    stage: values.stage,
+    query: values.query,
+    opportunity_kind: "prospect",
+    writing_status: "draft_failed"
   });
 }
 
@@ -3901,6 +3981,40 @@ function renderProspect(prospect, context) {
   if (nextActionLabel(prospect?.queue)) writeLine(context.stdout, `Next action: ${nextActionLabel(prospect.queue)}`);
 }
 
+function renderProspectReplan(payload, context) {
+  const prospect = payload?.prospect || {};
+  const current = payload?.current || {};
+  const replanned = payload?.replanned || {};
+  const status = replanStatusLabel(payload);
+
+  writeLine(context.stdout, `Replan ${status} for ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
+  writeLine(context.stdout, `Changed: ${payload?.changed ? "yes" : "no"}`);
+  if (payload?.reason_code) writeLine(context.stdout, `Reason: ${payload.reason_code}`);
+  writeLine(context.stdout, `Current: ${formatCoachAction(current.next_action)}`);
+  writeLine(context.stdout, `Replanned: ${formatCoachAction(replanned.next_action)}`);
+  if (replanned.rationale) writeLine(context.stdout, `Rationale: ${replanned.rationale}`);
+  if (replanned.guidance) writeLine(context.stdout, `Guidance: ${replanned.guidance}`);
+  if (payload?.status === "dry_run") writeLine(context.stdout, "Run again with --apply to persist this plan.");
+  if (payload?.status === "coach_error") writeLine(context.stdout, "The plan was not persisted. Fix the coach error and rerun with --apply.");
+}
+
+function replanStatusLabel(payload) {
+  if (payload?.status === "dry_run") return "dry run";
+  if (payload?.status === "coach_error") return "coach error";
+  if (payload?.status === "not_applied") return "not applied";
+
+  return payload?.applied ? "applied" : "dry run";
+}
+
+function formatCoachAction(nextAction = {}) {
+  const action = nextAction?.label || nextAction?.type || "none";
+  const mode = nextAction?.request_mode || nextAction?.mode;
+  const timing = nextAction?.timing?.mode;
+  const details = compactText([mode, timing]).join(", ");
+
+  return details ? `${action} (${details})` : action;
+}
+
 function renderProspectDisposition(payload, context, { action }) {
   const prospect = payload?.prospect || {};
   const accountProspect = payload?.account_prospect || {};
@@ -4595,6 +4709,87 @@ function renderOperatorOutcome(payload, context) {
   if (payload?.event?.prefix_id) {
     writeLine(context.stdout, `Event: ${payload.event.prefix_id} (${display(payload.event.key)})`);
   }
+}
+
+function renderOperatorFailedDrafts(payload, context) {
+  const rows = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
+  if (rows.length === 0) {
+    writeLine(context.stdout, "No failed operator drafts found.");
+    return;
+  }
+
+  writeLine(context.stdout, "Failed operator drafts");
+  writeAlignedTable(context, ["ROW ID", "PROSPECT", "MOTION", "STATUS", "REASON", "DRAFT"], rows.map(operatorFailedDraftTableRow));
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, `Shown: ${rows.length}`);
+  writeLine(context.stdout, "Requeue: audienti operator failed-drafts requeue <row_id> [row_id...]");
+  writeLine(context.stdout, "If a rewrite fails again, it remains in this list with the latest failure reason.");
+}
+
+function renderOperatorFailedDraftRequeue(payload, context) {
+  const metrics = payload?.metrics || {};
+  const queued = Number(metrics.queued_count || 0);
+  const skipped = Number(metrics.skipped_count || 0);
+  const failed = Number(metrics.failed_count || 0);
+  writeLine(context.stdout, `Queued draft rewrites: ${queued}`);
+  if (skipped > 0) writeLine(context.stdout, `Skipped: ${skipped}`);
+  if (failed > 0) writeLine(context.stdout, `Failed: ${failed}`);
+
+  writeOperatorFailedDraftRequeueDetails(context, "Queued", payload?.queued);
+  writeOperatorFailedDraftRequeueDetails(context, "Skipped", payload?.skipped);
+  writeOperatorFailedDraftRequeueDetails(context, "Failed", payload?.failed);
+
+  const message = payload?.message ||
+    "Rewrites run asynchronously. Re-run `audienti operator failed-drafts` with the same filters to see drafts that still fail after rewriting.";
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, message);
+}
+
+function writeOperatorFailedDraftRequeueDetails(context, label, rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  if (list.length === 0) return;
+
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, label);
+  writeAlignedTable(context, ["ROW ID", "PROSPECT", "REASON", "DRAFT ID", "JOB ID"], list.map((row) => [
+    display(row.row_id),
+    display(row.prospect_name || row.prospect_id),
+    display(row.reason),
+    display(row.draft_id || row.source_draft_id),
+    display(row.job_id)
+  ]));
+}
+
+function operatorFailedDraftTableRow(row) {
+  const draft = row?.operator_draft || {};
+  return [
+    display(row?.id),
+    operatorSubjectLabel(row),
+    operatorMotionLabel(row),
+    display(draft.status || draft.state),
+    operatorFailedDraftReason(draft),
+    operatorFailedDraftSnippet(draft)
+  ];
+}
+
+function operatorFailedDraftReason(draft) {
+  const payload = draft?.payload || {};
+  const codes = Array.isArray(payload.quality_codes) ? payload.quality_codes.filter(Boolean).join(",") : "";
+  return display(
+    codes ||
+      payload.blank_reason ||
+      payload.error ||
+      payload.message ||
+      payload.status ||
+      draft?.status ||
+      draft?.state,
+    "-"
+  );
+}
+
+function operatorFailedDraftSnippet(draft) {
+  const payload = draft?.payload || {};
+  return truncateCliText(payload.subject || payload.body || payload.text || "", 64) || "-";
 }
 
 function renderAnalyticsProspects(payload, context) {
@@ -5379,6 +5574,7 @@ const HELP_TOPICS = new Map([
     "    audienti prospects show <prsp_id>",
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
     "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected>",
+    "    audienti prospects replan <prsp_id> [--apply]",
     "    audienti prospects lock <prsp_id> [--note <text>]",
     "    audienti prospects reject <prsp_id>",
     "    audienti prospects nurture <prsp_id> [--reason <reason>]",
@@ -5417,11 +5613,13 @@ const HELP_TOPICS = new Map([
     "    audienti prospects write <prsp_id> --type <surface_key>",
     "    audienti prospects sequence-export <prsp_id>",
     "",
-    "  Operator queue",
-    "    audienti operator next --plan",
-    "    audienti operator next --done --note <text>",
-    "    audienti operator queue",
-    "",
+  "  Operator queue",
+  "    audienti operator next --plan",
+  "    audienti operator next --done --note <text>",
+  "    audienti operator queue",
+  "    audienti operator failed-drafts",
+  "    audienti operator failed-drafts requeue <row_id>",
+  "",
     "  Analytics",
     "    audienti analytics prospects --window 24h",
     "    audienti analytics dashboard --play-tag <tag>",
@@ -6881,6 +7079,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
     "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json]",
+    "  audienti prospects replan <prsp_id> [--apply] [--json]",
     "  audienti prospects reject <prsp_id> [--json]",
     "  audienti prospects nurture <prsp_id> [--reason <reason>] [--json]",
     "  audienti prospects restore <prsp_id> [--json]",
@@ -7060,6 +7259,28 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/prospects/:id.json"
+  ].join("\n")],
+
+  ["prospects replan", [
+    "Usage:",
+    `  ${PROSPECTS_REPLAN_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Re-run the next-action coach for one account prospect from the CLI without adding a product UI button.",
+    "",
+    "Behavior:",
+    "  Defaults to a dry-run so operators can compare the cached plan with the current planner output.",
+    "  Pass --apply to persist the replanned AccountProspect coach payload.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/replan.json",
+    "",
+    "JSON body:",
+    "  {",
+    "    \"apply\": true",
+    "  }"
   ].join("\n")],
 
   ["prospects reject", [
@@ -7682,9 +7903,11 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
     "  audienti operator queue [--json]",
+    "  audienti operator failed-drafts [--json]",
+    "  audienti operator failed-drafts requeue (--all | <row_id> [row_id...])",
     "  audienti operator outcome <row_id> --payload <file.json>",
     "",
-    "Status: read commands and prospect next-move writeback implemented",
+    "Status: read commands, failed draft requeue, and prospect next-move writeback implemented",
     "",
     "Filters:",
     "  --principal <account_user_id>",
@@ -7740,6 +7963,37 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/operator.json"
+  ].join("\n")],
+
+  ["operator failed-drafts", [
+    "Usage:",
+    "  audienti operator failed-drafts [--json] [filters] [--account <acct_id>]",
+    "  audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Lists failed prospect operator drafts and queues selected drafts for rewriting.",
+    "",
+    "Filters:",
+    "  --principal <account_user_id>",
+    "  --motion <motn_id>",
+    "  --list <list_id>",
+    "  --stage <stage>",
+    "  --query <text>",
+    "",
+    "Output:",
+    "  Plain text: failed draft rows with status, reason, and draft snippet",
+    "  JSON list: standard operator queue payload forced to prospect draft_failed rows",
+    "  JSON requeue: { status, queued[], skipped[], failed[], metrics, message }",
+    "",
+    "Notes:",
+    "  Requeue is async. A queued response means the rewrite job was accepted, not that the draft passed.",
+    "  If a rewrite fails again, rerun the list command with the same filters to see the latest failure reason.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=prospect&writing_status=draft_failed",
+    "  POST /api/v1/accounts/:account_id/operator/failed_drafts/requeue.json"
   ].join("\n")],
 
   ["operator outcome", [
@@ -8008,11 +8262,13 @@ const HELP_TOPICS = new Map([
     "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...]",
     "",
-    "6. Work the operator queue",
-    "  audienti operator next",
-    "  audienti operator next --plan",
-    "  audienti operator queue --json",
-    "  audienti operator outcome <row_id> --payload <file.json>",
+  "6. Work the operator queue",
+  "  audienti operator next",
+  "  audienti operator next --plan",
+  "  audienti operator queue --json",
+  "  audienti operator failed-drafts",
+  "  audienti operator failed-drafts requeue <row_id>",
+  "  audienti operator outcome <row_id> --payload <file.json>",
     "",
     "7. Inspect account analytics",
     "  audienti users activity me --window 7d",

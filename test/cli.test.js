@@ -58,8 +58,11 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti prospects nurture <prsp_id>/);
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti prospects set-status <prsp_id> --status <active\|nurture\|non_responsive\|not_fit\|bad_data_404\|rejected>/);
+  assert.match(stdout.output, /audienti prospects replan <prsp_id>/);
   assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
+  assert.match(stdout.output, /audienti operator failed-drafts/);
+  assert.match(stdout.output, /audienti operator failed-drafts requeue <row_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
@@ -271,6 +274,7 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti prospects restore <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti operator next --plan/);
+  assert.match(stdout.output, /audienti operator failed-drafts/);
   assert.match(stdout.output, /audienti analytics prospects --window 24h/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti analytics visibility --window 24h --user me/);
@@ -290,6 +294,7 @@ test("resource help lists child commands", async () => {
   assert.match(stdout.output, /audienti prospects check/);
   assert.match(stdout.output, /audienti prospects show <prsp_id>/);
   assert.match(stdout.output, /audienti prospects set-status <prsp_id>/);
+  assert.match(stdout.output, /audienti prospects replan <prsp_id>/);
   assert.match(stdout.output, /audienti prospects lock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects unlock <prsp_id>/);
   assert.match(stdout.output, /audienti prospects reject <prsp_id>/);
@@ -464,7 +469,11 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["operator", "help"],
-      expected: [/audienti operator next/, /--opportunity-kind prospect\|visibility/]
+      expected: [/audienti operator next/, /audienti operator failed-drafts/, /--opportunity-kind prospect\|visibility/]
+    },
+    {
+      args: ["operator", "failed-drafts", "help"],
+      expected: [/Usage:\n  audienti operator failed-drafts/, /requeue is async/i, /operator\/failed_drafts\/requeue\.json/]
     },
     {
       args: ["operator", "next", "help"],
@@ -521,6 +530,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["prospects", "set-status", "help"],
       expected: [/Usage:\n  audienti prospects set-status <prsp_id>/, /bad_data_404/, /active restores the prospect/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/nurture\.json/]
+    },
+    {
+      args: ["prospects", "replan", "help"],
+      expected: [/Usage:\n  audienti prospects replan <prsp_id>/, /dry-run/, /--apply/, /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/replan\.json/]
     },
     {
       args: ["prospects", "reject", "help"],
@@ -3511,6 +3524,117 @@ test("prospects set-status rejects unsupported statuses without calling the api"
 
     assert.equal(exitCode, 1);
     assert.match(stderr.output, /Usage: audienti prospects set-status <prsp_id>/);
+  });
+});
+
+test("prospects replan dry-runs next-action coach output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/replan.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {});
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        status: "dry_run",
+        applied: false,
+        changed: true,
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        current: {
+          next_action: { type: "connection_request", request_mode: "blank" },
+          rationale: "Cached while sender capabilities were stale."
+        },
+        replanned: {
+          next_action: { type: "follow", timing: { mode: "now" } },
+          rationale: "Pre-connect should start with a follow.",
+          guidance: "Follow the profile before requesting a connection."
+        }
+      });
+    });
+
+    const exitCode = await run(["prospects", "replan", "prsp_one"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Replan dry run for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Changed: yes/);
+    assert.match(stdout.output, /Current: connection_request \(blank\)/);
+    assert.match(stdout.output, /Replanned: follow \(now\)/);
+    assert.match(stdout.output, /Run again with --apply to persist this plan\./);
+  });
+});
+
+test("prospects replan applies and supports json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      status: "applied",
+      applied: true,
+      changed: true,
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      current: { next_action: { type: "connection_request" } },
+      replanned: { next_action: { type: "follow" } }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/prsp_one/replan.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { apply: true });
+
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["prospects", "replan", "prsp_one", "--apply", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("prospects replan shows coach errors as not persisted", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      status: "coach_error",
+      applied: false,
+      changed: false,
+      reason_code: "coach_error",
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      current: { next_action: { type: "follow", timing: { mode: "now" } } },
+      replanned: {
+        next_action: { type: "wait", timing: { mode: "now" } },
+        rationale: "Insufficient angle data for a coaching recommendation.",
+        guidance: "Collect additional signals or refresh research context."
+      }
+    }));
+
+    const exitCode = await run(["prospects", "replan", "prsp_one", "--apply"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Replan coach error for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Reason: coach_error/);
+    assert.match(stdout.output, /The plan was not persisted\. Fix the coach error and rerun with --apply\./);
+    assert.doesNotMatch(stdout.output, /Run again with --apply to persist this plan\./);
   });
 });
 
@@ -6804,6 +6928,184 @@ test("operator queue renders a clean aligned table with motion names", async () 
     assert.match(stdout.output, /MOVE ID\s+WORK TYPE\s+SUBJECT\s+MOTION\s+NEXT ACTION/);
     assert.match(stdout.output, /motion_visibility_123\s+Visibility\s+Visibility Author\s+Inbound Queue\s+Review comment/);
     assert.doesNotMatch(stdout.output, /Inbound Queue \(motn_inbound\)/);
+  });
+});
+
+test("operator failed-drafts lists failed prospect drafts with reason and snippet", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator.json");
+      assert.equal(url.searchParams.get("opportunity_kind"), "prospect");
+      assert.equal(url.searchParams.get("writing_status"), "draft_failed");
+      assert.equal(url.searchParams.get("principal_account_user_id"), "42");
+      assert.equal(url.searchParams.get("query"), "pat");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        next_move: null,
+        decision_queue: [{
+          id: "oprow_failed_123",
+          opportunity_kind: "prospect",
+          prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+          motion: { prefix_id: "motn_one", name: "Motion One" },
+          operator_draft: {
+            state: "draft_failed",
+            status: "quality_failure",
+            payload: {
+              status: "quality_failure",
+              body: "Pat, noticed your team is tightening vendor governance before renewals.",
+              quality_codes: ["too_many_sentences"]
+            }
+          }
+        }],
+        filters: {},
+        metrics: {}
+      });
+    });
+
+    const exitCode = await run(["operator", "failed-drafts", "--principal", "42", "--query", "pat"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Failed operator drafts/);
+    assert.match(stdout.output, /oprow_failed_123\s+Pat Prospect\s+Motion One\s+quality_failure\s+too_many_sentences/);
+    assert.match(stdout.output, /Requeue: audienti operator failed-drafts requeue <row_id>/);
+    assert.match(stdout.output, /If a rewrite fails again, it remains in this list/);
+  });
+});
+
+test("operator failed-drafts requeue posts selected rows and reports async rewrite status", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/failed_drafts/requeue.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        principal_account_user_id: "42",
+        motion_id: "motn_one",
+        opportunity_kind: "prospect",
+        writing_status: "draft_failed",
+        row_ids: ["oprow_failed_123", "prsp_two"]
+      });
+      return jsonResponse({
+        status: "partial",
+        queued: [{
+          row_id: "oprow_failed_123",
+          prospect_id: "prsp_one",
+          prospect_name: "Pat Prospect",
+          source_draft_id: 100,
+          draft_id: 100,
+          job_id: "job-123"
+        }],
+        skipped: [],
+        failed: [{ row_id: "prsp_two", reason: "not_found" }],
+        metrics: {
+          requested_count: 2,
+          matched_count: 1,
+          queued_count: 1,
+          skipped_count: 0,
+          failed_count: 1
+        },
+        message: "Rewrites run asynchronously. Re-run `audienti operator failed-drafts` with the same filters to see drafts that still fail after rewriting."
+      });
+    });
+
+    const exitCode = await run([
+      "operator",
+      "failed-drafts",
+      "requeue",
+      "oprow_failed_123",
+      "prsp_two",
+      "--principal",
+      "42",
+      "--motion",
+      "motn_one"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Queued draft rewrites: 1/);
+    assert.match(stdout.output, /Failed: 1/);
+    assert.match(stdout.output, /Pat Prospect/);
+    assert.match(stdout.output, /not_found/);
+    assert.match(stdout.output, /Rewrites run asynchronously/);
+    assert.match(stdout.output, /still fail after rewriting/);
+  });
+});
+
+test("operator failed-drafts requeue can queue the current failed page", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator/failed_drafts/requeue.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        principal_account_user_id: "42",
+        opportunity_kind: "prospect",
+        writing_status: "draft_failed",
+        all: true,
+        limit: "10"
+      });
+      return jsonResponse({
+        status: "queued",
+        queued: [],
+        skipped: [],
+        failed: [],
+        metrics: { queued_count: 0, skipped_count: 0, failed_count: 0 },
+        message: "Rewrites run asynchronously."
+      });
+    });
+
+    const exitCode = await run(["operator", "failed-drafts", "requeue", "--all", "--limit", "10", "--principal", "42"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Queued draft rewrites: 0/);
+    assert.match(stdout.output, /Rewrites run asynchronously/);
+  });
+});
+
+test("operator failed-drafts requeue rejects missing selection before calling the API", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("invalid requeue input must not call the API");
+    });
+
+    const exitCode = await run(["operator", "failed-drafts", "requeue"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(fetch.calls.length, 0);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Usage: audienti operator failed-drafts requeue/);
   });
 });
 

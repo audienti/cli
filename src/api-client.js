@@ -366,6 +366,13 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId]));
   }
 
+  replanProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "replan"]), {
+      method: "POST",
+      body
+    });
+  }
+
   assignProspects(accountId, body) {
     return this.requestJson(accountPath(accountId, ["prospects", "assign"]), {
       method: "POST",
@@ -498,6 +505,13 @@ export class AudientiClient {
 
   operatorNext(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operator", "next"], query));
+  }
+
+  requeueOperatorFailedDrafts(accountId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["operator", "failed_drafts", "requeue"]), {
+      method: "POST",
+      body
+    });
   }
 
   operatorOutcome(accountId, body) {
