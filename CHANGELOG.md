@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-08-04
+
+### Changed
+
+- Track the account API contract update that blocks provider-backed company search while account processing is stopped.
+
 ## [0.1.29] - 2026-07-23
 
 ### Added
