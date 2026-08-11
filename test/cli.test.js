@@ -31,6 +31,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /Work areas:/);
   assert.match(stdout.output, /Setup & identity/);
   assert.match(stdout.output, /audienti update check/);
+  assert.match(stdout.output, /audienti setup play preflight/);
   assert.match(stdout.output, /Motions \/ plays/);
   assert.match(stdout.output, /Prospects/);
   assert.match(stdout.output, /Lists & targeting inputs/);
@@ -70,6 +71,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti operator failed-drafts requeue <row_id>/);
   assert.match(stdout.output, /audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>/);
   assert.match(stdout.output, /audienti analytics dashboard --play-tag <tag>/);
+  assert.match(stdout.output, /audienti analytics stages --interval weekly/);
   assert.match(stdout.output, /audienti analytics cohorts create-list --name "Blank note test"/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
   assert.match(stdout.output, /audienti content programs/);
@@ -264,9 +266,11 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /Authenticate and select an account/);
   assert.match(stdout.output, /audienti users list/);
   assert.match(stdout.output, /audienti users select me/);
+  assert.match(stdout.output, /audienti setup play preflight --principal me --platform linkedin/);
   assert.match(stdout.output, /audienti offers list/);
   assert.match(stdout.output, /audienti icps list/);
   assert.match(stdout.output, /audienti motions create --payload <file\.json>/);
+  assert.match(stdout.output, /audienti setup play preflight --principal <account_user_id\|me> --platform linkedin/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
   assert.match(stdout.output, /audienti motions pause <motn_id>/);
   assert.match(stdout.output, /audienti prospects import https:\/\/www\.linkedin\.com\/in\/example/);
@@ -283,6 +287,7 @@ test("agent workflow help gives local agents common production paths", async () 
   assert.match(stdout.output, /audienti operator failed-drafts/);
   assert.match(stdout.output, /audienti analytics prospects --window 24h/);
   assert.match(stdout.output, /audienti analytics users --user me --window 30d/);
+  assert.match(stdout.output, /audienti analytics stages --interval weekly --play-tag wine_campaign/);
   assert.match(stdout.output, /audienti analytics visibility --window 24h --user me/);
   assert.match(stdout.output, /audienti analytics content --window week/);
   assert.match(stdout.output, /Current gaps to plan around:/);
@@ -342,6 +347,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["users", "activity", "help"],
       expected: [/Usage:\n  audienti users activity \[account_user_id\|me\]/, /GET \/api\/v1\/accounts\/:account_id\/operations\/users\/:user_id\/activity\.json/]
+    },
+    {
+      args: ["setup", "play", "preflight", "help"],
+      expected: [/Usage:\n  audienti setup play preflight/, /GET \/api\/v1\/accounts\/:account_id\/social_cookies\.json/]
     },
     {
       args: ["account", "select", "help"],
@@ -538,6 +547,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["analytics", "dashboard", "help"],
       expected: [/Usage:\n  audienti analytics dashboard/, /cohort_company_target_count/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/dashboard\.json/]
+    },
+    {
+      args: ["analytics", "stages", "help"],
+      expected: [/Usage:\n  audienti analytics stages/, /conversion_grid\.rows\[\]/, /stage_aging\.rows\[\]/, /GET \/api\/v1\/accounts\/:account_id\/analytics\/stages\.json/]
     },
     {
       args: ["analytics", "cohorts", "help"],
@@ -1243,6 +1256,107 @@ test("users activity supports json output", async () => {
     });
 
     const exitCode = await run(["users", "activity", "42", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("setup play preflight checks connected account readiness for the saved principal", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = {
+      account_id: 1,
+      account_prefix_id: "acct_one",
+      platform: "linkedin",
+      account_user: { id: 42, user_id: 7, name: "User One", email: "one@example.com", current: true },
+      ready: true,
+      reason: "ready",
+      setup_url: "https://app.audienti.com/operations/users/42/social_cookies/new?service_identifier=linkedin",
+      social_cookie: {
+        id: 11,
+        prefix_id: "scok_linkedin",
+        service_identifier: "linkedin",
+        username: "user-one",
+        status: "active",
+        accessible_to_account: true,
+        actionable: true,
+        automation: {
+          autopilot_enabled: true,
+          automatic_sending_enabled: true,
+          connection_request_autopilot_enabled: false
+        },
+        urls: {
+          edit_url: "https://app.audienti.com/operations/users/42/social_cookies/scok_linkedin/edit",
+          mapping_url: "https://app.audienti.com/user/social_cookies/scok_linkedin/rights"
+        }
+      },
+      social_cookies: []
+    };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/social_cookies.json?account_user_id=42&platform=linkedin");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["setup", "play", "preflight"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Setup preflight: linkedin for User One \(42\)/);
+    assert.match(stdout.output, /Status: ready \(ready\)/);
+    assert.match(stdout.output, /Connected account: user-one \(scok_linkedin\)/);
+    assert.match(stdout.output, /Mapped to account: yes/);
+    assert.match(stdout.output, /Automation: autopilot on, automatic sending on, connection requests off/);
+    assert.match(stdout.output, /Edit URL: https:\/\/app\.audienti\.com\/operations\/users\/42\/social_cookies\/scok_linkedin\/edit/);
+  });
+});
+
+test("setup play preflight returns setup URL as json when the principal has no connected account", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const responseBody = {
+      account_id: 1,
+      account_prefix_id: "acct_one",
+      platform: "linkedin",
+      account_user: { id: 43, user_id: 8, name: "User Two", email: "two@example.com", current: false },
+      ready: false,
+      reason: "needs_setup",
+      setup_url: "https://app.audienti.com/operations/users/43/social_cookies/new?service_identifier=linkedin",
+      social_cookie: null,
+      social_cookies: []
+    };
+    const fetch = createFetch((url) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/social_cookies.json?account_user_id=two%40example.com&platform=linkedin");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run([
+      "--account",
+      "acct_two",
+      "setup",
+      "play",
+      "preflight",
+      "--principal",
+      "two@example.com",
+      "--json"
+    ], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
     assert.deepEqual(JSON.parse(stdout.output), responseBody);
@@ -8221,6 +8335,162 @@ test("analytics dashboard supports campaigns alias and json output", async () =>
     });
 
     const exitCode = await run(["analytics", "campaigns", "--tag", "wine_campaign", "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("analytics stages sends cohort filters and renders conversion and aging grids", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/stages.json");
+      assert.equal(url.searchParams.get("cohort_start_date"), "2026-07-01");
+      assert.equal(url.searchParams.get("cohort_end_date"), "2026-07-14");
+      assert.equal(url.searchParams.get("play_tag"), "wine_campaign");
+      assert.equal(url.searchParams.get("motion_id"), "motn_focus");
+      assert.equal(url.searchParams.get("list_id"), "list_blank_notes");
+      assert.equal(url.searchParams.get("offer_id"), "offr_one");
+      assert.equal(url.searchParams.get("icp_id"), "icpp_one");
+      assert.equal(url.searchParams.get("account_user_id"), "42");
+      assert.equal(url.searchParams.get("interval"), "weekly");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      return jsonResponse({
+        kind: "stages",
+        cohort: {
+          start_date: "2026-07-01",
+          end_date: "2026-07-14",
+          label: "Jul 1, 2026 - Jul 14, 2026",
+          field: "account_prospects.created_at"
+        },
+        filters: {
+          play_tag: "wine_campaign",
+          motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion" },
+          list: { id: 55, prefix_id: "list_blank_notes", name: "Blank note requests" },
+          offer: { id: 4, prefix_id: "offr_one", name: "Wine Offer" },
+          icp: { id: 5, prefix_id: "icpp_one", name: "Wine ICP" },
+          account_user: { id: 42, name: "User One", email: "one@example.com" }
+        },
+        conversion_grid: {
+          interval: "weekly",
+          row_heading: "Week",
+          window_description: "Weekly cohorts, newest first",
+          maturity_days: 21,
+          stage_definitions: [
+            { key: "prospects_found", label: "Prospects", kind: "count" },
+            { key: "connected_rate", label: "Connected rate", kind: "rate" },
+            { key: "reply_rate", label: "Reply rate", kind: "rate" }
+          ],
+          rows: [
+            {
+              label: "Jul 1 - Jul 7",
+              values: {
+                prospects_found: { kind: "count", count: 10 },
+                connected_rate: { kind: "rate", numerator: 4, denominator: 8, rate: 50, maturing: true },
+                reply_rate: { kind: "rate", numerator: 2, denominator: 4, rate: 50, maturing: false }
+              }
+            }
+          ]
+        },
+        stage_aging: {
+          due_soon_window_days: 2,
+          totals: { current_count: 3, due_soon_count: 1, overdue_count: 2, overdue_rate: 66.7 },
+          rows: [
+            {
+              key: "connected",
+              label: "Connected",
+              current_count: 3,
+              due_soon_count: 1,
+              overdue_count: 2,
+              overdue_rate: 66.7,
+              median_stage_age_days: 5,
+              oldest_idle_days: 9
+            }
+          ]
+        }
+      });
+    });
+
+    const exitCode = await run([
+      "analytics",
+      "stages",
+      "--cohort-start",
+      "2026-07-01",
+      "--cohort-end",
+      "2026-07-14",
+      "--play-tag",
+      "wine_campaign",
+      "--motion",
+      "motn_focus",
+      "--list",
+      "list_blank_notes",
+      "--offer",
+      "offr_one",
+      "--icp",
+      "icpp_one",
+      "--user",
+      "me",
+      "--interval",
+      "weekly"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Stage analytics \(Jul 1, 2026 - Jul 14, 2026\)/);
+    assert.match(stdout.output, /Tag: wine_campaign/);
+    assert.match(stdout.output, /Conversion interval: weekly/);
+    assert.match(stdout.output, /Connection maturity window: 21 days/);
+    assert.match(stdout.output, /Weekly cohorts, newest first/);
+    assert.match(stdout.output, /Jul 1 - Jul 7\s+10\s+4\/8 50% maturing\s+2\/4 50%/);
+    assert.match(stdout.output, /Stage Aging/);
+    assert.match(stdout.output, /Totals: 3 current, 1 due soon, 2 overdue \(66.7%\)/);
+    assert.match(stdout.output, /Connected\s+3\s+1\s+2\s+66.7%\s+5d\s+9d/);
+  });
+});
+
+test("analytics stages supports monthly json output", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      kind: "stages",
+      conversion_grid: { interval: "monthly", rows: [] },
+      stage_aging: { rows: [] }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/stages.json");
+      assert.equal(url.searchParams.get("interval"), "monthly");
+      assert.equal(url.searchParams.get("play_tag"), "wine_campaign");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run([
+      "analytics",
+      "stages",
+      "--interval",
+      "monthly",
+      "--tag",
+      "wine_campaign",
+      "--json"
+    ], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
     assert.deepEqual(JSON.parse(stdout.output), responseBody);

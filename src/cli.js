@@ -61,6 +61,7 @@ const TASKS_LIST_USAGE = "Usage: audienti tasks list [--status <open|completed>]
 const TASKS_ADD_USAGE = "Usage: audienti tasks add --title <text> --due <time> [--prospect <prsp_id>] [--list <list_id>] [--assigned-user <id|me>] [--notes <text>] [--json] [--account <acct_id>]";
 const TASKS_COMPLETE_USAGE = "Usage: audienti tasks complete <ptsk_id> [--json] [--account <acct_id>]";
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage|related>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
+const SETUP_PLAY_PREFLIGHT_USAGE = "Usage: audienti setup play preflight [--principal <account_user_id|email|name|me>] [--platform linkedin] [--json] [--account <acct_id>]";
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
 const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
@@ -94,6 +95,7 @@ const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
 const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_STAGES_USAGE = "Usage: audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
 const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
@@ -189,6 +191,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
+  if (normalizedResource === "setup" && action === "play" && rest[0] === "preflight") return setupPlayPreflight(rest.slice(1), context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "show") return offersShow(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
@@ -288,6 +291,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["dashboard", "campaign", "campaigns"].includes(action)) return analyticsDashboard(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && action === "stages") return analyticsStages(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["cohorts", "cohort"].includes(action)) return analyticsCohorts(rest, context, { accountOverride });
 
   throw new CommandError(usage(), { exitCode: resource ? 1 : 0 });
@@ -720,6 +724,24 @@ async function usersActivity(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderUserActivity(payload, context);
+}
+
+async function setupPlayPreflight(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    principal: { type: "string" },
+    platform: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(SETUP_PLAY_PREFLIGHT_USAGE);
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.socialCookies(accountId, compactObject({
+    account_user_id: resolveAccountUserId(values.principal || "me", config, { accountOverride }),
+    platform: values.platform || "linkedin"
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderSetupPlayPreflight(payload, context);
 }
 
 async function offersList(args, context, { accountOverride } = {}) {
@@ -2751,6 +2773,18 @@ async function analyticsDashboard(args, context, { accountOverride } = {}) {
   renderAnalyticsDashboard(payload, context);
 }
 
+async function analyticsStages(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsStagesOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_STAGES_USAGE);
+  validateDatePair(values["cohort-start"], values["cohort-end"], "--cohort-start", "--cohort-end");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsStages(accountId, analyticsStagesQuery(values, config, { accountOverride }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsStages(payload, context);
+}
+
 async function analyticsCohorts(args, context, { accountOverride } = {}) {
   const action = args[0];
   if (action !== "create-list") throw new CommandError(ANALYTICS_COHORT_LIST_USAGE);
@@ -3024,6 +3058,13 @@ function analyticsDashboardOptions() {
   };
 }
 
+function analyticsStagesOptions() {
+  return {
+    ...analyticsDashboardOptions(),
+    interval: { type: "string" }
+  };
+}
+
 function analyticsCohortListOptions() {
   return {
     ...jsonOptions(),
@@ -3079,6 +3120,13 @@ function analyticsDashboardQuery(values, config = {}, { accountOverride } = {}) 
     offer_id: values.offer,
     icp_id: values.icp,
     account_user_id: resolveAccountUserId(values.user, config, { accountOverride })
+  });
+}
+
+function analyticsStagesQuery(values, config = {}, { accountOverride } = {}) {
+  return compactObject({
+    ...analyticsDashboardQuery(values, config, { accountOverride }),
+    interval: values.interval
   });
 }
 
@@ -3873,6 +3921,51 @@ function renderUserActivity(payload, context) {
       display(event.details)
     ].join("\t"));
   }
+}
+
+function renderSetupPlayPreflight(payload, context) {
+  const accountUser = payload?.account_user || {};
+  const socialCookie = payload?.social_cookie || null;
+  const urls = socialCookie?.urls || {};
+
+  writeLine(
+    context.stdout,
+    `Setup preflight: ${display(payload?.platform, "linkedin")} for ${display(accountUser.name || accountUser.email)} (${display(accountUser.id)})`
+  );
+  writeLine(context.stdout, `Status: ${payload?.ready ? "ready" : "blocked"} (${display(payload?.reason, "unknown")})`);
+
+  if (socialCookie) {
+    writeLine(
+      context.stdout,
+      `Connected account: ${display(socialCookie.username || socialCookie.name)} (${display(socialCookie.prefix_id)})`
+    );
+    writeLine(context.stdout, `Connection status: ${display(socialCookie.status)}`);
+    writeLine(context.stdout, `Mapped to account: ${socialCookie.accessible_to_account ? "yes" : "no"}`);
+    writeLine(context.stdout, `Actionable: ${socialCookie.actionable ? "yes" : "no"}`);
+    renderSetupAutomationSummary(socialCookie.automation || {}, context);
+  } else {
+    writeLine(context.stdout, "Connected account: none");
+  }
+
+  if (!socialCookie && payload?.setup_url) {
+    writeLine(context.stdout, `Setup URL: ${payload.setup_url}`);
+  } else if (payload?.reason === "needs_account_access" && urls.mapping_url) {
+    writeLine(context.stdout, `Mapping URL: ${urls.mapping_url}`);
+  } else if (payload?.reason === "needs_reconnect" && urls.edit_url) {
+    writeLine(context.stdout, `Edit URL: ${urls.edit_url}`);
+  } else if (urls.edit_url) {
+    writeLine(context.stdout, `Edit URL: ${urls.edit_url}`);
+  }
+}
+
+function renderSetupAutomationSummary(automation, context) {
+  const summary = [
+    `autopilot ${automation.autopilot_enabled ? "on" : "off"}`,
+    `automatic sending ${automation.automatic_sending_enabled ? "on" : "off"}`,
+    `connection requests ${automation.connection_request_autopilot_enabled ? "on" : "off"}`
+  ];
+
+  writeLine(context.stdout, `Automation: ${summary.join(", ")}`);
 }
 
 function renderCountRows(context, label, rows) {
@@ -5107,6 +5200,82 @@ function renderAnalyticsDashboard(payload, context) {
   writeCountTable(context, "Current pipeline stages", payload?.pipeline_stage_counts, ["STAGE", "COUNT"], countRow);
 }
 
+function renderAnalyticsStages(payload, context) {
+  const conversionGrid = payload?.conversion_grid || {};
+  writeLine(context.stdout, `Stage analytics (${display(payload?.cohort?.label, "selected cohort")})`);
+  if (payload?.cohort) {
+    writeLine(context.stdout, `Cohort: ${payload.cohort.start_date} to ${payload.cohort.end_date} (${display(payload.cohort.field, "account_prospects.created_at")})`);
+  }
+  writeDashboardFilters(payload, context);
+  writeLine(context.stdout, `Conversion interval: ${display(conversionGrid.interval, "weekly")}`);
+  writeLine(context.stdout, `Connection maturity window: ${display(conversionGrid.maturity_days, 21)} days`);
+  writeStageConversionTable(conversionGrid, context);
+  writeStageAgingTable(payload?.stage_aging, context);
+}
+
+function writeStageConversionTable(conversionGrid, context) {
+  const rows = Array.isArray(conversionGrid?.rows) ? conversionGrid.rows : [];
+  const definitions = Array.isArray(conversionGrid?.stage_definitions) ? conversionGrid.stage_definitions : [];
+  const columns = definitions.filter((definition) => definition?.key);
+
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, display(conversionGrid?.window_description, "Conversion cohorts"));
+  if (rows.length === 0 || columns.length === 0) return writeLine(context.stdout, "None");
+
+  const headers = ["COHORT", ...columns.map((column) => display(column.label || column.key))];
+  const tableRows = rows.map((row) => [
+    display(row?.label),
+    ...columns.map((column) => stageMetricValueLabel(row?.values?.[column.key]))
+  ]);
+
+  writeAlignedTable(context, headers, tableRows);
+}
+
+function writeStageAgingTable(stageAging, context) {
+  const rows = Array.isArray(stageAging?.rows) ? stageAging.rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Stage Aging");
+  if (rows.length === 0) return writeLine(context.stdout, "None");
+
+  const totals = stageAging?.totals || {};
+  writeLine(
+    context.stdout,
+    `Totals: ${display(totals.current_count, 0)} current, ${display(totals.due_soon_count, 0)} due soon, ${display(totals.overdue_count, 0)} overdue (${percentageLabel(totals.overdue_rate)})`
+  );
+  writeAlignedTable(
+    context,
+    ["STAGE", "CURRENT", "DUE SOON", "OVERDUE", "OVERDUE %", "MED AGE", "OLDEST IDLE"],
+    rows.map(stageAgingRow),
+    { numericColumns: [false, true, true, true, true, true, true] }
+  );
+}
+
+function stageAgingRow(row) {
+  return [
+    display(row?.label || row?.key),
+    display(row?.current_count, 0),
+    display(row?.due_soon_count, 0),
+    display(row?.overdue_count, 0),
+    percentageLabel(row?.overdue_rate),
+    dayCountLabel(row?.median_stage_age_days),
+    dayCountLabel(row?.oldest_idle_days)
+  ];
+}
+
+function stageMetricValueLabel(value) {
+  if (!value) return "-";
+  if (value.kind === "count") return display(value.count, 0);
+
+  const numerator = display(value.numerator, 0);
+  const denominator = display(value.denominator, 0);
+  const suffix = value.maturing ? " maturing" : "";
+  return `${numerator}/${denominator} ${percentageLabel(value.rate)}${suffix}`;
+}
+
+function dayCountLabel(value) {
+  return value === undefined || value === null || value === "" ? "-" : `${value}d`;
+}
+
 function renderAnalyticsCohortList(payload, context) {
   const list = payload?.list || {};
   writeLine(context.stdout, `Created analytics cohort list ${display(list.name)} (${display(list.prefix_id)}).`);
@@ -5824,6 +5993,7 @@ const HELP_TOPICS = new Map([
     "    audienti auth status",
     "    audienti config list",
     "    audienti update check",
+    "    audienti setup play preflight",
     "    audienti users list",
     "    audienti users select <account_user_id|email|name|me>",
     "    audienti users activity [account_user_id|me]",
@@ -5914,6 +6084,7 @@ const HELP_TOPICS = new Map([
     "  Analytics",
     "    audienti analytics prospects --window 24h",
     "    audienti analytics dashboard --play-tag <tag>",
+    "    audienti analytics stages --interval weekly",
     "    audienti analytics cohorts create-list --name \"Blank note test\" --start 2026-07-20 --end 2026-07-20 --note-mode blank",
     "    audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>",
     "    audienti analytics users --user me --window 30d",
@@ -5934,6 +6105,7 @@ const HELP_TOPICS = new Map([
     "  Preview a campaign:  audienti writer test-run <prsp_id>",
     "  Analyze one motion:  audienti motions analytics <motn_id>",
     "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
+    "  Compare stage rates:  audienti analytics stages --interval weekly",
     "  Audit your work:     audienti analytics users --user me --window 30d",
     "  Review reminders:    audienti tasks list",
     "",
@@ -6112,6 +6284,53 @@ const HELP_TOPICS = new Map([
     "",
     "Effect:",
     "  Saves accountId and accountName in local CLI config."
+  ].join("\n")],
+
+  ["setup", [
+    "Usage:",
+    "  audienti setup play preflight [--principal <account_user_id|email|name|me>] [--platform linkedin] [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Preflight account setup before an agent creates or activates an Audienti play.",
+    "",
+    "Commands:",
+    "  audienti setup play preflight  Check connected-account readiness and direct setup URLs"
+  ].join("\n")],
+
+  ["setup play", [
+    "Usage:",
+    "  audienti setup play preflight [--principal <account_user_id|email|name|me>] [--platform linkedin] [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Check the sender identity prerequisites for a new motion or play."
+  ].join("\n")],
+
+  ["setup play preflight", [
+    "Usage:",
+    `  ${SETUP_PLAY_PREFLIGHT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Verify that the selected principal has a connected account mapped to the current Audienti account before a play starts capture or outreach.",
+    "",
+    "Output shape:",
+    "  ready: true when the selected principal has a mapped, actionable platform account",
+    "  reason: ready | needs_setup | needs_account_access | needs_reconnect",
+    "  setup_url: direct operations URL for creating a connected account",
+    "  social_cookie.urls.mapping_url: owner URL for granting account access",
+    "  social_cookie.urls.edit_url: operations URL for reconnect/settings review when mapped",
+    "",
+    "Examples:",
+    "  audienti setup play preflight --principal me --platform linkedin",
+    "  audienti setup play preflight --principal 42 --json",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/social_cookies.json"
   ].join("\n")],
 
   ["users", [
@@ -8442,6 +8661,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
+    "  audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
     "  audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--note-mode <any|with_note|blank>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--platform <linkedin|email|gmail>] [--json]",
@@ -8458,6 +8678,7 @@ const HELP_TOPICS = new Map([
     "  --motion <motn_id>  For prospect and user analytics, filter AccountProspect.motion_id to one motion/play.",
     "  --list <list_id>  Filter analytics to prospects in one list, including analytics cohort lists.",
     "  --play-tag <tag>  For dashboard analytics, filter to motions/lists tagged with a campaign tag.",
+    "  --interval <weekly|monthly>  For stages analytics, select the conversion cohort grain.",
     "  --provenance <source>  Optional lower-level AccountProspect.intake_source filter.",
     "  --platform <linkedin|email|gmail>  For user analytics, filter events.platform. --channel is accepted as an alias.",
     "  cohort-analysis loops over recent weekly AccountProspect.created_at cohorts and compares their current stages.",
@@ -8495,6 +8716,35 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/analytics/dashboard.json"
+  ].join("\n")],
+
+  ["analytics stages", [
+    "Usage:",
+    `  ${ANALYTICS_STAGES_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Return the stages dashboard read model through the CLI, including weekly or monthly conversion cohorts and current stage aging.",
+    "",
+    "Options:",
+    "  --interval <weekly|monthly>  Conversion cohort grain. Defaults to weekly.",
+    "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select the AccountProspect.created_at cohort.",
+    "  --play-tag <tag>  Filter to motions/lists tagged with a campaign tag. --tag is accepted as an alias.",
+    "  --motion <motn_id>  Filter to one motion/play.",
+    "  --list <list_id>  Filter to prospects in one list, including analytics cohort lists.",
+    "  --offer <offr_id>  Filter to one offer.",
+    "  --icp <icp_id>  Filter to one ICP.",
+    "  --user <account_user_id|email|name|me>  Filter to prospects assigned to one account user.",
+    "",
+    "Output shape:",
+    "  conversion_grid.rows[]: period label, date bounds, totals_by_stage, and values keyed by stage metric",
+    "  conversion_grid.stage_definitions[]: stable metric keys and numerator/denominator stage definitions",
+    "  stage_aging.rows[]: current, due soon, overdue, age, and idle counts by current pipeline stage",
+    "  stage_aging.totals: rollup current, due soon, overdue, overdue_rate, and oldest_idle_days",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/stages.json"
   ].join("\n")],
 
   ["analytics prospects", [
@@ -8666,10 +8916,12 @@ const HELP_TOPICS = new Map([
     "  audienti accounts select <acct_id>",
     "  audienti users list",
     "  audienti users select me",
+    "  audienti setup play preflight --principal me --platform linkedin",
     "  audienti offers list",
     "  audienti icps list",
     "",
     "2. Create a motion or play",
+    "  audienti setup play preflight --principal <account_user_id|me> --platform linkedin",
     "  audienti motions create --payload <file.json>",
     "  audienti motions clone <motn_id> --name \"New subset motion\"",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
@@ -8725,6 +8977,7 @@ const HELP_TOPICS = new Map([
     "  audienti users activity me --window 7d",
     "  audienti analytics prospects --window 24h",
     "  audienti analytics dashboard --play-tag wine_campaign",
+    "  audienti analytics stages --interval weekly --play-tag wine_campaign",
     "  audienti analytics cohorts create-list --name \"Connection requests 2026-07-20\" --start 2026-07-20 --end 2026-07-20",
     "  audienti analytics users --user me --window 30d",
     "  audienti analytics visibility --window 24h --user me",

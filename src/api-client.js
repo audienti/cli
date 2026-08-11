@@ -44,6 +44,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["users"]));
   }
 
+  socialCookies(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["social_cookies"], query));
+  }
+
   userActivity(accountId, userId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operations", "users", userId, "activity"], query));
   }
@@ -570,6 +574,10 @@ export class AudientiClient {
 
   analyticsDashboard(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["analytics", "dashboard"], query));
+  }
+
+  analyticsStages(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "stages"], query));
   }
 
   createAnalyticsCohortList(accountId, body = {}) {

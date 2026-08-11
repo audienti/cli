@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-08-10
+
+### Added
+
+- Add `audienti setup play preflight` for checking LinkedIn connected-account readiness and returning direct setup, mapping, or edit URLs before an agent activates a play.
+- Add `audienti analytics stages` for weekly or monthly stage conversion cohorts and current stage aging/overdue metrics.
+
 ## [0.1.30] - 2026-08-04
 
 ### Changed
