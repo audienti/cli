@@ -1,12 +1,14 @@
 ---
 name: audienti
-description: Use when the user wants to operate Audienti through the production CLI, including account selection, plays, prospect imports, lists, message previews, or supported operator outcomes.
+description: Use when the user wants to operate Audienti through the production CLI or app-hosted MCP endpoint, including account selection, plays, prospect imports, lists, message previews, analytics, or supported operator outcomes.
 ---
 
-# Audienti CLI
+# Audienti CLI and MCP
 
-Use the installed `audienti` command as the production contract. Do not build a
-parallel wrapper or call undocumented API endpoints.
+Use the installed `audienti` command or Audienti's app-hosted MCP endpoint as
+the production contract. The packaged `audienti-mcp` command is only a local
+stdio bridge for MCP hosts. Do not build a parallel wrapper or call
+undocumented API endpoints.
 
 ## Setup
 
@@ -23,9 +25,15 @@ curl -fsSL https://cli.audienti.com/install | bash
 ```
 
 3. Authentication is explicit and per machine. Do not ask a user to paste a
-production token into chat, a repository file, an issue, or a CI secret. Use
-the existing `audienti auth token` flow only after the user supplies a token
-through an approved secure channel.
+production token into chat, a repository file, an issue, or a CI secret. Prefer
+browser login:
+
+```bash
+audienti auth login
+```
+
+Use `audienti auth token` only after the user supplies a token through an
+approved secure channel.
 
 4. Start with discovery, not mutation:
 
@@ -34,6 +42,39 @@ audienti auth status
 audienti accounts list --json
 audienti help agent-workflows
 ```
+
+For MCP hosts, configure the packaged `.mcp.json` or run:
+
+```bash
+audienti-mcp
+```
+
+The bridge reads the same local config as the CLI and forwards MCP JSON-RPC to
+the app-hosted `/mcp` endpoint. Before starting the bridge, select account
+context:
+
+```bash
+audienti auth login
+audienti accounts list --json
+audienti accounts select <acct_id>
+audienti users select me
+```
+
+If the MCP host can call HTTP directly, use `POST /mcp` with the same bearer
+token as the API. Call `tools/list` first, then call named tools with
+`tools/call`. Account-scoped tools accept `account_id`; the local bridge injects
+the selected CLI account when it is omitted.
+
+Useful MCP tools:
+
+- `auth.me` confirms the token identity.
+- `accounts.list` shows accessible accounts.
+- `setup.play_preflight` returns connected-account readiness and setup or
+  mapping URLs.
+- `offers.create`, `icps.create`, and `motions.create` set up the offer, ICP,
+  and play.
+- `analytics.stages` returns stage conversion cohorts and stage aging.
+- `analytics.cohort_lists.create` materializes event cohorts as reusable lists.
 
 ## Operating Rules
 

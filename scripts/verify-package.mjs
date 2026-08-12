@@ -42,8 +42,16 @@ if (packageJson.bin?.audienti !== "./bin/audienti.js") {
   errors.push("package must expose the audienti binary");
 }
 
+if (packageJson.bin?.["audienti-mcp"] !== "./bin/audienti-mcp.js") {
+  errors.push("package must expose the audienti-mcp binary");
+}
+
 if (!Array.isArray(packageJson.files) || !packageJson.files.includes("skills/")) {
   errors.push('package files must include "skills/" so the agent-facing CLI contract ships');
+}
+
+if (!Array.isArray(packageJson.files) || !packageJson.files.includes(".mcp.json")) {
+  errors.push('package files must include ".mcp.json" so the MCP bridge config ships');
 }
 
 if (!Array.isArray(packageJson.files) || !packageJson.files.includes("install")) {
@@ -55,7 +63,9 @@ if (!changelog.includes(`## [${packageJson.version}]`)) {
 }
 
 await requireFile("bin/audienti.js");
+await requireExecutableFile("bin/audienti-mcp.js");
 await requireExecutableFile("install");
+await requireFile(".mcp.json");
 await requireTextFile("CNAME", "cli.audienti.com");
 await requireFile(".nojekyll");
 await requireFile("LICENSE");

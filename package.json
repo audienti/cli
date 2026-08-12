@@ -1,15 +1,17 @@
 {
   "name": "@audienti/cli",
-  "version": "0.1.31",
+  "version": "0.1.32",
   "description": "Agent-first command-line client for Audienti.",
   "type": "module",
   "bin": {
-    "audienti": "./bin/audienti.js"
+    "audienti": "./bin/audienti.js",
+    "audienti-mcp": "./bin/audienti-mcp.js"
   },
   "files": [
     "bin/",
     "src/",
     "skills/",
+    ".mcp.json",
     "install",
     "README.md",
     "LICENSE",

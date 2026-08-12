@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "audienti": {
+      "title": "Audienti",
+      "description": "Bridge MCP clients to Audienti's app-hosted /mcp endpoint for accounts, plays, prospects, lists, analytics, and operator workflows.",
+      "cwd": ".",
+      "command": "node",
+      "args": [
+        "./bin/audienti-mcp.js"
+      ]
+    }
+  }
+}

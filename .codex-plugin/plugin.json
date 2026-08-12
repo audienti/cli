@@ -1,7 +1,7 @@
 {
   "name": "audienti-cli",
-  "version": "0.1.31",
-  "description": "Use the Audienti production API through a local, agent-first CLI.",
+  "version": "0.1.32",
+  "description": "Use the Audienti production API through a local, agent-first CLI and app-hosted MCP bridge.",
   "author": {
     "name": "Audienti",
     "email": "wflanagan@audienti.com",
@@ -17,10 +17,11 @@
     "sales"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Audienti CLI",
-    "shortDescription": "Operate Audienti through its production CLI.",
-    "longDescription": "Install and use the Audienti production CLI for governed account, play, prospect, list, and operator workflows.",
+    "displayName": "Audienti",
+    "shortDescription": "Operate Audienti through its production CLI or MCP tools.",
+    "longDescription": "Install and use the Audienti production CLI and local bridge to Audienti's app-hosted MCP endpoint for governed account, play, prospect, list, analytics, and operator workflows.",
     "developerName": "Audienti",
     "category": "Sales",
     "capabilities": [

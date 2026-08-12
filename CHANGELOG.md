@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-08-11
+
+### Added
+
+- Add `audienti auth login` for browser-based local authentication through a loopback callback.
+- Add the `audienti-mcp` stdio bridge and Codex MCP manifest for Audienti's app-hosted MCP endpoint, including stage analytics and cohort list creation.
+
 ## [0.1.31] - 2026-08-10
 
 ### Added

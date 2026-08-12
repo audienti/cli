@@ -40,6 +40,13 @@ export class AudientiClient {
     return this.requestJson("/api/v1/accounts.json");
   }
 
+  mcp(message) {
+    return this.requestJson("/mcp", {
+      method: "POST",
+      body: message
+    });
+  }
+
   users(accountId) {
     return this.requestJson(accountPath(accountId, ["users"]));
   }

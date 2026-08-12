@@ -1,9 +1,10 @@
 # Audienti CLI
 
 Audienti CLI is the agent-first command-line client for the Audienti production
-API. It lets local coding agents and operators inspect accounts, create and
-manage plays, import prospects, build lists, manage task reminders, and work
-supported operator flows.
+API and the local bridge for Audienti's app-hosted MCP endpoint. It lets local
+coding agents and operators inspect accounts,
+create and manage plays, import prospects, build lists, manage task reminders,
+and work supported operator flows.
 
 ## Install
 
@@ -25,14 +26,24 @@ For one-off use, run `npx @audienti/cli --help`.
 
 ## Authenticate
 
-Create an Audienti API token through the product, then configure this machine:
+Authenticate through the browser, then configure the default account context:
 
 ```bash
-audienti auth token <token>
+audienti auth login
 audienti accounts list --json
 audienti accounts select <acct_id>
 audienti users list
 audienti users select <account_user_id|email|name|me>
+```
+
+`audienti auth login` opens Audienti in your browser, creates an API token from
+your signed-in web session, sends it back to a temporary `127.0.0.1` callback,
+and stores it in the local CLI config after validating it.
+
+If you already have a token, you can still configure it directly:
+
+```bash
+audienti auth token <token>
 ```
 
 The CLI writes its local configuration to `~/.config/audienti/config.json` with
@@ -54,6 +65,71 @@ audienti help agent-workflows
 Use `--json` whenever another program or agent will consume the result. Inspect
 the target state before mutations, and use the command-specific help before
 creating, changing, or deleting data.
+
+## MCP
+
+Audienti serves MCP from the app at `/mcp`. The package ships a small stdio
+bridge for MCP hosts that need a local command:
+
+```bash
+audienti-mcp
+```
+
+Use it this way:
+
+1. Install the package.
+2. Run `audienti auth login`.
+3. Run `audienti accounts select <acct_id>`.
+4. Configure your MCP host with the packaged `.mcp.json`, or point it at the
+   `audienti-mcp` command.
+5. In the MCP host, list tools and call the account-scoped tool you need.
+
+The bridge reads the same `~/.config/audienti/config.json` as the CLI, forwards
+MCP JSON-RPC messages to the app, and injects the selected account when a tool
+call does not include `account_id`. If you want a tool to run against a
+different account, pass `account_id` in that tool call.
+
+MCP clients that can call HTTP directly may use the hosted endpoint instead of
+the stdio bridge:
+
+```bash
+curl https://app.audienti.com/mcp \
+  -H "Authorization: Bearer $AUDIENTI_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'
+```
+
+Example tool call:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "analytics.stages",
+    "arguments": {
+      "account_id": "acct_...",
+      "query": {
+        "interval": "weekly",
+        "cohort_start_date": "2026-07-01",
+        "cohort_end_date": "2026-07-31"
+      }
+    }
+  }
+}
+```
+
+Useful MCP tools to start with:
+
+- `auth.me` confirms the token identity.
+- `accounts.list` shows accessible accounts.
+- `setup.play_preflight` returns LinkedIn connected-account readiness and setup
+  or mapping URLs.
+- `offers.create`, `icps.create`, and `motions.create` set up the offer, ICP,
+  and play.
+- `analytics.stages` returns stage conversion cohorts and stage aging.
+- `analytics.cohort_lists.create` materializes event cohorts as reusable lists.
 
 Common inspection commands:
 

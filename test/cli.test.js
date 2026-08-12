@@ -116,7 +116,7 @@ test("incomplete command prefixes print scoped help without calling the api", as
   const cases = [
     {
       args: ["auth"],
-      expected: [/Usage:\n  audienti auth token <token>/, /audienti auth status/, /Run `audienti auth token help`/]
+      expected: [/Usage:\n  audienti auth login/, /audienti auth status/, /Run `audienti auth login help`/]
     },
     {
       args: ["auth", "token"],
@@ -229,6 +229,104 @@ test("api network failures include configured host guidance", async () => {
     assert.match(stderr.output, /start the workspace app server first/);
     assert.match(stderr.output, /--host <url>/);
     assert.match(stderr.output, /fetch failed/);
+  });
+});
+
+test("auth login saves browser callback token and selected account", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.example.test/api/v1/me.json");
+      assert.equal(options.headers.Authorization, "Bearer browser-token");
+      return jsonResponse({ name: "Browser User", email: "browser@example.test" });
+    });
+    const callbackOnce = { called: false };
+    const callbackStdout = {
+      output: "",
+      write(chunk) {
+        this.output += chunk;
+        const match = this.output.match(/https:\/\/app\.example\.test\/cli\/auth\?[^\s]+/);
+        if (!match || callbackOnce.called) return;
+
+        callbackOnce.called = true;
+        const authUrl = new URL(match[0]);
+        const redirectUri = new URL(authUrl.searchParams.get("redirect_uri"));
+        redirectUri.searchParams.set("state", authUrl.searchParams.get("state"));
+        redirectUri.searchParams.set("token", "browser-token");
+        redirectUri.searchParams.set("host", "https://app.example.test");
+        redirectUri.searchParams.set("user_name", "Browser User");
+        redirectUri.searchParams.set("user_email", "browser@example.test");
+        redirectUri.searchParams.set("account_id", "acct_browser");
+        redirectUri.searchParams.set("account_name", "Browser Account");
+        setImmediate(() => globalThis.fetch(redirectUri));
+      }
+    };
+
+    const exitCode = await run(["auth", "login", "--host", "https://app.example.test", "--no-open"], {
+      env,
+      fetch,
+      stdout: callbackStdout,
+      stderr
+    });
+
+    stdout.output = callbackStdout.output;
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Open this URL to authenticate Audienti CLI:/);
+    assert.match(stdout.output, /Authenticated to https:\/\/app\.example\.test as Browser User\./);
+    assert.match(stdout.output, /Selected account Browser Account \(acct_browser\)\./);
+    assert.equal(stderr.output, "");
+
+    const config = await readConfig({ env });
+    assert.equal(config.host, "https://app.example.test");
+    assert.equal(config.token, "browser-token");
+    assert.equal(config.accountId, "acct_browser");
+    assert.equal(config.accountName, "Browser Account");
+  });
+});
+
+test("auth login defaults to app.audienti.com for packaged production use", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    const stderr = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/me.json");
+      assert.equal(options.headers.Authorization, "Bearer production-browser-token");
+      return jsonResponse({ name: "Production Browser User" });
+    });
+    const callbackStdout = {
+      output: "",
+      callbackStarted: false,
+      write(chunk) {
+        this.output += chunk;
+        const match = this.output.match(/https:\/\/app\.audienti\.com\/cli\/auth\?[^\s]+/);
+        if (!match || this.callbackStarted) return;
+
+        this.callbackStarted = true;
+        const authUrl = new URL(match[0]);
+        const redirectUri = new URL(authUrl.searchParams.get("redirect_uri"));
+        redirectUri.searchParams.set("state", authUrl.searchParams.get("state"));
+        redirectUri.searchParams.set("token", "production-browser-token");
+        redirectUri.searchParams.set("host", "https://app.audienti.com");
+        redirectUri.searchParams.set("user_name", "Production Browser User");
+        setImmediate(() => globalThis.fetch(redirectUri));
+      }
+    };
+
+    const exitCode = await run(["auth", "login", "--no-open"], {
+      env,
+      fetch,
+      stdout: callbackStdout,
+      stderr
+    });
+
+    assert.equal(exitCode, 0);
+    assert.match(callbackStdout.output, /https:\/\/app\.audienti\.com\/cli\/auth\?/);
+    assert.match(callbackStdout.output, /Authenticated to https:\/\/app\.audienti\.com as Production Browser User\./);
+    assert.equal(stderr.output, "");
+
+    const config = await readConfig({ env });
+    assert.equal(config.host, "https://app.audienti.com");
+    assert.equal(config.token, "production-browser-token");
   });
 });
 

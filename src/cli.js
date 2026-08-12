@@ -1,4 +1,7 @@
 import { parseArgs } from "node:util";
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
@@ -17,6 +20,7 @@ const DEFAULT_LIST_LIMIT = 20;
 const API_MAX_LIST_LIMIT = 100;
 const DEFAULT_LOOKUP_TIMEOUT_SECONDS = 60;
 const DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS = 2;
+const DEFAULT_AUTH_LOGIN_TIMEOUT_SECONDS = 180;
 const DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS = 180;
 const DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS = 2;
 const PACKAGE_NAME = "@audienti/cli";
@@ -182,6 +186,7 @@ async function dispatch(argv, context) {
   const normalizedResource = normalizeResource(resource);
 
   if (normalizedResource === "auth" && action === "token") return authToken(rest, context);
+  if (normalizedResource === "auth" && action === "login") return authLogin(rest, context);
   if (normalizedResource === "auth" && action === "status") return authStatus(rest, context, { accountOverride });
   if (normalizedResource === "auth" && action === "logout") return authLogout(rest, context);
   if (normalizedResource === "config" && action === "list") return configList(rest, context);
@@ -406,12 +411,148 @@ async function authToken(args, context) {
   writeLine(context.stdout, "Run `audienti accounts list` to choose an account.");
 }
 
+async function authLogin(args, context) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    host: { type: "string" },
+    "timeout-seconds": { type: "string" },
+    "no-open": { type: "boolean" }
+  });
+
+  if (positionals.length > 0) {
+    throw new CommandError("Usage: audienti auth login [--host https://app.audienti.com] [--timeout-seconds <n>] [--no-open] [--json]");
+  }
+
+  const host = normalizeHost(values.host || DEFAULT_HOST);
+  const timeoutSeconds = normalizeOptionalPositiveInteger(values["timeout-seconds"], "--timeout-seconds") || DEFAULT_AUTH_LOGIN_TIMEOUT_SECONDS;
+  const state = randomBytes(24).toString("hex");
+  const callback = await createAuthCallbackServer({ state, context });
+  const authUrl = new URL("/cli/auth", host);
+  authUrl.searchParams.set("redirect_uri", callback.redirectUri);
+  authUrl.searchParams.set("state", state);
+
+  if (values.json) {
+    writeJson(context.stdout, {
+      kind: "auth_login_start",
+      auth_url: authUrl.toString(),
+      callback_url: callback.redirectUri,
+      timeout_seconds: timeoutSeconds
+    });
+  } else {
+    writeLine(context.stdout, "Open this URL to authenticate Audienti CLI:");
+    writeLine(context.stdout, authUrl.toString());
+  }
+
+  if (!values["no-open"]) openBrowser(authUrl.toString(), context);
+
+  let payload;
+  try {
+    payload = await callback.wait(timeoutSeconds);
+  } finally {
+    await callback.close();
+  }
+
+  const client = new AudientiClient({ host: payload.host || host, token: payload.token, fetchImpl: context.fetchImpl });
+  const user = await client.me();
+  await writeConfig({
+    host: client.host,
+    token: payload.token,
+    accountId: payload.account_id || undefined,
+    accountName: payload.account_name || undefined
+  }, { env: context.env });
+
+  const result = {
+    kind: "auth_login_complete",
+    host: client.host,
+    user: user?.name || payload.user_name || payload.user_email || user?.email || null,
+    account_id: payload.account_id || null,
+    account_name: payload.account_name || null
+  };
+
+  if (values.json) return writeJson(context.stdout, result);
+
+  writeLine(context.stdout, `Authenticated to ${client.host} as ${result.user || "current user"}.`);
+  if (result.account_id) writeLine(context.stdout, `Selected account ${result.account_name || result.account_id} (${result.account_id}).`);
+  if (!result.account_id) writeLine(context.stdout, "Run `audienti accounts list` to choose an account.");
+}
+
+async function createAuthCallbackServer({ state, context }) {
+  let resolvePayload;
+  let rejectPayload;
+  const waitPromise = new Promise((resolve, reject) => {
+    resolvePayload = resolve;
+    rejectPayload = reject;
+  });
+
+  const server = createServer((request, response) => {
+    const url = new URL(request.url, "http://127.0.0.1");
+    if (url.pathname !== "/callback") {
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Not found.");
+      return;
+    }
+
+    const payload = Object.fromEntries(url.searchParams.entries());
+    if (payload.state !== state) {
+      response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Audienti CLI authentication failed: state mismatch.");
+      rejectPayload(new CommandError("Browser authentication state mismatch."));
+      return;
+    }
+
+    if (!payload.token) {
+      response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("Audienti CLI authentication failed: missing token.");
+      rejectPayload(new CommandError("Browser authentication callback did not include a token."));
+      return;
+    }
+
+    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    response.end("<!doctype html><title>Audienti CLI authenticated</title><p>Audienti CLI is authenticated. You can close this window.</p>");
+    resolvePayload(payload);
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const { port } = server.address();
+
+  return {
+    redirectUri: `http://127.0.0.1:${port}/callback`,
+    wait(timeoutSeconds) {
+      let timeoutId;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new CommandError(`Timed out waiting for browser authentication after ${timeoutSeconds} seconds.`)), timeoutSeconds * 1000);
+      });
+
+      return Promise.race([waitPromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+    },
+    close() {
+      return new Promise((resolve) => server.close(() => resolve()));
+    }
+  };
+}
+
+function openBrowser(url, context) {
+  const command = process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+
+  try {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.unref();
+  } catch (error) {
+    writeLine(context.stderr, `Could not open browser automatically: ${error.message}`);
+  }
+}
+
 async function authStatus(args, context, { accountOverride } = {}) {
   assertNoPositionals(args, "Usage: audienti auth status [--account <acct_id>]");
 
   const config = await readConfig({ env: context.env });
   if (!config.token) {
-    writeLine(context.stdout, "Not authenticated. Run `audienti auth token <token>`.");
+    writeLine(context.stdout, "Not authenticated. Run `audienti auth login`.");
     return 1;
   }
 
@@ -2833,7 +2974,7 @@ function assertNoPositionals(args, usageText) {
 async function requireAuthenticatedConfig(context) {
   const config = await readConfig({ env: context.env });
   if (!config.token) {
-    throw new CommandError("Not authenticated. Run `audienti auth token <token>`.");
+    throw new CommandError("Not authenticated. Run `audienti auth login` or `audienti auth token <token>`.");
   }
 
   return config;
@@ -5982,6 +6123,7 @@ const HELP_TOPICS = new Map([
     "  audienti <command> [options]",
     "",
     "Start:",
+    "  audienti auth login                 Sign in through the browser",
     "  audienti auth token <token>         Save an API token",
     "  audienti accounts list             See accounts available to this token",
     "  audienti accounts select <acct_id>  Use one account by default",
@@ -6121,6 +6263,7 @@ const HELP_TOPICS = new Map([
 
   ["auth", [
     "Usage:",
+    "  audienti auth login [--host <url>] [--timeout-seconds <n>] [--no-open] [--json]",
     "  audienti auth token <token> [--host <url>]",
     "  audienti auth status",
     "  audienti auth logout",
@@ -6128,11 +6271,32 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Commands:",
+    "  audienti auth login          Open Audienti in a browser and save the returned token",
     "  audienti auth token <token>  Validate and save a bearer API token",
     "  audienti auth status         Check live auth and show selected account",
     "  audienti auth logout         Delete local CLI auth config",
     "",
-    "Run `audienti auth token help` for token input shape."
+    "Run `audienti auth login help` for browser authentication."
+  ].join("\n")],
+
+  ["auth login", [
+    "Usage:",
+    "  audienti auth login [--host <url>] [--timeout-seconds <n>] [--no-open] [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Options:",
+    "  --host <url>           Audienti host. Default: https://app.audienti.com",
+    "  --timeout-seconds <n>  Wait budget before the command fails. Default: 180",
+    "  --no-open              Print the URL without opening a browser",
+    "  --json                 Print machine-readable start and completion payloads",
+    "",
+    "Flow:",
+    "  Starts a temporary 127.0.0.1 callback server, opens /cli/auth in the browser,",
+    "  and saves the returned API token to ~/.config/audienti/config.json after validation.",
+    "",
+    "Example:",
+    "  audienti auth login --host https://app.audienti.com"
   ].join("\n")],
 
   ["auth token", [
@@ -8911,7 +9075,7 @@ const HELP_TOPICS = new Map([
     "  Give a local coding agent the shortest safe path through the common Audienti production workflows.",
     "",
     "1. Authenticate and select an account",
-    "  audienti auth token <token>",
+    "  audienti auth login",
     "  audienti accounts list",
     "  audienti accounts select <acct_id>",
     "  audienti users list",
