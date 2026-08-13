@@ -139,6 +139,7 @@ audienti operator next --plan
 audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
 audienti motions run-discovery <motn_id>
+audienti motions quick-start --url https://example.com --wait --confirm
 audienti motions update <motn_id> --status paused
 audienti motions update <motn_id> --own-post-engagement true
 audienti motions activate <motn_id>
@@ -246,6 +247,12 @@ used by the operator surface:
 
 ```bash
 audienti motions run-discovery <motn_id>
+```
+
+To create and launch a quick-start motion from a company URL:
+
+```bash
+audienti motions quick-start --url https://example.com --wait --confirm
 ```
 
 To audit one account user's outbound actions, optionally narrowed to one motion

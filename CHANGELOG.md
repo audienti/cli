@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.33] - 2026-08-13
+
+### Added
+
+- Add `audienti motions quick-start --url <company_url>` for URL-generated quick-start drafts, with optional `--wait --confirm` motion setup and discovery launch.
+
 ## [0.1.32] - 2026-08-11
 
 ### Added

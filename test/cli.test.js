@@ -44,6 +44,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti operator next --plan/);
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
   assert.match(stdout.output, /audienti motions run-discovery <motn_id>/);
+  assert.match(stdout.output, /audienti motions quick-start --url <company_url> --confirm --wait/);
   assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
   assert.match(stdout.output, /audienti motions add-tag <motn_id> <tag>/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
@@ -125,6 +126,10 @@ test("incomplete command prefixes print scoped help without calling the api", as
     {
       args: ["motions", "run-discovery"],
       expected: [/Usage:\n  audienti motions run-discovery <motn_id>/, /Motions::DiscoverJob/]
+    },
+    {
+      args: ["motions", "quick-start"],
+      expected: [/Usage:\n  audienti motions quick-start --url <company_url>/, /QuickStartOrchestrator/]
     },
     {
       args: ["plays", "clone"],
@@ -775,6 +780,10 @@ test("help works as the final word at resource and nested command levels", async
     {
       args: ["motions", "run-discovery", "help"],
       expected: [/Usage:\n  audienti motions run-discovery <motn_id>/, /Motions::DiscoverJob/, /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/run_discovery\.json/]
+    },
+    {
+      args: ["motions", "quick-start", "help"],
+      expected: [/Usage:\n  audienti motions quick-start --url <company_url>/, /POST \/api\/v1\/accounts\/:account_id\/quick_start\.json/, /POST \/api\/v1\/accounts\/:account_id\/quick_start\/:draft_id\/confirm\.json/]
     },
     {
       args: ["motions", "prospects", "help"],
@@ -2637,6 +2646,150 @@ test("motions run-discovery rejects invalid target count without calling the api
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
     assert.match(stderr.output, /--target-count must be a positive integer/);
+  });
+});
+
+test("motions quick-start creates a url draft and renders status", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/quick_start.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.equal(options.headers["Content-Type"], "application/json");
+      assert.deepEqual(JSON.parse(options.body), {
+        quick_start: {
+          company_url: "https://www.example.com",
+          principal_account_user_id: "me",
+          feedback: "Focus on CFOs.",
+          force: true
+        }
+      });
+
+      return jsonResponse({
+        id: 42,
+        status: "generating",
+        ready: false,
+        normalized_url: "https://www.example.com",
+        principal_account_user: { id: 7, name: "William Flanagan", email: "william@example.com" }
+      }, { status: 202 });
+    });
+
+    const exitCode = await run([
+      "motions",
+      "quick-start",
+      "--url",
+      "https://www.example.com",
+      "--principal",
+      "me",
+      "--feedback",
+      "Focus on CFOs.",
+      "--force"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Quick-start draft 42 is generating\./);
+    assert.match(stdout.output, /URL: https:\/\/www\.example\.com/);
+    assert.match(stdout.output, /Principal: William Flanagan \(7\)/);
+  });
+});
+
+test("motions quick-start waits for a ready draft and confirms launch", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const nowMs = { value: Date.parse("2026-08-13T12:00:00.000Z") };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      requests.push({ url: url.toString(), method: options.method || "GET", body: options.body ? JSON.parse(options.body) : null });
+
+      if (url.pathname === "/api/v1/accounts/acct_one/quick_start.json") {
+        return jsonResponse({ id: 42, status: "generating", ready: false, normalized_url: "https://www.example.com" }, { status: 202 });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/quick_start/42.json") {
+        return jsonResponse({ id: 42, status: "ready", ready: true, normalized_url: "https://www.example.com" });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/quick_start/42/confirm.json") {
+        return jsonResponse({
+          reused: false,
+          motion: { id: 123, prefix_id: "motn_quick", name: "Example Quick Start", kind: "outbound", status: "preparing" },
+          reservation: { id: 9, status: "reserved", launch_status: "enqueued", launch_reason: "launched", launch_attempts: 1 }
+        }, { status: 201 });
+      }
+
+      throw new Error(`unexpected request ${url.toString()}`);
+    });
+
+    const stdout = captureStream();
+    const exitCode = await run([
+      "plays",
+      "quick-start",
+      "--url",
+      "https://www.example.com",
+      "--wait",
+      "--confirm",
+      "--timeout-seconds",
+      "10",
+      "--poll-interval-seconds",
+      "1"
+    ], {
+      env,
+      fetch,
+      stdout,
+      now: () => new Date(nowMs.value),
+      sleep: async (milliseconds) => {
+        nowMs.value += milliseconds;
+      }
+    });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(requests.map((request) => [request.method, new URL(request.url).pathname]), [
+      ["POST", "/api/v1/accounts/acct_one/quick_start.json"],
+      ["GET", "/api/v1/accounts/acct_one/quick_start/42.json"],
+      ["POST", "/api/v1/accounts/acct_one/quick_start/42/confirm.json"]
+    ]);
+    assert.match(stdout.output, /Quick-start motion Example Quick Start \(motn_quick\) created\./);
+    assert.match(stdout.output, /Reservation: reserved \/ enqueued/);
+    assert.match(stdout.output, /Launch reason: launched/);
+  });
+});
+
+test("motions quick-start rejects confirm before draft readiness without wait", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/quick_start.json");
+      return jsonResponse({ id: 42, status: "generating", ready: false, normalized_url: "https://www.example.com" }, { status: 202 });
+    });
+
+    const exitCode = await run(["motions", "quick-start", "--url", "https://www.example.com", "--confirm"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Quick-start draft 42 is generating/);
+    assert.equal(fetch.calls.length, 1);
   });
 });
 

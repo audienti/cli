@@ -89,6 +89,7 @@ const MOTIONS_DELETE_USAGE = "Usage: audienti motions delete <motn_id> --confirm
 const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
 const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
 const MOTIONS_RUN_DISCOVERY_USAGE = "Usage: audienti motions run-discovery <motn_id> [--target-count <n>] [--json] [--account <acct_id>]";
+const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <company_url> [--principal <account_user_id|me>] [--feedback <text>] [--offer-type <type>] [--force] [--confirm] [--wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--json] [--account <acct_id>]";
 const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
 const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> [--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]";
 const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]";
@@ -248,6 +249,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "clone") return motionsClone(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "run-discovery") return motionsRunDiscovery(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "quick-start") return motionsQuickStart(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "programs") return contentPrograms(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "plan") return contentPlan(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "show") return contentShow(rest, context, { accountOverride });
@@ -1541,6 +1543,55 @@ async function motionsRunDiscovery(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderMotionDiscoveryRun(payload, context);
+}
+
+async function motionsQuickStart(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    url: { type: "string" },
+    principal: { type: "string" },
+    feedback: { type: "string" },
+    "offer-type": { type: "string" },
+    force: { type: "boolean" },
+    confirm: { type: "boolean" },
+    wait: { type: "boolean" },
+    "timeout-seconds": { type: "string" },
+    "poll-interval-seconds": { type: "string" }
+  });
+  if (positionals.length > 0 || !values.url) throw new CommandError(MOTIONS_QUICK_START_USAGE);
+
+  const timeoutSeconds = normalizeOptionalPositiveInteger(values["timeout-seconds"], "--timeout-seconds") || DEFAULT_LOOKUP_TIMEOUT_SECONDS;
+  const pollIntervalSeconds = normalizeOptionalPositiveInteger(values["poll-interval-seconds"], "--poll-interval-seconds") || DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const requestBody = {
+    quick_start: compactObject({
+      company_url: values.url,
+      principal_account_user_id: values.principal,
+      feedback: values.feedback,
+      offer_type: values["offer-type"],
+      force: values.force || undefined
+    })
+  };
+
+  let draft = await client.createQuickStart(accountId, requestBody);
+  if (values.wait && !quickStartReady(draft)) {
+    draft = await waitForQuickStartDraft(client, accountId, draft, context, { timeoutSeconds, pollIntervalSeconds });
+  }
+
+  if (values.confirm) {
+    if (!quickStartReady(draft)) {
+      throw new CommandError(`Quick-start draft ${display(draft?.id)} is ${display(draft?.status)}. Re-run with --wait or confirm after it is ready.`);
+    }
+
+    const payload = await client.confirmQuickStart(accountId, draft.id, {});
+    if (values.json) return writeJson(context.stdout, payload);
+
+    renderQuickStartConfirmation(payload, context);
+    return;
+  }
+
+  if (values.json) return writeJson(context.stdout, draft);
+  renderQuickStartDraft(draft, context);
 }
 
 async function motionsAnalytics(args, context, { accountOverride } = {}) {
@@ -5324,6 +5375,45 @@ function renderMotionDiscoveryRun(payload, context) {
   writeLine(context.stdout, `Target count: ${display(payload?.target_count)}`);
 }
 
+function renderQuickStartDraft(draft, context) {
+  writeLine(context.stdout, `Quick-start draft ${display(draft?.id)} is ${display(draft?.status)}.`);
+  writeLine(context.stdout, `URL: ${display(draft?.normalized_url)}`);
+  if (draft?.principal_account_user) writeLine(context.stdout, `Principal: ${accountUserLabel(draft.principal_account_user)}`);
+  if (draft?.expires_at) writeLine(context.stdout, `Expires: ${draft.expires_at}`);
+  if (draft?.error) writeLine(context.stdout, `Error: ${draft.error}`);
+  if (quickStartReady(draft)) writeLine(context.stdout, `Confirm: audienti motions quick-start --url ${draft.normalized_url} --confirm`);
+}
+
+function renderQuickStartConfirmation(payload, context) {
+  const motion = payload?.motion || {};
+  writeLine(context.stdout, `Quick-start motion ${display(entityLabel(motion) || motion.prefix_id)} ${payload?.reused ? "reused" : "created"}.`);
+  writeLine(context.stdout, `Motion status: ${display(motion.status)}`);
+  writeLine(context.stdout, `Reservation: ${display(payload?.reservation?.status)} / ${display(payload?.reservation?.launch_status)}`);
+  if (payload?.reservation?.launch_reason) writeLine(context.stdout, `Launch reason: ${payload.reservation.launch_reason}`);
+}
+
+function quickStartReady(draft) {
+  return draft?.ready === true || draft?.status === "ready";
+}
+
+function quickStartTerminal(draft) {
+  return quickStartReady(draft) || draft?.status === "failed";
+}
+
+async function waitForQuickStartDraft(client, accountId, initialDraft, context, { timeoutSeconds, pollIntervalSeconds }) {
+  let draft = initialDraft;
+  const deadline = context.now().getTime() + timeoutSeconds * 1000;
+
+  while (!quickStartTerminal(draft)) {
+    if (context.now().getTime() >= deadline) return draft;
+
+    await context.sleep(pollIntervalSeconds * 1000);
+    draft = await client.quickStart(accountId, draft.id);
+  }
+
+  return draft;
+}
+
 function renderAnalyticsDashboard(payload, context) {
   writeLine(context.stdout, `Dashboard analytics (${display(payload?.cohort?.label, "selected cohort")})`);
   if (payload?.cohort) {
@@ -6145,6 +6235,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions show <motn_id>",
     "    audienti motions analytics <motn_id>",
     "    audienti motions run-discovery <motn_id>",
+    "    audienti motions quick-start --url <company_url> --confirm --wait",
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
     "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>]",
@@ -7393,6 +7484,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions show <motn_id> [--json]",
     "  audienti motions status <motn_id> [--json]",
     "  audienti motions run-discovery <motn_id> [--target-count <n>] [--json]",
+    "  audienti motions quick-start --url <company_url> [--confirm] [--wait] [--json]",
     "  audienti motions analytics <motn_id> [--window 30d] [--json]",
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
@@ -7407,7 +7499,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions clone <motn_id> --name <text> [--json]",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json]",
     "",
-    "Status: read, create, status update, delete, clone, status, discovery launch, and prospect attachment commands implemented",
+    "Status: read, create, quick-start, status update, delete, clone, status, discovery launch, and prospect attachment commands implemented",
     "",
     "CLI synonym:",
     "  `plays` is accepted anywhere `motions` is accepted",
@@ -7543,6 +7635,36 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/motions/:id/run_discovery.json"
+  ].join("\n")],
+
+  ["motions quick-start", [
+    "Usage:",
+    `  ${MOTIONS_QUICK_START_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Draft a quick-start motion from a company URL, then optionally confirm it into a launched quick-start motion.",
+    "",
+    "Options:",
+    "  --url <company_url>       Public HTTP(S) URL used by the quick-start drafter.",
+    "  --principal <user>        Account user id or me. Defaults to the authenticated token user.",
+    "  --feedback <text>         Optional operator guidance for the draft.",
+    "  --offer-type <type>       Optional supported offer type hint.",
+    "  --force                  Request a fresh draft when inputs should replace an existing ready draft.",
+    "  --confirm                Confirm the ready draft into motion setup and discovery launch.",
+    "  --wait                   Poll until the generated draft is ready before returning or confirming.",
+    "  --timeout-seconds <n>    Maximum wait time. Defaults to 60.",
+    "  --poll-interval-seconds <n>  Poll cadence. Defaults to 2.",
+    "",
+    "Pipeline:",
+    "  POST creates or reuses a QuickStartDraft and enqueues GenerateQuickStartDraftJob when needed.",
+    "  POST confirm calls QuickStartOrchestrator, creating ICP, offer, signals, motion, reservation, and discovery launch.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/quick_start.json",
+    "  GET /api/v1/accounts/:account_id/quick_start/:draft_id.json",
+    "  POST /api/v1/accounts/:account_id/quick_start/:draft_id/confirm.json"
   ].join("\n")],
 
   ["motions prospects", [

@@ -375,6 +375,24 @@ export class AudientiClient {
     });
   }
 
+  createQuickStart(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["quick_start"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  quickStart(accountId, draftId) {
+    return this.requestJson(accountPath(accountId, ["quick_start", draftId]));
+  }
+
+  confirmQuickStart(accountId, draftId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["quick_start", draftId, "confirm"]), {
+      method: "POST",
+      body
+    });
+  }
+
   motionProspects(accountId, motionId, query = {}) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "prospects"], query));
   }
