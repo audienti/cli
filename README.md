@@ -142,6 +142,7 @@ audienti motions run-discovery <motn_id>
 audienti motions quick-start --url https://example.com --wait --confirm
 audienti motions update <motn_id> --status paused
 audienti motions update <motn_id> --own-post-engagement true
+audienti motions update <motn_id> --payload motion-signals.json
 audienti motions activate <motn_id>
 audienti motions delete <motn_id> --confirm yes
 audienti content programs
@@ -249,11 +250,35 @@ used by the operator surface:
 audienti motions run-discovery <motn_id>
 ```
 
+To check whether a motion has executable configuration before preparing,
+activating, or running discovery:
+
+```bash
+audienti motions status <motn_id>
+audienti motions status <motn_id> --json
+```
+
+The JSON response includes `executable_configuration.valid` plus a reason when
+the config is incomplete, such as missing outbound signals or missing LOPA
+tracked profile URLs.
+
 To create and launch a quick-start motion from a company URL:
 
 ```bash
 audienti motions quick-start --url https://example.com --wait --confirm
 ```
+
+To create or update an ICP from a rich JSON payload:
+
+```bash
+audienti icps create --payload icp.json
+audienti icps update <icp_id> --payload icp-patch.json
+```
+
+`icps update --payload` accepts the same human-readable facet keys as create.
+Supplied facet collections, such as `company_sizes_attributes`, replace that
+collection in place; omitted fields and collections remain unchanged. Invalid
+lookup values fail server-side without partially applying the patch.
 
 To audit one account user's outbound actions, optionally narrowed to one motion
 and one AccountProspect.created_at cohort:

@@ -4,6 +4,18 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.34] - 2026-08-17
+
+### Added
+
+- Add `audienti icps update <icp_id> --payload <file.json>` for rich ICP facet patches using the same payload shape as ICP creation.
+- Surface executable motion configuration validity in `audienti motions status`, including missing outbound signals and missing LOPA tracked profile URLs.
+- Add outbound motion signal configuration to `audienti motions create --payload` and `audienti motions update <motn_id> --payload <file.json>`, including scoped company/person/both signal rows.
+
+### Changed
+
+- Default omitted inbound motion channels to LinkedIn-only when motions are created through the CLI/API contract; Reddit remains explicit opt-in.
+
 ## [0.1.33] - 2026-08-13
 
 ### Added

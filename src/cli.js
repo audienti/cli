@@ -72,7 +72,7 @@ const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
 const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
@@ -91,7 +91,7 @@ const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <so
 const MOTIONS_RUN_DISCOVERY_USAGE = "Usage: audienti motions run-discovery <motn_id> [--target-count <n>] [--json] [--account <acct_id>]";
 const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <company_url> [--principal <account_user_id|me>] [--feedback <text>] [--offer-type <type>] [--force] [--confirm] [--wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--json] [--account <acct_id>]";
 const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
-const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> [--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]";
+const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> ([--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const ICPS_REMOVE_TAG_USAGE = "Usage: audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_ADD_TAG_USAGE = "Usage: audienti lists add-tag <list_id> <tag> [--json] [--account <acct_id>]";
@@ -1030,25 +1030,19 @@ async function icpsCreate(args, context, { accountOverride } = {}) {
 async function icpsUpdate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
+    payload: { type: "string" },
     name: { type: "string" },
     notes: { type: "string" },
     tags: { type: "string" },
     "discovery-keyword": { type: "string" }
   });
-  const hasUpdateField = values.name || values.notes !== undefined || values.tags !== undefined || values["discovery-keyword"] !== undefined;
+  const hasUpdateField = values.payload || icpSimpleFieldsPresent(values);
   if (positionals.length !== 1 || !hasUpdateField) {
     throw new CommandError(ICPS_UPDATE_USAGE);
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const icp = await client.updateIcp(accountId, positionals[0], {
-    icp: compactObject({
-      name: values.name,
-      notes: values.notes,
-      discovery_keyword: values["discovery-keyword"],
-      tags: values.tags !== undefined ? tagList(values.tags) : undefined
-    })
-  });
+  const icp = await client.updateIcp(accountId, positionals[0], { icp: await icpUpdatePayload(values) });
   if (values.json) return writeJson(context.stdout, icp);
 
   writeLine(context.stdout, `Updated ICP ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
@@ -1683,12 +1677,20 @@ async function motionsCreate(args, context, { accountOverride } = {}) {
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await readJsonPayload(values.payload);
+  const payload = normalizeMotionCreatePayload(await readJsonPayload(values.payload));
   const created = await client.createMotion(accountId, { motion: payload });
   if (values.json) return writeJson(context.stdout, created);
 
   writeLine(context.stdout, `Created motion ${display(created?.name)} (${display(created?.prefix_id)}).`);
   renderMotion(created, context);
+}
+
+function normalizeMotionCreatePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  if (String(payload.kind || "").trim().toLowerCase() !== "inbound") return payload;
+  if (Object.prototype.hasOwnProperty.call(payload, "inbound_channels")) return payload;
+
+  return { ...payload, inbound_channels: ["linkedin"] };
 }
 
 async function motionsDelete(args, context, { accountOverride } = {}) {
@@ -1711,28 +1713,42 @@ async function motionsDelete(args, context, { accountOverride } = {}) {
 async function motionsUpdate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
+    payload: { type: "string" },
     status: { type: "string" },
     tags: { type: "string" },
     "own-post-engagement": { type: "string" }
   });
-  const hasUpdateField = values.status || values.tags !== undefined || values["own-post-engagement"] !== undefined;
+  const hasUpdateField = values.payload || motionSimpleFieldsPresent(values);
   if (positionals.length !== 1 || !hasUpdateField) {
     throw new CommandError(MOTIONS_UPDATE_USAGE);
   }
 
-  const normalizedStatus = normalizeMotionStatus(values.status);
-  const motionAttributes = compactObject({
-    status: normalizedStatus,
-    play_tags: values.tags !== undefined ? tagList(values.tags) : undefined,
-    own_post_engagement: values["own-post-engagement"] !== undefined ? parseBooleanString(values["own-post-engagement"], "--own-post-engagement") : undefined
-  });
-
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const motion = await client.updateMotion(accountId, positionals[0], { motion: motionAttributes });
+  const motion = await client.updateMotion(accountId, positionals[0], { motion: await motionUpdatePayload(values) });
   if (values.json) return writeJson(context.stdout, motion);
 
   writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}).`);
   renderMotion(motion, context);
+}
+
+async function motionUpdatePayload(values) {
+  if (values.payload) {
+    if (motionSimpleFieldsPresent(values)) {
+      throw new CommandError("Choose one motion input mode: either --payload <file.json> or the simple --status/--tags/--own-post-engagement flags.");
+    }
+
+    return readJsonPayload(values.payload);
+  }
+
+  return compactObject({
+    status: normalizeMotionStatus(values.status),
+    play_tags: values.tags !== undefined ? tagList(values.tags) : undefined,
+    own_post_engagement: values["own-post-engagement"] !== undefined ? parseBooleanString(values["own-post-engagement"], "--own-post-engagement") : undefined
+  });
+}
+
+function motionSimpleFieldsPresent(values) {
+  return Boolean(values.status) || values.tags !== undefined || values["own-post-engagement"] !== undefined;
 }
 
 async function motionsStatusShortcut(action, args, context, { accountOverride } = {}) {
@@ -3575,7 +3591,7 @@ function filterRecordsByTag(records, value, field) {
 
 async function icpCreatePayload(values) {
   if (values.payload) {
-    if (values.name || values.notes || values.tags !== undefined || values["discovery-keyword"]) {
+    if (icpSimpleFieldsPresent(values)) {
       throw new CommandError("Choose one ICP input mode: either --payload <file.json> or the simple --name/--notes/--discovery-keyword/tags flags.");
     }
 
@@ -3592,6 +3608,27 @@ async function icpCreatePayload(values) {
     tags: values.tags !== undefined ? tagList(values.tags) : undefined,
     discovery_keyword: values["discovery-keyword"]
   });
+}
+
+async function icpUpdatePayload(values) {
+  if (values.payload) {
+    if (icpSimpleFieldsPresent(values)) {
+      throw new CommandError("Choose one ICP input mode: either --payload <file.json> or the simple --name/--notes/--discovery-keyword/tags flags.");
+    }
+
+    return readJsonPayload(values.payload);
+  }
+
+  return compactObject({
+    name: values.name,
+    notes: values.notes,
+    tags: values.tags !== undefined ? tagList(values.tags) : undefined,
+    discovery_keyword: values["discovery-keyword"]
+  });
+}
+
+function icpSimpleFieldsPresent(values) {
+  return Boolean(values.name) || values.notes !== undefined || values.tags !== undefined || values["discovery-keyword"] !== undefined;
 }
 
 async function prospectNotePayload(values, { forcedType, usageText } = {}) {
@@ -4323,6 +4360,7 @@ function renderMotion(motion, context) {
   writeLine(context.stdout, `Motion: ${display(motion?.name)} (${display(motion?.prefix_id)})`);
   writeLine(context.stdout, `Status: ${display(motion?.status)}`);
   writeLine(context.stdout, `Kind: ${display(motion?.kind)}`);
+  renderExecutableConfiguration(motion?.executable_configuration, context);
   if (motion?.offer?.name) writeLine(context.stdout, `Offer: ${motion.offer.name} (${display(motion.offer.prefix_id)})`);
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
   if (motion?.list?.name) writeLine(context.stdout, `List: ${motion.list.name} (${display(motion.list.prefix_id)})`);
@@ -4393,8 +4431,21 @@ function renderMotionStatus(status, context) {
   writeLine(context.stdout, `Motion: ${display(status?.name)} (${display(status?.prefix_id)})`);
   writeLine(context.stdout, `State: ${display(status?.state)}`);
   writeLine(context.stdout, `Reason: ${display(status?.reason_label || status?.reason_key)}`);
+  renderExecutableConfiguration(status?.executable_configuration, context);
   if (status?.description) writeLine(context.stdout, status.description);
   if (status?.action?.label) writeLine(context.stdout, `Action: ${status.action.label}`);
+}
+
+function renderExecutableConfiguration(config, context) {
+  if (!config || typeof config !== "object") return;
+
+  writeLine(context.stdout, `Valid config: ${config.valid ? "yes" : "no"}`);
+  if (!config.valid && (config.reason_label || config.reason_key)) {
+    writeLine(context.stdout, `Config reason: ${display(config.reason_label || config.reason_key)}`);
+  }
+  if (!config.valid && config.description) {
+    writeLine(context.stdout, `Config detail: ${config.description}`);
+  }
 }
 
 function renderProspects(payload, context, { wide = false, profiles = false } = {}) {
@@ -6239,6 +6290,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions prospects <motn_id>",
     "    audienti motions create --payload <file.json>",
     "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>]",
+    "    audienti motions update <motn_id> --payload <file.json>",
     "    audienti motions add-tag <motn_id> <tag>",
     "    audienti motions remove-tag <motn_id> <tag>",
     "    audienti motions activate <motn_id>",
@@ -6293,7 +6345,7 @@ const HELP_TOPICS = new Map([
     "    audienti offers delete <offr_id> --confirm <yes|true|Y|y>",
     "    audienti icps list [--tag <tag>]",
     "    audienti icps show <icp_id>",
-    "    audienti icps update <icp_id> [--tags <tag[,tag...]>]",
+    "    audienti icps update <icp_id> [--tags <tag[,tag...]> | --payload <file.json>]",
     "    audienti icps add-tag <icp_id> <tag>",
     "    audienti icps remove-tag <icp_id> <tag>",
     "    audienti companies search --query <text>",
@@ -6770,7 +6822,7 @@ const HELP_TOPICS = new Map([
     "  audienti icps list [--tag <tag>] [--json]",
     "  audienti icps show <icp_id> [--json]",
     "  audienti icps create (--name <text> | --payload <file.json>) [--json]",
-    "  audienti icps update <icp_id> [--tags <tag[,tag...]>] [--json]",
+    "  audienti icps update <icp_id> ([--tags <tag[,tag...]>] | --payload <file.json>) [--json]",
     "  audienti icps add-tag <icp_id> <tag> [--json]",
     "  audienti icps remove-tag <icp_id> <tag> [--json]",
     "",
@@ -6863,12 +6915,12 @@ const HELP_TOPICS = new Map([
 
   ["icps update", [
     "Usage:",
-    "  audienti icps update <icp_id> [--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] [--json] [--account <acct_id>]",
+    `  ${ICPS_UPDATE_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
     "Purpose:",
-    "  Update simple ICP fields or replace the ICP's full tag set.",
+    "  Update simple ICP fields, replace the ICP's full tag set, or apply a rich ICP payload patch.",
     "",
     "Input shape:",
     "  icp_id: icpp_ prefixed id or integer id",
@@ -6876,15 +6928,30 @@ const HELP_TOPICS = new Map([
     "  notes: string | optional",
     "  discovery_keyword: string | optional",
     "  tags: comma-separated tag list | optional",
+    "  payload: file.json | optional full or partial ICP object using the account API create shape",
+    "",
+    "Behavior:",
+    "  Choose either --payload or simple flags. Supplied facet collections replace that collection in place; omitted fields and facet collections remain unchanged.",
+    "  Human-readable lookup-backed facet names are resolved by the account API. Invalid lookup values fail with 422 and no partial mutation.",
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/icps/:id.json",
     "",
-    "JSON body:",
+    "Simple JSON body:",
     "  {",
     "    \"icp\": {",
     "      \"tags\": [\"enterprise\", \"renewal\"]",
     "    }",
+    "  }",
+    "",
+    "Payload file example:",
+    "  {",
+    "    \"company_sizes_attributes\": [",
+    "      {\"name\": \"1001-5000 employees\"}",
+    "    ],",
+    "    \"seniorities_attributes\": [",
+    "      {\"name\": \"CXO\"}",
+    "    ]",
     "  }"
   ].join("\n")],
 
@@ -7489,7 +7556,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti motions create --payload <file.json> [--json]",
-    "  audienti motions update <motn_id> [--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--json]",
+    "  audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] | --payload <file.json>) [--json]",
     "  audienti motions add-tag <motn_id> <tag> [--json]",
     "  audienti motions remove-tag <motn_id> <tag> [--json]",
     "  audienti motions activate <motn_id> [--json]",
@@ -7587,6 +7654,7 @@ const HELP_TOPICS = new Map([
     "  state: healthy_idle | broken",
     "  reason_key: string",
     "  reason_label: string",
+    "  executable_configuration: { valid: boolean, reason_key: string | null, reason_label: string | null, description: string | null }",
     "  description: string",
     "  action: { key: string, label: string } | null",
     "  stats: { target_count, deficit, projected_connectable, capacity, daily_target }",
@@ -7738,7 +7806,9 @@ const HELP_TOPICS = new Map([
     "  icp_id: icpp_ prefix id | optional",
     "  list_id: list_ prefix id | optional",
     "  play_tags: [string] | optional",
-    "  inbound_channels: [linkedin | reddit] | optional",
+    "  signal_rows: [{ scope: company | person | both, question: string, company_signal_category: string | optional, role_terms: string | optional, posting_language: string | optional, topics: string | optional }] | optional for outbound motions",
+    "  signal_questions: newline-delimited company::, person::, or both:: legacy question text | optional for outbound motions",
+    "  inbound_channels: [linkedin | reddit] | optional; defaults to [linkedin] for inbound motions",
     "  lopa_profiles: [{ url: string, source_type: creator | competitor | partner | customer | other }] | optional",
     "",
     "JSON example:",
@@ -7793,25 +7863,44 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Change one motion or play's lifecycle status or replace its tag set.",
+    "  Change one motion or play's lifecycle status, replace its tag set, or patch rich motion configuration.",
     "",
     "Input shape:",
     "  motn_id: motn_ prefix id",
     "  status: draft | preparing | active | paused | archived | optional",
     "  tags: comma-separated tag list | optional",
+    "  payload: file.json | optional full or partial motion object using the account API shape",
     "",
     "Behavior:",
-    "  Updates only the provided fields. Sending --tags replaces the motion's full tag set.",
+    "  Choose either --payload or simple flags. Updates only the provided fields. Sending --tags replaces the motion's full tag set.",
+    "  Payload mode supports outbound signal_rows or legacy signal_questions; supplied rows replace the motion's active ready signals.",
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/motions/:id.json",
     "",
-    "JSON body:",
+    "Simple JSON body:",
     "  {",
       "    \"motion\": {",
       "      \"status\": \"paused\",",
       "      \"play_tags\": [\"sarit\", \"pj\"]",
       "    }",
+    "  }",
+    "",
+    "Payload file example:",
+    "  {",
+    "    \"signal_rows\": [",
+    "      {",
+    "        \"scope\": \"company\",",
+    "        \"question\": \"Is the company hiring revenue operations leaders?\",",
+    "        \"company_signal_category\": \"hiring\",",
+    "        \"role_terms\": \"Revenue Operations\"",
+    "      },",
+    "      {",
+    "        \"scope\": \"person\",",
+    "        \"question\": \"Is the person talking about pipeline quality?\",",
+    "        \"topics\": \"pipeline quality\"",
+    "      }",
+    "    ]",
     "  }"
   ].join("\n")],
 

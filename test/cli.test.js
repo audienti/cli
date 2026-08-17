@@ -46,6 +46,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti motions run-discovery <motn_id>/);
   assert.match(stdout.output, /audienti motions quick-start --url <company_url> --confirm --wait/);
   assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
+  assert.match(stdout.output, /audienti motions update <motn_id> --payload <file\.json>/);
   assert.match(stdout.output, /audienti motions add-tag <motn_id> <tag>/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
   assert.match(stdout.output, /audienti motions pause <motn_id>/);
@@ -356,7 +357,7 @@ test("help topics describe submit payload shapes for implemented mutations", asy
   assert.match(stdout.output, /premise: string/);
   assert.match(stdout.output, /offer_id: offr_/);
   assert.match(stdout.output, /principal_account_user_id: integer/);
-  assert.match(stdout.output, /inbound_channels: \[linkedin \| reddit\]/);
+  assert.match(stdout.output, /inbound_channels: \[linkedin \| reddit\].*defaults to \[linkedin\]/);
   assert.doesNotMatch(stdout.output, /instagram|facebook|tiktok/);
 });
 
@@ -807,7 +808,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["plays", "update", "help"],
-      expected: [/Usage:\n  audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+      expected: [/Usage:\n  audienti motions update <motn_id> \(\[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\] \| --payload <file\.json>\)/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
     },
     {
       args: ["content", "help"],
@@ -1791,6 +1792,86 @@ test("icps update patches tags", async () => {
   });
 });
 
+test("icps update accepts a payload file for rich ICP facets", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const payloadPath = join(root, "icp-update.json");
+    await writeFile(payloadPath, JSON.stringify({
+      company_sizes_attributes: [
+        { name: "1001-5000 employees" }
+      ],
+      seniorities_attributes: [
+        { name: "CXO" }
+      ]
+    }, null, 2));
+
+    const responseBody = {
+      prefix_id: "icpp_source",
+      name: "Pipeline ICP",
+      notes: "ICP notes.",
+      tags: ["sarit"],
+      discovery_keyword: "renewal",
+      company_sizes: [
+        { linkedin_company_size_id: "G", name: "1001-5000 employees", negative: false }
+      ],
+      seniorities: [
+        { linkedin_seniority_level_id: "310", name: "CXO", negative: false }
+      ]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/icps/icpp_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        icp: {
+          company_sizes_attributes: [
+            { name: "1001-5000 employees" }
+          ],
+          seniorities_attributes: [
+            { name: "CXO" }
+          ]
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["icps", "update", "icpp_source", "--payload", payloadPath, "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("icps update rejects mixed simple flags and payload mode without calling the api", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const payloadPath = join(root, "icp-update.json");
+    await writeFile(payloadPath, JSON.stringify({ notes: "From payload." }));
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("mixed mode must not call the API");
+    });
+
+    const exitCode = await run(["icps", "update", "icpp_source", "--payload", payloadPath, "--notes", "From flags"], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Choose one ICP input mode/);
+  });
+});
+
 test("icps add-tag posts the expected payload and supports json output", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -1999,7 +2080,13 @@ test("account read commands call the expected api endpoints with json output", a
     {
       args: ["motions", "status", "motn_one", "--json"],
       path: "/api/v1/accounts/acct_one/motions/motn_one/status.json",
-      body: { prefix_id: "motn_one", name: "Motion One", state: "healthy_idle", reason_label: "Healthy" }
+      body: {
+        prefix_id: "motn_one",
+        name: "Motion One",
+        state: "healthy_idle",
+        reason_label: "Healthy",
+        executable_configuration: { valid: true, reason_key: null, reason_label: null }
+      }
     },
     {
       args: ["motions", "analytics", "motn_one", "--json"],
@@ -2486,6 +2573,45 @@ test("motions list can filter by tag", async () => {
   });
 });
 
+test("motions status renders executable configuration validity", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_lopa/status.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        prefix_id: "motn_lopa",
+        name: "ACTICO APAC AML Informants - LOPA",
+        state: "broken",
+        reason_key: "no_tracked_profile",
+        reason_label: "No source profile",
+        description: "Add at least one LinkedIn source profile URL before discovery can replenish this motion.",
+        executable_configuration: {
+          valid: false,
+          reason_key: "missing_lopa_profile_urls",
+          reason_label: "Missing tracked profile URLs",
+          description: "Add at least one tracked LinkedIn profile URL before this motion can prepare or activate."
+        }
+      });
+    });
+
+    const exitCode = await run(["motions", "status", "motn_lopa"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /State: broken/);
+    assert.match(stdout.output, /Reason: No source profile/);
+    assert.match(stdout.output, /Valid config: no/);
+    assert.match(stdout.output, /Config reason: Missing tracked profile URLs/);
+  });
+});
+
 test("motions analytics renders prospect output by day", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -2857,6 +2983,156 @@ test("motions create posts the expected payload, supports plays alias, and honor
   });
 });
 
+test("motions create defaults inbound payloads to linkedin only when channels are omitted", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "inbound-motion-create.json");
+    await writeFile(payloadPath, JSON.stringify({
+      name: "Inbound migration conversations",
+      premise: "Find operators discussing stalled CRM migrations.",
+      kind: "inbound",
+      status: "draft",
+      offer_id: "offr_abc123"
+    }));
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          name: "Inbound migration conversations",
+          premise: "Find operators discussing stalled CRM migrations.",
+          kind: "inbound",
+          status: "draft",
+          offer_id: "offr_abc123",
+          inbound_channels: ["linkedin"]
+        }
+      });
+      return jsonResponse({
+        id: 11,
+        prefix_id: "motn_abc123",
+        name: "Inbound migration conversations",
+        kind: "inbound",
+        status: "draft",
+        inbound_channels: ["linkedin"]
+      }, { status: 201 });
+    });
+
+    const exitCode = await run(["motions", "create", "--json", "--payload", payloadPath], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).prefix_id, "motn_abc123");
+  });
+});
+
+test("motions create preserves explicitly requested inbound channels", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "inbound-motion-create.json");
+    await writeFile(payloadPath, JSON.stringify({
+      name: "Inbound migration conversations",
+      premise: "Find operators discussing stalled CRM migrations.",
+      kind: "inbound",
+      status: "draft",
+      offer_id: "offr_abc123",
+      inbound_channels: ["linkedin", "reddit"]
+    }));
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          name: "Inbound migration conversations",
+          premise: "Find operators discussing stalled CRM migrations.",
+          kind: "inbound",
+          status: "draft",
+          offer_id: "offr_abc123",
+          inbound_channels: ["linkedin", "reddit"]
+        }
+      });
+      return jsonResponse({
+        id: 11,
+        prefix_id: "motn_abc123",
+        name: "Inbound migration conversations",
+        kind: "inbound",
+        status: "draft",
+        inbound_channels: ["linkedin", "reddit"]
+      }, { status: 201 });
+    });
+
+    const exitCode = await run(["motions", "create", "--json", "--payload", payloadPath], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).prefix_id, "motn_abc123");
+  });
+});
+
+test("motions create preserves outbound signal rows in payload files", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "outbound-motion-create.json");
+    const payload = {
+      name: "Outbound signal motion",
+      premise: "Find accounts showing current buying triggers.",
+      kind: "outbound",
+      status: "draft",
+      offer_id: "offr_abc123",
+      signal_rows: [
+        {
+          scope: "company",
+          question: "Is the company hiring revenue operations leaders?",
+          company_signal_category: "hiring",
+          role_terms: "Revenue Operations"
+        },
+        {
+          scope: "person",
+          question: "Is the person talking about pipeline quality?",
+          topics: "pipeline quality"
+        }
+      ]
+    };
+    await writeFile(payloadPath, JSON.stringify(payload));
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { motion: payload });
+      return jsonResponse({
+        id: 12,
+        prefix_id: "motn_sig123",
+        name: "Outbound signal motion",
+        kind: "outbound",
+        status: "draft",
+        signal_rows: payload.signal_rows
+      }, { status: 201 });
+    });
+
+    const exitCode = await run(["motions", "create", "--json", "--payload", payloadPath], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(JSON.parse(stdout.output).prefix_id, "motn_sig123");
+  });
+});
+
 test("motions clone posts the expected payload, supports plays alias, and honors account override", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -3069,6 +3345,78 @@ test("motions update patches own-post engagement setting", async () => {
   });
 });
 
+test("motions update accepts a payload file for signal configuration", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const payloadPath = join(root, "motion-update.json");
+    const payload = {
+      signal_rows: [
+        {
+          scope: "company",
+          question: "Is the company hiring revenue operations leaders?",
+          company_signal_category: "hiring",
+          role_terms: "Revenue Operations"
+        },
+        {
+          scope: "both",
+          question: "Is the account investing in workflow automation?",
+          company_signal_category: "expansion"
+        }
+      ]
+    };
+    await writeFile(payloadPath, JSON.stringify(payload, null, 2));
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Pipeline motion",
+      status: "draft",
+      kind: "outbound",
+      signal_rows: payload.signal_rows
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(JSON.parse(options.body), { motion: payload });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--payload", payloadPath, "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions update rejects mixed simple flags and payload mode without calling the api", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const payloadPath = join(root, "motion-update.json");
+    await writeFile(payloadPath, JSON.stringify({ signal_rows: [] }));
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("mixed mode must not call the API");
+    });
+
+    const exitCode = await run(["motions", "update", "motn_source", "--payload", payloadPath, "--status", "paused"], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Choose one motion input mode/);
+  });
+});
+
 test("motions status shortcuts patch expected statuses", async () => {
   const cases = [
     { action: "activate", status: "active" },
@@ -3130,7 +3478,7 @@ test("motions update rejects invalid status without calling the api", async () =
 
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
-    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
+    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \(\[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\] \| --payload <file\.json>\)/);
   });
 });
 
