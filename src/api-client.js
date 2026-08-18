@@ -290,6 +290,23 @@ export class AudientiClient {
     });
   }
 
+  motionAbmCompanies(accountId, motionId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "abm_companies"]));
+  }
+
+  addMotionAbmCompanies(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "abm_companies"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeMotionAbmCompany(accountId, motionId, rowId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "abm_companies", rowId]), {
+      method: "DELETE"
+    });
+  }
+
   contentPrograms(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["content_ops", "programs"], query));
   }

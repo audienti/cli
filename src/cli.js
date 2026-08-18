@@ -90,6 +90,9 @@ const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <tex
 const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
 const MOTIONS_RUN_DISCOVERY_USAGE = "Usage: audienti motions run-discovery <motn_id> [--target-count <n>] [--json] [--account <acct_id>]";
 const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <company_url> [--principal <account_user_id|me>] [--feedback <text>] [--offer-type <type>] [--force] [--confirm] [--wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--json] [--account <acct_id>]";
+const MOTIONS_ABM_COMPANIES_LIST_USAGE = "Usage: audienti motions abm-companies <motn_id> list [--json] [--account <acct_id>]";
+const MOTIONS_ABM_COMPANIES_ADD_USAGE = "Usage: audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json] [--account <acct_id>]";
+const MOTIONS_ABM_COMPANIES_REMOVE_USAGE = "Usage: audienti motions abm-companies <motn_id> remove <row_id> [--json] [--account <acct_id>]";
 const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
 const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> ([--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]";
@@ -237,6 +240,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "list") return motionsList(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "show") return motionsShow(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && ["abm-companies", "company-filters"].includes(action)) return motionsAbmCompanies(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "analytics") return motionsAnalytics(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "prospects") return motionsProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
@@ -1687,10 +1691,66 @@ async function motionsCreate(args, context, { accountOverride } = {}) {
 
 function normalizeMotionCreatePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  validateMotionSignalRows(payload);
   if (String(payload.kind || "").trim().toLowerCase() !== "inbound") return payload;
   if (Object.prototype.hasOwnProperty.call(payload, "inbound_channels")) return payload;
 
   return { ...payload, inbound_channels: ["linkedin"] };
+}
+
+async function motionsAbmCompanies(args, context, { accountOverride } = {}) {
+  const [motionId, subaction, ...rest] = args;
+  if (!motionId || !subaction) throw new CommandError("Usage: audienti motions abm-companies <motn_id> <list|add|remove> [args] [--json] [--account <acct_id>]");
+
+  if (subaction === "list") return motionsAbmCompaniesList(motionId, rest, context, { accountOverride });
+  if (subaction === "add") return motionsAbmCompaniesAdd(motionId, rest, context, { accountOverride });
+  if (["remove", "delete"].includes(subaction)) return motionsAbmCompaniesRemove(motionId, rest, context, { accountOverride });
+
+  throw new CommandError("Usage: audienti motions abm-companies <motn_id> <list|add|remove> [args] [--json] [--account <acct_id>]");
+}
+
+async function motionsAbmCompaniesList(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(MOTIONS_ABM_COMPANIES_LIST_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.motionAbmCompanies(accountId, motionId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderMotionAbmCompanies(payload, context);
+}
+
+async function motionsAbmCompaniesAdd(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    file: { type: "string" }
+  });
+  if ((positionals.length === 0 && !values.file) || (positionals.length > 0 && values.file)) {
+    throw new CommandError(MOTIONS_ABM_COMPANIES_ADD_USAGE);
+  }
+
+  const entries = values.file ? await motionAbmCompanyEntriesFromFile(values.file) : positionals;
+  if (entries.length === 0) throw new CommandError(MOTIONS_ABM_COMPANIES_ADD_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.addMotionAbmCompanies(accountId, motionId, { abm_companies: entries });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Company filters: ${Array.isArray(payload?.abm_companies) ? payload.abm_companies.length : 0}`);
+  renderMotionAbmCompanies(payload, context);
+  renderMotionAbmCompanyErrors(payload, context);
+}
+
+async function motionsAbmCompaniesRemove(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(MOTIONS_ABM_COMPANIES_REMOVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.removeMotionAbmCompany(accountId, motionId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Removed company filter ${display(positionals[0])} from motion ${display(payload?.motion_id || motionId)}.`);
+  renderMotionAbmCompanies(payload, context);
 }
 
 async function motionsDelete(args, context, { accountOverride } = {}) {
@@ -1737,7 +1797,9 @@ async function motionUpdatePayload(values) {
       throw new CommandError("Choose one motion input mode: either --payload <file.json> or the simple --status/--tags/--own-post-engagement flags.");
     }
 
-    return readJsonPayload(values.payload);
+    const payload = await readJsonPayload(values.payload);
+    validateMotionSignalRows(payload);
+    return payload;
   }
 
   return compactObject({
@@ -1749,6 +1811,41 @@ async function motionUpdatePayload(values) {
 
 function motionSimpleFieldsPresent(values) {
   return Boolean(values.status) || values.tags !== undefined || values["own-post-engagement"] !== undefined;
+}
+
+function validateMotionSignalRows(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+
+  for (const row of Array.isArray(payload.signal_rows) ? payload.signal_rows : []) {
+    if (!row || typeof row !== "object" || Array.isArray(row)) continue;
+    if (!String(row.posting_language || "").trim()) continue;
+
+    const scope = String(row.scope || "company").trim().toLowerCase();
+    const category = String(row.company_signal_category || "").trim().toLowerCase();
+    if (scope === "company" && category === "hiring") continue;
+
+    throw new CommandError("posting_language is only supported on company-scope hiring signal rows.");
+  }
+}
+
+async function motionAbmCompanyEntriesFromFile(path) {
+  const contents = await readFile(path, "utf8");
+  const trimmed = contents.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      return Array.isArray(parsed.abm_companies) ? parsed.abm_companies :
+        (Array.isArray(parsed.company_filters) ? parsed.company_filters :
+          (Array.isArray(parsed.items) ? parsed.items : []));
+    }
+  } catch {
+    // Plain text files use one company domain or LinkedIn company URL per line.
+  }
+
+  return trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }
 
 async function motionsStatusShortcut(action, args, context, { accountOverride } = {}) {
@@ -4228,7 +4325,7 @@ function renderOffer(offer, context) {
 function renderIcps(icps, context) {
   if (!Array.isArray(icps) || icps.length === 0) return writeLine(context.stdout, "No ICPs found.");
 
-  writeLine(context.stdout, "ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tAGENT");
+  writeLine(context.stdout, "ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tSENIORITY MODE\tAGENT");
   for (const icp of icps) {
     writeLine(
       context.stdout,
@@ -4237,6 +4334,7 @@ function renderIcps(icps, context) {
         display(icp.name),
         display(Array.isArray(icp.tags) && icp.tags.length > 0 ? icp.tags.join(",") : "-"),
         display(icp.discovery_keyword),
+        display(icp.seniority_match_mode),
         display(icp.agent?.name)
       ].join("\t")
     );
@@ -4248,6 +4346,7 @@ function renderIcp(icp, context) {
   if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
   if (icp?.notes) writeLine(context.stdout, `Notes: ${icp.notes}`);
   if (icp?.discovery_keyword) writeLine(context.stdout, `Discovery keyword: ${icp.discovery_keyword}`);
+  if (icp?.seniority_match_mode) writeLine(context.stdout, `Seniority match mode: ${icp.seniority_match_mode}`);
   if (icp?.agent?.name) writeLine(context.stdout, `Agent: ${icp.agent.name}`);
 }
 
@@ -4365,12 +4464,65 @@ function renderMotion(motion, context) {
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
   if (motion?.list?.name) writeLine(context.stdout, `List: ${motion.list.name} (${display(motion.list.prefix_id)})`);
   writeLine(context.stdout, `Own-post engagement: ${motion?.own_post_engagement ? "enabled" : "disabled"}`);
+  if (Array.isArray(motion?.inbound_channels)) writeLine(context.stdout, `Inbound channels: ${display(motion.inbound_channels.join(", "), "-")}`);
+  renderMotionLopaProfiles(motion?.lopa_profiles, context);
+  renderMotionSignalRows(motion?.signal_rows, context);
+  renderMotionAbmCompanies(motion, context, { showEmpty: false });
   if (Array.isArray(motion?.play_tags)) writeLine(context.stdout, `Tags: ${display(motion.play_tags.join(", "), "-")}`);
   if (motion?.principal_account_user?.id) {
     writeLine(
       context.stdout,
       `Principal: ${display(motion.principal_account_user.name || motion.principal_account_user.email)} (${display(motion.principal_account_user.id)})`
     );
+  }
+}
+
+function renderMotionLopaProfiles(rows, context) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  writeLine(context.stdout, "LOPA profiles:");
+  for (const row of rows) {
+    writeLine(context.stdout, `- ${display(row.url)} (${display(row.source_type, "other")})`);
+  }
+}
+
+function renderMotionSignalRows(rows, context) {
+  if (!Array.isArray(rows) || rows.length === 0) return;
+
+  writeLine(context.stdout, "Signal rows:");
+  for (const row of rows) {
+    const filters = [
+      row.company_signal_category ? `category=${row.company_signal_category}` : null,
+      row.role_terms ? `roles=${singleLine(row.role_terms)}` : null,
+      row.posting_language ? `posting_language=${singleLine(row.posting_language)}` : null,
+      row.topics ? `topics=${singleLine(row.topics)}` : null
+    ].filter(Boolean).join("; ");
+    writeLine(context.stdout, `- ${display(row.scope)}: ${display(row.question)}${filters ? ` [${filters}]` : ""}`);
+  }
+}
+
+function renderMotionAbmCompanies(payload, context, { showEmpty = true } = {}) {
+  const rows = Array.isArray(payload?.abm_companies) ? payload.abm_companies : [];
+  if (rows.length === 0) {
+    if (showEmpty) writeLine(context.stdout, "No company filters found.");
+    return;
+  }
+
+  writeAlignedTable(context, ["ROW ID", "KIND", "VALUE", "STATUS"], rows.map((row) => [
+    display(row.id),
+    display(row.kind),
+    display(row.normalized_value || row.raw_value),
+    display(row.status)
+  ]));
+}
+
+function renderMotionAbmCompanyErrors(payload, context) {
+  const errors = Array.isArray(payload?.errors) ? payload.errors : [];
+  if (errors.length === 0) return;
+
+  writeLine(context.stdout, "Errors:");
+  for (const error of errors) {
+    writeLine(context.stdout, `- ${display(error.input)}: ${display(error.error)}`);
   }
 }
 
@@ -5992,6 +6144,10 @@ function display(value, fallback = "") {
   return value === undefined || value === null || value === "" ? fallback : value;
 }
 
+function singleLine(value) {
+  return String(value || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join(", ");
+}
+
 function prospectsToCsv(prospects) {
   const profileIdentifiers = profileIdentifiersForPayload({ meta: {} }, prospects);
   const headers = [
@@ -6288,6 +6444,8 @@ const HELP_TOPICS = new Map([
     "    audienti motions run-discovery <motn_id>",
     "    audienti motions quick-start --url <company_url> --confirm --wait",
     "    audienti motions prospects <motn_id>",
+    "    audienti motions abm-companies <motn_id> list",
+    "    audienti motions abm-companies <motn_id> add <domain_or_linkedin_url>...",
     "    audienti motions create --payload <file.json>",
     "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>]",
     "    audienti motions update <motn_id> --payload <file.json>",
@@ -7555,6 +7713,9 @@ const HELP_TOPICS = new Map([
     "  audienti motions analytics <motn_id> [--window 30d] [--json]",
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
+    "  audienti motions abm-companies <motn_id> list [--json]",
+    "  audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json]",
+    "  audienti motions abm-companies <motn_id> remove <row_id> [--json]",
     "  audienti motions create --payload <file.json> [--json]",
     "  audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] | --payload <file.json>) [--json]",
     "  audienti motions add-tag <motn_id> <tag> [--json]",
@@ -7637,8 +7798,36 @@ const HELP_TOPICS = new Map([
     "Input shape:",
     "  motn_id: motn_ prefix id",
     "",
+    "Output shape:",
+    "  inbound_channels: enabled inbound collectors for inbound motions",
+    "  lopa_profiles[]: tracked LinkedIn profile rows for LOPA motions",
+    "  signal_rows[]: outbound signal configuration rows",
+    "  abm_companies[]: motion-scoped positive company filter rows",
+    "",
     "API:",
     "  GET /api/v1/accounts/:account_id/motions/:id.json"
+  ].join("\n")],
+
+  ["motions abm-companies", [
+    "Usage:",
+    `  ${MOTIONS_ABM_COMPANIES_LIST_USAGE.slice("Usage: ".length)}`,
+    `  ${MOTIONS_ABM_COMPANIES_ADD_USAGE.slice("Usage: ".length)}`,
+    `  ${MOTIONS_ABM_COMPANIES_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Manage a motion-scoped positive company filter list for isolated ABM discovery runs.",
+    "",
+    "Input shape:",
+    "  motn_id: motn_ prefix id",
+    "  domain_or_linkedin_url: company domain or LinkedIn company page URL",
+    "  file: plain text one entry per line, or JSON array / { abm_companies: [...] }",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/motions/:motion_id/abm_companies.json",
+    "  POST /api/v1/accounts/:account_id/motions/:motion_id/abm_companies.json",
+    "  DELETE /api/v1/accounts/:account_id/motions/:motion_id/abm_companies/:row_id.json"
   ].join("\n")],
 
   ["motions status", [
@@ -7806,7 +7995,7 @@ const HELP_TOPICS = new Map([
     "  icp_id: icpp_ prefix id | optional",
     "  list_id: list_ prefix id | optional",
     "  play_tags: [string] | optional",
-    "  signal_rows: [{ scope: company | person | both, question: string, company_signal_category: string | optional, role_terms: string | optional, posting_language: string | optional, topics: string | optional }] | optional for outbound motions",
+    "  signal_rows: [{ scope: company | person | both, question: string, company_signal_category: string | optional, role_terms: string | optional, posting_language: hiring-only string | optional, topics: string | optional }] | optional for outbound motions",
     "  signal_questions: newline-delimited company::, person::, or both:: legacy question text | optional for outbound motions",
     "  inbound_channels: [linkedin | reddit] | optional; defaults to [linkedin] for inbound motions",
     "  lopa_profiles: [{ url: string, source_type: creator | competitor | partner | customer | other }] | optional",
@@ -7825,6 +8014,7 @@ const HELP_TOPICS = new Map([
     "",
     "Behavior:",
     "  The API calls Motions::Setup and the managed graph provisioner. If principal_account_user_id is omitted, the authenticated account user is used.",
+    "  posting_language is only supported on company-scope hiring signal rows; use topics for person discussion evidence.",
     "  Use `audienti offers list`, `audienti icps list`, and `audienti users list` to resolve valid ids before calling this command."
   ].join("\n")],
 
@@ -7874,6 +8064,7 @@ const HELP_TOPICS = new Map([
     "Behavior:",
     "  Choose either --payload or simple flags. Updates only the provided fields. Sending --tags replaces the motion's full tag set.",
     "  Payload mode supports outbound signal_rows or legacy signal_questions; supplied rows replace the motion's active ready signals.",
+    "  posting_language is only supported on company-scope hiring signal rows; use topics for person discussion evidence.",
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/motions/:id.json",
@@ -9298,6 +9489,7 @@ const HELP_TOPICS = new Map([
     "2. Create a motion or play",
     "  audienti setup play preflight --principal <account_user_id|me> --platform linkedin",
     "  audienti motions create --payload <file.json>",
+    "  audienti motions abm-companies <motn_id> add --file abm-domains.txt",
     "  audienti motions clone <motn_id> --name \"New subset motion\"",
     "  audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
     "  audienti motions activate <motn_id>",

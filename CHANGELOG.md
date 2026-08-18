@@ -4,6 +4,17 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.35] - 2026-08-18
+
+### Added
+
+- Add `audienti motions abm-companies` commands for listing, adding, and removing motion-scoped positive company filters through the account API.
+- Surface ICP `seniority_match_mode`, motion inbound channels, LOPA profile rows, signal rows, and ABM company filters in CLI/API readbacks.
+
+### Fixed
+
+- Reject `posting_language` on non-hiring signal rows instead of accepting a field that cannot persist outside company-scope hiring signals.
+
 ## [0.1.34] - 2026-08-17
 
 ### Added

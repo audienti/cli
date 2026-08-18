@@ -140,6 +140,8 @@ audienti writer test-run <prsp_id>
 audienti motions analytics <motn_id>
 audienti motions run-discovery <motn_id>
 audienti motions quick-start --url https://example.com --wait --confirm
+audienti motions abm-companies <motn_id> add --file abm-domains.txt
+audienti motions abm-companies <motn_id> list
 audienti motions update <motn_id> --status paused
 audienti motions update <motn_id> --own-post-engagement true
 audienti motions update <motn_id> --payload motion-signals.json

@@ -1490,7 +1490,7 @@ test("offers and icps list render readable selection tables", async () => {
 
       if (url.pathname === "/api/v1/accounts/acct_one/icps.json") {
         return jsonResponse([
-          { id: 21, prefix_id: "icpp_one", name: "ICP One", tags: ["enterprise"], discovery_keyword: "migration", agent: { id: 31, name: "Finder One" } }
+          { id: 21, prefix_id: "icpp_one", name: "ICP One", tags: ["enterprise"], discovery_keyword: "migration", seniority_match_mode: "exact", agent: { id: 31, name: "Finder One" } }
         ]);
       }
 
@@ -1505,8 +1505,8 @@ test("offers and icps list render readable selection tables", async () => {
     stdout.output = "";
     exitCode = await run(["icps", "list"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tAGENT/);
-    assert.match(stdout.output, /icpp_one\tICP One\tenterprise\tmigration\tFinder One/);
+    assert.match(stdout.output, /ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tSENIORITY MODE\tAGENT/);
+    assert.match(stdout.output, /icpp_one\tICP One\tenterprise\tmigration\texact\tFinder One/);
   });
 });
 
@@ -1743,6 +1743,7 @@ test("icps show renders one icp", async () => {
         notes: "ICP notes.",
         tags: ["sarit"],
         discovery_keyword: "renewal",
+        seniority_match_mode: "exact",
         agent: { name: "Finder One" }
       });
     });
@@ -1752,6 +1753,7 @@ test("icps show renders one icp", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /ICP: Pipeline ICP \(icpp_source\)/);
     assert.match(stdout.output, /Tags: sarit/);
+    assert.match(stdout.output, /Seniority match mode: exact/);
     assert.match(stdout.output, /Agent: Finder One/);
   });
 });
@@ -2612,6 +2614,117 @@ test("motions status renders executable configuration validity", async () => {
   });
 });
 
+test("motions show renders signal rows and motion configuration details", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_lopa.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        prefix_id: "motn_lopa",
+        name: "ACTICO APAC AML Informants - LOPA",
+        status: "draft",
+        kind: "lopa",
+        own_post_engagement: false,
+        inbound_channels: ["linkedin", "reddit"],
+        lopa_profiles: [
+          { url: "https://www.linkedin.com/in/source-profile", source_type: "creator" }
+        ],
+        signal_rows: [
+          {
+            scope: "company",
+            question: "Is the company hiring vendor governance leaders?",
+            company_signal_category: "hiring",
+            role_terms: "Vendor Manager",
+            posting_language: "QBR"
+          }
+        ],
+        abm_companies: [
+          { id: 7, kind: "linkedin_company_url", normalized_value: "https://www.linkedin.com/company/acme", status: "pending" }
+        ]
+      });
+    });
+
+    const exitCode = await run(["motions", "show", "motn_lopa"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Inbound channels: linkedin, reddit/);
+    assert.match(stdout.output, /LOPA profiles:/);
+    assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/in\/source-profile \(creator\)/);
+    assert.match(stdout.output, /Signal rows:/);
+    assert.match(stdout.output, /posting_language=QBR/);
+    assert.match(stdout.output, /ROW ID\s+KIND\s+VALUE\s+STATUS/);
+    assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/company\/acme/);
+  });
+});
+
+test("motions abm-companies manages motion company filters", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const filePath = join(root, "abm-domains.txt");
+    await writeFile(filePath, "acme.com\nhttps://www.linkedin.com/company/direct-company\n");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_abm/abm_companies.json" && options.method === "POST") {
+        assert.deepEqual(JSON.parse(options.body), {
+          abm_companies: ["acme.com", "https://www.linkedin.com/company/direct-company"]
+        });
+        return jsonResponse({
+          motion_id: "motn_abm",
+          abm_companies: [
+            { id: 11, kind: "linkedin_company_url", normalized_value: "https://www.linkedin.com/company/acme", status: "pending" }
+          ],
+          errors: []
+        }, { status: 201 });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_abm/abm_companies.json" && options.method === "GET") {
+        return jsonResponse({
+          motion_id: "motn_abm",
+          abm_companies: [
+            { id: 11, kind: "linkedin_company_url", normalized_value: "https://www.linkedin.com/company/acme", status: "pending" }
+          ],
+          errors: []
+        });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_abm/abm_companies/11.json" && options.method === "DELETE") {
+        return jsonResponse({ motion_id: "motn_abm", abm_companies: [], errors: [], deleted: true });
+      }
+
+      throw new Error(`unexpected ${options.method} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["motions", "abm-companies", "motn_abm", "add", "--file", filePath], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Company filters: 1/);
+    assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/company\/acme/);
+
+    stdout.output = "";
+    exitCode = await run(["motions", "abm-companies", "motn_abm", "list"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /ROW ID\s+KIND\s+VALUE\s+STATUS/);
+
+    stdout.output = "";
+    exitCode = await run(["motions", "abm-companies", "motn_abm", "remove", "11"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed company filter 11/);
+  });
+});
+
 test("motions analytics renders prospect output by day", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -3130,6 +3243,42 @@ test("motions create preserves outbound signal rows in payload files", async () 
 
     assert.equal(exitCode, 0);
     assert.equal(JSON.parse(stdout.output).prefix_id, "motn_sig123");
+  });
+});
+
+test("motions create rejects posting language on non hiring signal rows before calling the api", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "outbound-motion-create.json");
+    await writeFile(payloadPath, JSON.stringify({
+      name: "Outbound signal motion",
+      premise: "Find accounts showing current buying triggers.",
+      kind: "outbound",
+      status: "draft",
+      offer_id: "offr_abc123",
+      signal_rows: [
+        {
+          scope: "person",
+          question: "Is the person discussing renewal governance?",
+          posting_language: "renewal dashboard"
+        }
+      ]
+    }));
+
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("invalid posting_language payload must not call the API");
+    });
+
+    const exitCode = await run(["motions", "create", "--payload", payloadPath], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /posting_language is only supported/);
   });
 });
 

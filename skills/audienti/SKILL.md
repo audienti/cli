@@ -73,6 +73,8 @@ Useful MCP tools:
   mapping URLs.
 - `offers.create`, `icps.create`, and `motions.create` set up the offer, ICP,
   and play.
+- Use `audienti motions abm-companies <motn_id> add --file <txt|json>` to attach
+  a positive company filter list for isolated ABM discovery runs.
 - `analytics.stages` returns stage conversion cohorts and stage aging.
 - `analytics.cohort_lists.create` materializes event cohorts as reusable lists.
 
@@ -101,6 +103,8 @@ audienti users activity me --window 7d --json
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json
 audienti motions quick-start --url https://example.com --wait --confirm --json
+audienti motions abm-companies <motn_id> add --file abm-domains.txt --json
+audienti motions abm-companies <motn_id> list --json
 audienti motions update <motn_id> --status paused --json
 audienti motions activate <motn_id> --json
 audienti motions delete <motn_id> --confirm yes --json
