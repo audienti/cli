@@ -268,6 +268,44 @@ export class AudientiClient {
     });
   }
 
+  listRoutingRules(accountId, listId) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules"]));
+  }
+
+  createListRoutingRule(accountId, listId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateListRoutingRule(accountId, listId, ruleId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", ruleId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  removeListRoutingRule(accountId, listId, ruleId) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", ruleId]), {
+      method: "DELETE"
+    });
+  }
+
+  moveListRoutingRule(accountId, listId, ruleId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", ruleId, "move"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  applyListRoutingRules(accountId, listId) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", "apply"]), {
+      method: "POST",
+      body: {}
+    });
+  }
+
   motions(accountId) {
     return this.requestJson(accountPath(accountId, ["motions"]));
   }

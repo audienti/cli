@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.36] - 2026-08-22
+
+### Added
+
+- Add `audienti lists routing-rules` commands to inspect, create, update, remove, reorder, and apply the same account-scoped list routing rules available in the UI.
+
 ## [0.1.35] - 2026-08-18
 
 ### Added

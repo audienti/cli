@@ -4,7 +4,7 @@ Audienti CLI is the agent-first command-line client for the Audienti production
 API and the local bridge for Audienti's app-hosted MCP endpoint. It lets local
 coding agents and operators inspect accounts,
 create and manage plays, import prospects, build lists, manage task reminders,
-and work supported operator flows.
+configure list routing rules, and work supported operator flows.
 
 ## Install
 
@@ -163,6 +163,8 @@ audienti tasks add --title "Review Cristina" --due 2026-07-24T11:00 --prospect <
 audienti tasks complete <ptsk_id>
 audienti dnc list
 audienti company-rules list
+audienti lists routing-rules <list_id> list
+audienti lists routing-rules <list_id> apply
 audienti users activity --window 7d
 audienti analytics prospects --window 24h
 audienti analytics dashboard --play-tag wine_campaign
@@ -200,6 +202,38 @@ audienti tasks list --status completed
 audienti tasks add --title "Review target account" --due 2026-07-24T11:00 --list <list_id> --notes "Check the latest notes."
 audienti tasks complete <ptsk_id>
 ```
+
+To manage the same ordered rules shown in a list's Routing Rules UI, use a JSON
+payload for create and update operations:
+
+```bash
+audienti lists routing-rules <list_id> list
+audienti lists routing-rules <list_id> create --payload routing-rule.json
+audienti lists routing-rules <list_id> update <rule_id> --payload routing-rule.json
+audienti lists routing-rules <list_id> move <rule_id> up
+audienti lists routing-rules <list_id> remove <rule_id>
+audienti lists routing-rules <list_id> apply
+```
+
+```json
+{
+  "name": "VP prospects to Alice",
+  "enabled": true,
+  "action_kind": "assign_user",
+  "target_account_user_id": "alice@example.com",
+  "conditions": {
+    "seniorities": [
+      {"id": "5", "name": "Vice President", "negative": false}
+    ],
+    "seniority_match_mode": "at_least"
+  }
+}
+```
+
+Use `action_kind: "route_to_list"` with `target_list_id` to route to another
+working list. `apply` queues the existing list-routing background job, just like
+the UI; it reports that work was enqueued, not that every prospect has finished
+routing. Run `audienti lists routing-rules help` for the full condition contract.
 
 To inspect activity for prospects that entered the account during a specific
 cohort while keeping a separate activity window:

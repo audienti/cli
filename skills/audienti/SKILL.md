@@ -1,6 +1,6 @@
 ---
 name: audienti
-description: Use when the user wants to operate Audienti through the production CLI or app-hosted MCP endpoint, including account selection, plays, prospect imports, lists, message previews, analytics, or supported operator outcomes.
+description: Use when the user wants to operate Audienti through the production CLI or app-hosted MCP endpoint, including account selection, plays, prospect imports, lists and routing rules, message previews, analytics, or supported operator outcomes.
 ---
 
 # Audienti CLI and MCP
@@ -102,6 +102,10 @@ audienti prospects unlock <prsp_id> --json
 audienti users activity me --window 7d --json
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json
+audienti lists routing-rules <list_id> list --json
+audienti lists routing-rules <list_id> create --payload routing-rule.json --json
+audienti lists routing-rules <list_id> move <rule_id> up --json
+audienti lists routing-rules <list_id> apply --json
 audienti motions quick-start --url https://example.com --wait --confirm --json
 audienti motions abm-companies <motn_id> add --file abm-domains.txt --json
 audienti motions abm-companies <motn_id> list --json
@@ -124,6 +128,12 @@ audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --rep
 audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id> --no-wait
 audienti writer test-run show <prsp_id> <rprt_id>
 ```
+
+List routing-rule create and update commands accept the same normalized
+condition and action data as the list UI. Inspect the ordered rules first, use
+`audienti lists routing-rules help` for the payload contract, and treat `apply`
+as an asynchronous relaunch: it queues the existing routing job and does not
+mean every list member has finished routing.
 
 `audienti writer test-run <prsp_id>` starts a report-backed writing session and
 builds the campaign timeline without drafting every message. The printed

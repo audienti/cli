@@ -545,6 +545,14 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/Usage:\n  audienti lists remove-tag <list_id> <tag>/, /DELETE \/api\/v1\/accounts\/:account_id\/lists\/:id\/remove_tag\.json/]
     },
     {
+      args: ["lists", "routing-rules", "help"],
+      expected: [
+        /Usage:\n  audienti lists routing-rules <list_id> list/,
+        /--payload <file\.json>/,
+        /POST \/api\/v1\/accounts\/:account_id\/lists\/:list_id\/routing_rules\/apply\.json/
+      ]
+    },
+    {
       args: ["tags", "help"],
       expected: [/Usage:\n  audienti tags list \[--json\]/, /shared vocabulary from ICP tags, list tags, and motion play_tags/]
     },
@@ -3863,6 +3871,168 @@ test("lists update renders a readable confirmation", async () => {
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Updated list Updated target list \(list_one\)\./);
     assert.match(stdout.output, /Description: Re-ranked operator list\./);
+  });
+});
+
+test("lists routing-rules creates from a payload and lists normalized rule readback", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "routing-rule.json");
+    const ruleInput = {
+      name: "Assign executives",
+      enabled: true,
+      position: 1,
+      action_kind: "assign_user",
+      target_account_user_id: "me",
+      conditions: {
+        seniorities: [{ id: "5", name: "Vice President", negative: false }],
+        seniority_match_mode: "at_least"
+      }
+    };
+    await writeFile(payloadPath, JSON.stringify(ruleInput));
+
+    const rule = {
+      id: 17,
+      ...ruleInput,
+      target_account_user_id: 42,
+      target_account_user: { id: 42, name: "Alex Admin", email: "alex@example.com" },
+      action_label: "Assign to Alex Admin"
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_focus/routing_rules.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+
+      if (calls.length === 1) {
+        assert.equal(options.method, "POST");
+        assert.deepEqual(JSON.parse(options.body), { routing_rule: ruleInput });
+        return jsonResponse({ list_id: "list_focus", routing_rule: rule }, { status: 201 });
+      }
+
+      assert.equal(options.method, "GET");
+      return jsonResponse({ list_id: "list_focus", routing_rules: [rule] });
+    });
+
+    let exitCode = await run(["lists", "routing-rules", "list_focus", "create", "--payload", payloadPath], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Created routing rule Assign executives \(17\) on list list_focus\./);
+
+    stdout.output = "";
+    exitCode = await run(["lists", "routing-rules", "list_focus", "list"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /RULE ID\s+POSITION\s+ENABLED\s+ACTION\s+TARGET\s+NAME/);
+    assert.match(stdout.output, /17\s+1\s+yes\s+assign_user\s+Alex Admin\s+Assign executives/);
+  });
+});
+
+test("lists routing-rules updates removes and applies through list endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const payloadPath = join(root, "routing-rule-update.json");
+    const ruleInput = { name: "Disabled route", enabled: false, position: 3 };
+    await writeFile(payloadPath, JSON.stringify(ruleInput));
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options, calls) => {
+      if (calls.length === 1) {
+        assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_focus/routing_rules/17.json");
+        assert.equal(options.method, "PATCH");
+        assert.deepEqual(JSON.parse(options.body), { routing_rule: ruleInput });
+        return jsonResponse({
+          list_id: "list_focus",
+          routing_rule: { id: 17, action_kind: "route_to_list", target_list: { name: "Destination" }, ...ruleInput }
+        });
+      }
+
+      if (calls.length === 2) {
+        assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_focus/routing_rules/17.json");
+        assert.equal(options.method, "DELETE");
+        return jsonResponse({ deleted: true, routing_rule: { id: 17, name: "Disabled route" } });
+      }
+
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_focus/routing_rules/apply.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {});
+      return jsonResponse({ list_id: "list_focus", enqueued: true }, { status: 202 });
+    });
+
+    let exitCode = await run(["lists", "routing-rules", "list_focus", "update", "17", "--payload", payloadPath], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Updated routing rule Disabled route \(17\) on list list_focus\./);
+
+    stdout.output = "";
+    exitCode = await run(["lists", "routing-rules", "list_focus", "remove", "17"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed routing rule Disabled route \(17\) from list list_focus\./);
+
+    stdout.output = "";
+    exitCode = await run(["lists", "routing-rules", "list_focus", "apply"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Routing rules will be applied in the background to list list_focus\./);
+  });
+});
+
+test("lists routing-rules moves a rule using the server ordering operation", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/lists/list_focus/routing_rules/17/move.json");
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(JSON.parse(options.body), { direction: "up" });
+      return jsonResponse({
+        list_id: "list_focus",
+        moved: true,
+        routing_rules: [
+          { id: 17, position: 1, enabled: true, action_kind: "assign_user", target_account_user: { name: "Alex Admin" }, name: "Assign executives" }
+        ]
+      });
+    });
+
+    const exitCode = await run(["lists", "routing-rules", "list_focus", "move", "17", "up"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Moved routing rule 17 up on list list_focus\./);
+    assert.match(stdout.output, /17\s+1\s+yes\s+assign_user\s+Alex Admin\s+Assign executives/);
+  });
+});
+
+test("lists routing-rules rejects a missing payload before making a request", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("request should not be made");
+    });
+
+    const exitCode = await run(["lists", "routing-rules", "list_focus", "create"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Usage: audienti lists routing-rules <list_id> create --payload <file\.json>/);
+    assert.equal(fetch.calls.length, 0);
   });
 });
 

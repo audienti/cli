@@ -99,6 +99,12 @@ const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json]
 const ICPS_REMOVE_TAG_USAGE = "Usage: audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_ADD_TAG_USAGE = "Usage: audienti lists add-tag <list_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_REMOVE_TAG_USAGE = "Usage: audienti lists remove-tag <list_id> <tag> [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_LIST_USAGE = "Usage: audienti lists routing-rules <list_id> list [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_CREATE_USAGE = "Usage: audienti lists routing-rules <list_id> create --payload <file.json> [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_UPDATE_USAGE = "Usage: audienti lists routing-rules <list_id> update <rule_id> --payload <file.json> [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_REMOVE_USAGE = "Usage: audienti lists routing-rules <list_id> remove <rule_id> [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_MOVE_USAGE = "Usage: audienti lists routing-rules <list_id> move <rule_id> <up|down> [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_APPLY_USAGE = "Usage: audienti lists routing-rules <list_id> apply [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
@@ -237,6 +243,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "lists" && action === "prospects") return listProspects(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "add-prospects") return listsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "remove-prospects") return listsRemoveProspects(rest, context, { accountOverride });
+  if (normalizedResource === "lists" && ["routing-rules", "rules"].includes(action)) return listsRoutingRules(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "list") return motionsList(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "show") return motionsShow(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
@@ -1489,6 +1496,104 @@ async function listsRemoveProspects(args, context, { accountOverride } = {}) {
     zeroSuccessLabel: `No prospects were removed from list ${listId}.`
   });
   return rejected ? 1 : 0;
+}
+
+async function listsRoutingRules(args, context, { accountOverride } = {}) {
+  const [listId, subaction, ...rest] = args;
+  if (!listId || !subaction) {
+    throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json] [--account <acct_id>]");
+  }
+
+  if (subaction === "list") return listRoutingRulesList(listId, rest, context, { accountOverride });
+  if (subaction === "create") return listRoutingRulesCreate(listId, rest, context, { accountOverride });
+  if (subaction === "update") return listRoutingRulesUpdate(listId, rest, context, { accountOverride });
+  if (["remove", "delete"].includes(subaction)) return listRoutingRulesRemove(listId, rest, context, { accountOverride });
+  if (subaction === "move") return listRoutingRulesMove(listId, rest, context, { accountOverride });
+  if (subaction === "apply") return listRoutingRulesApply(listId, rest, context, { accountOverride });
+
+  throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json] [--account <acct_id>]");
+}
+
+async function listRoutingRulesList(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(LIST_ROUTING_RULES_LIST_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.listRoutingRules(accountId, listId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderListRoutingRules(payload, context);
+}
+
+async function listRoutingRulesCreate(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    payload: {type: "string"}
+  });
+  if (positionals.length > 0 || !values.payload) throw new CommandError(LIST_ROUTING_RULES_CREATE_USAGE);
+
+  const ruleInput = await readJsonPayload(values.payload);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createListRoutingRule(accountId, listId, {routing_rule: ruleInput});
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.routing_rule;
+  writeLine(context.stdout, `Created routing rule ${display(rule?.name)} (${display(rule?.id)}) on list ${display(payload?.list_id || listId)}.`);
+}
+
+async function listRoutingRulesUpdate(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    payload: {type: "string"}
+  });
+  if (positionals.length !== 1 || !values.payload) throw new CommandError(LIST_ROUTING_RULES_UPDATE_USAGE);
+
+  const ruleInput = await readJsonPayload(values.payload);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateListRoutingRule(accountId, listId, positionals[0], {routing_rule: ruleInput});
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.routing_rule;
+  writeLine(context.stdout, `Updated routing rule ${display(rule?.name)} (${display(rule?.id)}) on list ${display(payload?.list_id || listId)}.`);
+}
+
+async function listRoutingRulesRemove(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(LIST_ROUTING_RULES_REMOVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.removeListRoutingRule(accountId, listId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.routing_rule;
+  writeLine(context.stdout, `Removed routing rule ${display(rule?.name)} (${display(rule?.id || positionals[0])}) from list ${display(listId)}.`);
+}
+
+async function listRoutingRulesMove(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  const [ruleId, direction] = positionals;
+  if (positionals.length !== 2 || !["up", "down"].includes(direction)) {
+    throw new CommandError(LIST_ROUTING_RULES_MOVE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.moveListRoutingRule(accountId, listId, ruleId, {direction});
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const verb = payload?.moved ? "Moved" : "Could not move";
+  writeLine(context.stdout, `${verb} routing rule ${display(ruleId)} ${direction} on list ${display(payload?.list_id || listId)}.`);
+  renderListRoutingRules(payload, context);
+}
+
+async function listRoutingRulesApply(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(LIST_ROUTING_RULES_APPLY_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.applyListRoutingRules(accountId, listId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Routing rules will be applied in the background to list ${display(payload?.list_id || listId)}.`);
 }
 
 async function motionsList(args, context, { accountOverride } = {}) {
@@ -4132,6 +4237,30 @@ function renderList(list, context) {
   if (list?.description) writeLine(context.stdout, `Description: ${list.description}`);
 }
 
+function renderListRoutingRules(payload, context) {
+  const rules = Array.isArray(payload?.routing_rules) ? payload.routing_rules : [];
+  if (rules.length === 0) return writeLine(context.stdout, "No routing rules found.");
+
+  writeLine(context.stdout, "RULE ID\tPOSITION\tENABLED\tACTION\tTARGET\tNAME");
+  for (const rule of rules) {
+    writeLine(context.stdout, [
+      display(rule.id),
+      display(rule.position),
+      rule.enabled ? "yes" : "no",
+      display(rule.action_kind),
+      routingRuleTargetLabel(rule),
+      display(rule.name)
+    ].join("\t"));
+  }
+}
+
+function routingRuleTargetLabel(rule) {
+  return rule?.target_account_user?.name ||
+    rule?.target_account_user?.email ||
+    rule?.target_list?.name ||
+    "-";
+}
+
 function renderTags(tags, context) {
   if (!Array.isArray(tags) || tags.length === 0) return writeLine(context.stdout, "No tags found.");
 
@@ -6492,6 +6621,9 @@ const HELP_TOPICS = new Map([
     "    audienti lists prospects <list_id>",
     "    audienti lists add-tag <list_id> <tag>",
     "    audienti lists remove-tag <list_id> <tag>",
+    "    audienti lists routing-rules <list_id> list",
+    "    audienti lists routing-rules <list_id> create --payload <file.json>",
+    "    audienti lists routing-rules <list_id> apply",
     "    audienti tags list",
     "    audienti tags show <tag>",
     "    audienti tasks list [--status open]",
@@ -7472,11 +7604,61 @@ const HELP_TOPICS = new Map([
     "  audienti lists prospects <list_id> [--json]",
     "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti lists remove-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
+    "  audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json]",
     "",
-    "Status: read, create, update, delete, and membership commands implemented",
+    "Status: read, create, update, delete, membership, and routing-rule commands implemented",
     "",
     "ID shape:",
     "  list_id: list_ prefix id"
+  ].join("\n")],
+
+  ["lists routing-rules", [
+    "Usage:",
+    "  audienti lists routing-rules <list_id> list [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> create --payload <file.json> [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> update <rule_id> --payload <file.json> [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> remove <rule_id> [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> move <rule_id> <up|down> [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> apply [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Configure, inspect, reorder, and relaunch the same routing rules available in the list UI.",
+    "  Apply only queues the existing background job; it does not wait for routing to finish.",
+    "",
+    "Payload shape:",
+    "  name: string",
+    "  enabled: boolean | optional",
+    "  position: non-negative integer | optional",
+    "  action_kind: assign_user | route_to_list",
+    "  target_account_user_id: account-user id, email, or me | required for assign_user",
+    "  target_list_id: list_ prefix id or numeric id | required for route_to_list",
+    "  conditions: object | optional",
+    "",
+    "Condition keys:",
+    "  locations, company_locations, seniorities, job_titles, bio_texts,",
+    "  company_sizes, company_types, company_keywords, seniority_match_mode, industry_groups",
+    "",
+    "Example payload file:",
+    "  {",
+    "    \"name\": \"VP prospects to Alice\",",
+    "    \"enabled\": true,",
+    "    \"action_kind\": \"assign_user\",",
+    "    \"target_account_user_id\": \"alice@example.com\",",
+    "    \"conditions\": {",
+    "      \"seniorities\": [{\"id\": \"5\", \"name\": \"Vice President\", \"negative\": false}],",
+    "      \"seniority_match_mode\": \"at_least\"",
+    "    }",
+    "  }",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/lists/:list_id/routing_rules.json",
+    "  POST /api/v1/accounts/:account_id/lists/:list_id/routing_rules.json",
+    "  PATCH /api/v1/accounts/:account_id/lists/:list_id/routing_rules/:id.json",
+    "  DELETE /api/v1/accounts/:account_id/lists/:list_id/routing_rules/:id.json",
+    "  PATCH /api/v1/accounts/:account_id/lists/:list_id/routing_rules/:id/move.json",
+    "  POST /api/v1/accounts/:account_id/lists/:list_id/routing_rules/apply.json"
   ].join("\n")],
 
   ["lists list", [
