@@ -174,10 +174,20 @@ audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
 audienti analytics content --window week
 audienti tools list
+audienti tools humanize --file draft.txt --tone professional --language English
 audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <icp_id>
 audienti tools linkedin-review reports
 audienti tools linkedin-review show <rprt_id>
 audienti tools linkedin-review status <rprt_id>
+```
+
+To humanize arbitrary text without exposing the underlying provider key, pass a
+UTF-8 file. Plain output contains only the transformed text, so it can be
+redirected directly to another file:
+
+```bash
+audienti tools humanize --file draft.txt --tone professional > revised.txt
+audienti tools humanize --file draft.txt --language English --json
 ```
 
 To let an agent or operator check whether the local CLI is behind the latest

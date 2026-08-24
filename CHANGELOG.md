@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.38] - 2026-08-24
+
+### Added
+
+- Add `audienti tools humanize --file <path>` with optional tone and language controls, plain-text output for shell redirection, and normalized JSON output through the authenticated Audienti API.
+
 ## [0.1.37] - 2026-08-23
 
 ### Added

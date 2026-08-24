@@ -120,6 +120,7 @@ audienti analytics stages --window 30d
 audienti analytics visibility --window 24h --user me --json
 audienti analytics content --window week --json
 audienti tools list --json
+audienti tools humanize --file draft.txt --tone professional --json
 audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <icp_id> --json
 audienti tools linkedin-review reports --json
 audienti tools linkedin-review show <rprt_id> --json

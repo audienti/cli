@@ -614,6 +614,13 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports", reportId]));
   }
 
+  humanizeText(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "humanize"]), {
+      method: "POST",
+      body: { humanization: body }
+    });
+  }
+
   operatorQueue(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operator"], query));
   }

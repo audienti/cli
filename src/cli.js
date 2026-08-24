@@ -112,6 +112,7 @@ const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort
 const ANALYTICS_STAGES_USAGE = "Usage: audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
+const TOOLS_HUMANIZE_USAGE = "Usage: audienti tools humanize --file <path> [--tone <professional|academic|blog|casual|creative|scientific|technical>] [--language <language>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
@@ -299,6 +300,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "writer" && action === "test-run") return writerTestRun(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "list") return toolsList(rest, context);
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "humanize") return toolsHumanize(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "linkedin-review") return toolsLinkedinReview(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "failed-drafts") return operatorFailedDrafts(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
@@ -2977,6 +2979,36 @@ async function toolsList(args, context) {
   renderToolsList(payload.tools, context);
 }
 
+async function toolsHumanize(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    file: { type: "string" },
+    tone: { type: "string" },
+    language: { type: "string" }
+  });
+
+  if (positionals.length > 0 || !values.file) {
+    throw new CommandError(TOOLS_HUMANIZE_USAGE);
+  }
+
+  const text = await readHumanizerFile(values.file);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.humanizeText(accountId, {
+    text,
+    tone: values.tone,
+    language: values.language
+  });
+
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const humanizedText = String(payload?.humanized_text || "");
+  if (!humanizedText.trim()) {
+    throw new CommandError("The humanizer response did not include humanized_text.");
+  }
+  context.stdout.write(humanizedText);
+  if (!humanizedText.endsWith("\n")) context.stdout.write("\n");
+}
+
 async function toolsLinkedinReviewReports(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -4126,6 +4158,26 @@ async function readJsonPayload(filePath) {
   } catch (error) {
     throw new CommandError(`Invalid JSON payload in ${filePath}: ${error.message}`);
   }
+}
+
+async function readHumanizerFile(filePath) {
+  let bytes;
+  try {
+    bytes = await readFile(filePath);
+  } catch (error) {
+    throw new CommandError(`Could not read humanizer file ${filePath}: ${error.message}`);
+  }
+
+  let contents;
+  try {
+    contents = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new CommandError(`Humanizer file ${filePath} must be valid UTF-8 text.`);
+  }
+
+  if (!contents.trim()) throw new CommandError("Humanizer file cannot be blank.");
+
+  return contents;
 }
 
 async function readProspectImportBatchFile(filePath) {
@@ -5532,6 +5584,13 @@ function availableTools() {
       status_command: null
     },
     {
+      id: "humanize",
+      command: "audienti tools humanize --file <path> [--tone <tone>] [--language <language>]",
+      description: "Humanize arbitrary text from a UTF-8 file and print the transformed result.",
+      reports_command: null,
+      status_command: null
+    },
+    {
       id: "linkedin-review",
       command: "audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>]",
       description: "Create a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
@@ -6724,6 +6783,7 @@ const HELP_TOPICS = new Map([
     "    audienti tools list",
     "    audienti tools get email --url <linkedin_url>",
     "    audienti tools get phone --url <linkedin_url>",
+    "    audienti tools humanize --file <path>",
     "    audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>]",
     "    audienti tools linkedin-review reports",
     "    audienti tools linkedin-review show <rprt_id>",
@@ -9198,6 +9258,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti tools list [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
+    "  audienti tools humanize --file <path> [--tone <tone>] [--language <language>] [--json]",
     "  audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json]",
     "  audienti tools linkedin-review reports [--limit <n>] [--json]",
     "  audienti tools linkedin-review show <rprt_id> [--json]",
@@ -9208,6 +9269,7 @@ const HELP_TOPICS = new Map([
     "Commands:",
     "  audienti tools list             Show available CLI tools and the report commands they support.",
     "  audienti tools get              Run a LinkedIn URL through the existing import and contact-enrichment pipeline, then return the first selected email or phone.",
+    "  audienti tools humanize         Humanize arbitrary UTF-8 text and print the result.",
     "  audienti tools linkedin-review  Queue a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
     "  audienti tools linkedin-review reports  List recent LinkedIn Review reports for the active account.",
     "  audienti tools linkedin-review show     View the completed report content in the terminal.",
@@ -9252,6 +9314,28 @@ const HELP_TOPICS = new Map([
     "Output:",
     "  Plain text: the selected value on success, or a readable not-found message",
     "  JSON: { kind, url, found, value, import_id, status, ready, prospect, pipeline }"
+  ].join("\n")],
+
+  ["tools humanize", [
+    "Usage:",
+    `  ${TOOLS_HUMANIZE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Sends arbitrary UTF-8 text to Audienti's server-side humanizer without exposing the provider key.",
+    "",
+    "Options:",
+    "  --file <path>       Required UTF-8 text file",
+    "  --tone <professional|academic|blog|casual|creative|scientific|technical>",
+    "  --language <name>   Optional language hint, for example English",
+    "",
+    "Output:",
+    "  Plain text: only the humanized text, suitable for redirecting to a file",
+    "  JSON: { humanized_text, id, input_words }",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/tools/humanize.json"
   ].join("\n")],
 
   ["tools linkedin-review", [

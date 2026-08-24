@@ -81,6 +81,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti content comments/);
   assert.match(stdout.output, /audienti prospects add-profile <prsp_id> --url <profile_url\|email\|phone>/);
   assert.match(stdout.output, /audienti tools list/);
+  assert.match(stdout.output, /audienti tools humanize --file <path>/);
   assert.match(stdout.output, /audienti tools linkedin-review --url <linkedin_url> \[--icp <icp_id>\]/);
   assert.match(stdout.output, /audienti tools linkedin-review reports/);
   assert.match(stdout.output, /More help:/);
@@ -5383,10 +5384,152 @@ test("tools list supports json output", async () => {
 
   assert.equal(exitCode, 0);
   const payload = JSON.parse(stdout.output);
-  assert.deepEqual(payload.tools.map((tool) => tool.id), ["get-email", "get-phone", "linkedin-review"]);
-  assert.equal(payload.tools[2].reports_command, "audienti tools linkedin-review reports");
-  assert.equal(payload.tools[2].status_command, "audienti tools linkedin-review status <rprt_id>");
-  assert.equal(payload.tools[2].show_command, "audienti tools linkedin-review show <rprt_id>");
+  assert.deepEqual(payload.tools.map((tool) => tool.id), ["get-email", "get-phone", "humanize", "linkedin-review"]);
+  assert.equal(payload.tools[3].reports_command, "audienti tools linkedin-review reports");
+  assert.equal(payload.tools[3].status_command, "audienti tools linkedin-review status <rprt_id>");
+  assert.equal(payload.tools[3].show_command, "audienti tools linkedin-review show <rprt_id>");
+});
+
+test("tools humanize help documents file input and the account API", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => {
+    throw new Error("help must not call the API");
+  });
+
+  const exitCode = await run(["tools", "humanize", "help"], { stdout, fetch });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /audienti tools humanize --file <path>/);
+  assert.match(stdout.output, /--tone <professional\|academic\|blog\|casual\|creative\|scientific\|technical>/);
+  assert.match(stdout.output, /Plain text: only the humanized text/);
+  assert.match(stdout.output, /POST \/api\/v1\/accounts\/:account_id\/tools\/humanize\.json/);
+  assert.equal(fetch.calls.length, 0);
+});
+
+test("tools humanize sends file text and prints only the humanized result", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const filePath = join(root, "draft.txt");
+    const sourceText = "This is a sufficiently long source draft with its original spacing.\n\nSecond paragraph.";
+    await writeFile(filePath, sourceText);
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/tools/humanize.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(JSON.parse(options.body), {
+        humanization: {
+          text: sourceText,
+          tone: "professional",
+          language: "English"
+        }
+      });
+      return jsonResponse({
+        humanized_text: "A natural result ready for a file.",
+        id: "humanization-123",
+        input_words: 13
+      });
+    });
+
+    const exitCode = await run([
+      "tools", "humanize", "--file", filePath,
+      "--tone", "professional", "--language", "English"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "A natural result ready for a file.\n");
+    assert.equal(fetch.calls.length, 1);
+  });
+});
+
+test("tools humanize supports normalized json output", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one"}, { env });
+    const filePath = join(root, "draft.txt");
+    await writeFile(filePath, "This is a sufficiently long source draft for the humanizer endpoint.");
+    const payload = {humanized_text: "Natural JSON result.", id: "humanization-123", input_words: 11};
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse(payload));
+
+    const exitCode = await run(["tools", "humanize", "--file", filePath, "--json"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), payload);
+  });
+});
+
+test("tools humanize does not duplicate a provider trailing newline", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one"}, { env });
+    const filePath = join(root, "draft.txt");
+    await writeFile(filePath, "This is a sufficiently long source draft for the humanizer endpoint.");
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({humanized_text: "Natural result.\n"}));
+
+    const exitCode = await run(["tools", "humanize", "--file", filePath], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Natural result.\n");
+  });
+});
+
+test("tools humanize surfaces server validation errors", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one"}, { env });
+    const filePath = join(root, "draft.txt");
+    await writeFile(filePath, "This file is readable but the server rejects its requested transformation.");
+    const stderr = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      error: "The humanizer could not process that text. Check the input and try again.",
+      code: "humanizer_rejected"
+    }, { status: 422 }));
+
+    const exitCode = await run(["tools", "humanize", "--file", filePath], {
+      env,
+      fetch,
+      stderr,
+      stdout: captureStream()
+    });
+
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /The humanizer could not process that text/);
+  });
+});
+
+test("tools humanize shows scoped help or rejects unreadable and blank files without an API call", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one"}, { env });
+    const blankPath = join(root, "blank.txt");
+    const invalidUtf8Path = join(root, "invalid-utf8.txt");
+    await writeFile(blankPath, " \n\t ");
+    await writeFile(invalidUtf8Path, Buffer.from([0xc3, 0x28]));
+    const fetch = createFetch(() => {
+      throw new Error("invalid input must not call the API");
+    });
+
+    const helpStdout = captureStream();
+    const helpExitCode = await run(["tools", "humanize"], { env, fetch, stdout: helpStdout });
+    assert.equal(helpExitCode, 0);
+    assert.match(helpStdout.output, /audienti tools humanize --file <path>/);
+
+    for (const args of [
+      ["tools", "humanize", "--file", join(root, "missing.txt")],
+      ["tools", "humanize", "--file", blankPath],
+      ["tools", "humanize", "--file", invalidUtf8Path]
+    ]) {
+      const stderr = captureStream();
+      const exitCode = await run(args, { env, fetch, stderr, stdout: captureStream() });
+      assert.equal(exitCode, 1);
+      assert.match(stderr.output, /Usage: audienti tools humanize|Could not read humanizer file|Humanizer file cannot be blank|must be valid UTF-8 text/);
+    }
+
+    assert.equal(fetch.calls.length, 0);
+  });
 });
 
 test("tools linkedin-review help documents the profile review command", async () => {
