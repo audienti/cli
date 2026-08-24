@@ -110,11 +110,13 @@ audienti motions quick-start --url https://example.com --wait --confirm --json
 audienti motions abm-companies <motn_id> add --file abm-domains.txt --json
 audienti motions abm-companies <motn_id> list --json
 audienti motions update <motn_id> --status paused --json
+audienti motions update <motn_id> --start-date 2026-09-01 --end-date 2026-09-30 --maximum-company-count 25 --json
 audienti motions activate <motn_id> --json
 audienti motions delete <motn_id> --confirm yes --json
 audienti operator next --json
 audienti operator next --plan
 audienti analytics prospects --window 24h --json
+audienti analytics stages --window 30d
 audienti analytics visibility --window 24h --user me --json
 audienti analytics content --window week --json
 audienti tools list --json
@@ -134,6 +136,13 @@ condition and action data as the list UI. Inspect the ordered rules first, use
 `audienti lists routing-rules help` for the payload contract, and treat `apply`
 as an asynchronous relaunch: it queues the existing routing job and does not
 mean every list member has finished routing.
+
+Motion start and end dates are optional lifecycle controls. A due start can
+activate a configured preparing or paused motion; an end date is the final
+active day and pauses the motion afterward. `--maximum-company-count` caps
+durable company admissions only: research and people discovery for admitted
+companies, prospect intake, and automation continue. Use `none` to clear any
+of these settings.
 
 `audienti writer test-run <prsp_id>` starts a report-backed writing session and
 builds the campaign timeline without drafting every message. The printed

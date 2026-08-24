@@ -72,7 +72,7 @@ const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
 const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
@@ -1881,7 +1881,10 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
     payload: { type: "string" },
     status: { type: "string" },
     tags: { type: "string" },
-    "own-post-engagement": { type: "string" }
+    "own-post-engagement": { type: "string" },
+    "start-date": { type: "string" },
+    "end-date": { type: "string" },
+    "maximum-company-count": { type: "string" }
   });
   const hasUpdateField = values.payload || motionSimpleFieldsPresent(values);
   if (positionals.length !== 1 || !hasUpdateField) {
@@ -1899,7 +1902,7 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
 async function motionUpdatePayload(values) {
   if (values.payload) {
     if (motionSimpleFieldsPresent(values)) {
-      throw new CommandError("Choose one motion input mode: either --payload <file.json> or the simple --status/--tags/--own-post-engagement flags.");
+      throw new CommandError("Choose one motion input mode: either --payload <file.json> or the simple motion update flags.");
     }
 
     const payload = await readJsonPayload(values.payload);
@@ -1907,15 +1910,54 @@ async function motionUpdatePayload(values) {
     return payload;
   }
 
-  return compactObject({
+  const payload = compactObject({
     status: normalizeMotionStatus(values.status),
     play_tags: values.tags !== undefined ? tagList(values.tags) : undefined,
     own_post_engagement: values["own-post-engagement"] !== undefined ? parseBooleanString(values["own-post-engagement"], "--own-post-engagement") : undefined
   });
+  const nullableSettings = {
+    starts_on: normalizeMotionDate(values["start-date"], "--start-date"),
+    ends_on: normalizeMotionDate(values["end-date"], "--end-date"),
+    maximum_company_count: normalizeMotionMaximumCompanyCount(values["maximum-company-count"])
+  };
+  for (const [key, value] of Object.entries(nullableSettings)) {
+    if (value !== undefined) payload[key] = value;
+  }
+
+  return payload;
 }
 
 function motionSimpleFieldsPresent(values) {
-  return Boolean(values.status) || values.tags !== undefined || values["own-post-engagement"] !== undefined;
+  return Boolean(values.status) ||
+    values.tags !== undefined ||
+    values["own-post-engagement"] !== undefined ||
+    values["start-date"] !== undefined ||
+    values["end-date"] !== undefined ||
+    values["maximum-company-count"] !== undefined;
+}
+
+function normalizeMotionDate(value, flagName) {
+  if (value === undefined) return undefined;
+
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "none") return null;
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) throw new CommandError(`${flagName} must be YYYY-MM-DD or none.`);
+
+  const [, year, month, day] = match.map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) {
+    throw new CommandError(`${flagName} must be YYYY-MM-DD or none.`);
+  }
+
+  return normalized;
+}
+
+function normalizeMotionMaximumCompanyCount(value) {
+  if (value === undefined) return undefined;
+  if (String(value || "").trim().toLowerCase() === "none") return null;
+
+  return normalizeOptionalPositiveInteger(value, "--maximum-company-count");
 }
 
 function validateMotionSignalRows(payload) {
@@ -4588,6 +4630,9 @@ function renderMotion(motion, context) {
   writeLine(context.stdout, `Motion: ${display(motion?.name)} (${display(motion?.prefix_id)})`);
   writeLine(context.stdout, `Status: ${display(motion?.status)}`);
   writeLine(context.stdout, `Kind: ${display(motion?.kind)}`);
+  writeLine(context.stdout, `Start date: ${display(motion?.starts_on, "not set")}`);
+  writeLine(context.stdout, `End date: ${display(motion?.ends_on, "not set")}`);
+  writeLine(context.stdout, `Maximum companies: ${display(motion?.maximum_company_count, "not set")}`);
   renderExecutableConfiguration(motion?.executable_configuration, context);
   if (motion?.offer?.name) writeLine(context.stdout, `Offer: ${motion.offer.name} (${display(motion.offer.prefix_id)})`);
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
@@ -5780,6 +5825,7 @@ function writeStageConversionTable(conversionGrid, context) {
   const rows = Array.isArray(conversionGrid?.rows) ? conversionGrid.rows : [];
   const definitions = Array.isArray(conversionGrid?.stage_definitions) ? conversionGrid.stage_definitions : [];
   const columns = definitions.filter((definition) => definition?.key);
+  const totalValues = conversionGrid?.total_values || {};
 
   writeLine(context.stdout, "");
   writeLine(context.stdout, display(conversionGrid?.window_description, "Conversion cohorts"));
@@ -5790,6 +5836,12 @@ function writeStageConversionTable(conversionGrid, context) {
     display(row?.label),
     ...columns.map((column) => stageMetricValueLabel(row?.values?.[column.key]))
   ]);
+  if (Object.keys(totalValues).length > 0) {
+    tableRows.push([
+      "TOTAL",
+      ...columns.map((column) => stageMetricValueLabel(totalValues[column.key]))
+    ]);
+  }
 
   writeAlignedTable(context, headers, tableRows);
 }
@@ -5807,20 +5859,22 @@ function writeStageAgingTable(stageAging, context) {
   );
   writeAlignedTable(
     context,
-    ["STAGE", "CURRENT", "DUE SOON", "OVERDUE", "OVERDUE %", "MED AGE", "OLDEST IDLE"],
+    ["STAGE", "SLA", "CURRENT", "DUE SOON", "OVERDUE", "OVERDUE %", "MED AGE", "OLDEST AGE", "OLDEST IDLE"],
     rows.map(stageAgingRow),
-    { numericColumns: [false, true, true, true, true, true, true] }
+    { numericColumns: [false, true, true, true, true, true, true, true, true] }
   );
 }
 
 function stageAgingRow(row) {
   return [
     display(row?.label || row?.key),
+    dayCountLabel(row?.due_after_days),
     display(row?.current_count, 0),
     display(row?.due_soon_count, 0),
     display(row?.overdue_count, 0),
     percentageLabel(row?.overdue_rate),
     dayCountLabel(row?.median_stage_age_days),
+    dayCountLabel(row?.oldest_stage_age_days),
     dayCountLabel(row?.oldest_idle_days)
   ];
 }
@@ -6576,7 +6630,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions abm-companies <motn_id> list",
     "    audienti motions abm-companies <motn_id> add <domain_or_linkedin_url>...",
     "    audienti motions create --payload <file.json>",
-    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>]",
+    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <date|none>] [--end-date <date|none>] [--maximum-company-count <n|none>]",
     "    audienti motions update <motn_id> --payload <file.json>",
     "    audienti motions add-tag <motn_id> <tag>",
     "    audienti motions remove-tag <motn_id> <tag>",
@@ -7899,7 +7953,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json]",
     "  audienti motions abm-companies <motn_id> remove <row_id> [--json]",
     "  audienti motions create --payload <file.json> [--json]",
-    "  audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] | --payload <file.json>) [--json]",
+    `  ${MOTIONS_UPDATE_USAGE.slice("Usage: ".length).replace(" [--account <acct_id>]", "")}`,
     "  audienti motions add-tag <motn_id> <tag> [--json]",
     "  audienti motions remove-tag <motn_id> <tag> [--json]",
     "  audienti motions activate <motn_id> [--json]",
@@ -8177,6 +8231,9 @@ const HELP_TOPICS = new Map([
     "  icp_id: icpp_ prefix id | optional",
     "  list_id: list_ prefix id | optional",
     "  play_tags: [string] | optional",
+    "  starts_on: YYYY-MM-DD | null | optional scheduled activation date",
+    "  ends_on: YYYY-MM-DD | null | optional final active date",
+    "  maximum_company_count: positive integer | null | optional new-company discovery cap",
     "  signal_rows: [{ scope: company | person | both, question: string, company_signal_category: string | optional, role_terms: string | optional, posting_language: hiring-only string | optional, topics: string | optional }] | optional for outbound motions",
     "  signal_questions: newline-delimited company::, person::, or both:: legacy question text | optional for outbound motions",
     "  inbound_channels: [linkedin | reddit] | optional; defaults to [linkedin] for inbound motions",
@@ -8191,6 +8248,9 @@ const HELP_TOPICS = new Map([
     "    \"offer_id\": \"offr_abc123\",",
     "    \"principal_account_user_id\": 42,",
     "    \"list_id\": \"list_abc123\",",
+    "    \"starts_on\": \"2026-09-01\",",
+    "    \"ends_on\": \"2026-09-30\",",
+    "    \"maximum_company_count\": 25,",
     "    \"play_tags\": [\"sarit\", \"pj\"]",
     "  }",
     "",
@@ -8214,8 +8274,8 @@ const HELP_TOPICS = new Map([
     "  name: new motion name",
     "",
     "Behavior:",
-    "  Copies the motion kind, offer, ICP, principal, premise, approach, targeting profile, suppression policy, secondary roles, and active signal rows.",
-    "  The clone starts as draft with a new empty backing list.",
+    "  Copies the motion kind, offer, ICP, principal, premise, approach, maximum company count, targeting profile, suppression policy, secondary roles, and active signal rows.",
+    "  The clone starts as draft with a new empty backing list and no inherited schedule dates.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/motions/:id/clone.json",
@@ -8241,10 +8301,14 @@ const HELP_TOPICS = new Map([
     "  motn_id: motn_ prefix id",
     "  status: draft | preparing | active | paused | archived | optional",
     "  tags: comma-separated tag list | optional",
+    "  start-date: YYYY-MM-DD | none | optional",
+    "  end-date: YYYY-MM-DD | none | optional",
+    "  maximum-company-count: positive integer | none | optional",
     "  payload: file.json | optional full or partial motion object using the account API shape",
     "",
     "Behavior:",
-    "  Choose either --payload or simple flags. Updates only the provided fields. Sending --tags replaces the motion's full tag set.",
+    "  Choose either --payload or simple flags. Updates only the provided fields. Use none to clear a schedule date or company cap. Sending --tags replaces the motion's full tag set.",
+    "  The company cap stops only new company discovery; existing company research, people discovery, prospect intake, and automation continue.",
     "  Payload mode supports outbound signal_rows or legacy signal_questions; supplied rows replace the motion's active ready signals.",
     "  posting_language is only supported on company-scope hiring signal rows; use topics for person discussion evidence.",
     "",

@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.37] - 2026-08-23
+
+### Added
+
+- Add motion start/end scheduling and maximum-company discovery-cap configuration to motion API readback and CLI create/update/show workflows.
+
+### Changed
+
+- Show conversion totals, stage SLA, and oldest stage age in the default `audienti analytics stages` output so it matches the dashboard read model without requiring `--json`.
+
 ## [0.1.36] - 2026-08-22
 
 ### Added

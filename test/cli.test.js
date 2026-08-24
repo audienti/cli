@@ -45,7 +45,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti motions analytics <motn_id>/);
   assert.match(stdout.output, /audienti motions run-discovery <motn_id>/);
   assert.match(stdout.output, /audienti motions quick-start --url <company_url> --confirm --wait/);
-  assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\]/);
+  assert.match(stdout.output, /audienti motions update <motn_id> \[--status <state>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\] \[--start-date <date\|none>\] \[--end-date <date\|none>\] \[--maximum-company-count <n\|none>\]/);
   assert.match(stdout.output, /audienti motions update <motn_id> --payload <file\.json>/);
   assert.match(stdout.output, /audienti motions add-tag <motn_id> <tag>/);
   assert.match(stdout.output, /audienti motions activate <motn_id>/);
@@ -816,7 +816,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["plays", "update", "help"],
-      expected: [/Usage:\n  audienti motions update <motn_id> \(\[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\] \| --payload <file\.json>\)/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
+      expected: [/Usage:\n  audienti motions update <motn_id> .*\[--start-date <YYYY-MM-DD\|none>\].*\[--maximum-company-count <n\|none>\].*--payload <file\.json>/, /PATCH \/api\/v1\/accounts\/:account_id\/motions\/:id\.json/]
     },
     {
       args: ["content", "help"],
@@ -2640,6 +2640,9 @@ test("motions show renders signal rows and motion configuration details", async 
         name: "ACTICO APAC AML Informants - LOPA",
         status: "draft",
         kind: "lopa",
+        starts_on: "2026-09-01",
+        ends_on: "2026-09-30",
+        maximum_company_count: 25,
         own_post_engagement: false,
         inbound_channels: ["linkedin", "reddit"],
         lopa_profiles: [
@@ -2663,6 +2666,9 @@ test("motions show renders signal rows and motion configuration details", async 
     const exitCode = await run(["motions", "show", "motn_lopa"], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Start date: 2026-09-01/);
+    assert.match(stdout.output, /End date: 2026-09-30/);
+    assert.match(stdout.output, /Maximum companies: 25/);
     assert.match(stdout.output, /Inbound channels: linkedin, reddit/);
     assert.match(stdout.output, /LOPA profiles:/);
     assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/in\/source-profile \(creator\)/);
@@ -3396,6 +3402,92 @@ test("motions update patches status, supports plays alias, and honors account ov
   });
 });
 
+test("motions update patches schedule and maximum company count", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      prefix_id: "motn_source",
+      name: "Scheduled premise test",
+      starts_on: "2026-09-01",
+      ends_on: "2026-09-30",
+      maximum_company_count: 25
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_source.json");
+      assert.equal(options.method, "PATCH");
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          starts_on: "2026-09-01",
+          ends_on: "2026-09-30",
+          maximum_company_count: 25
+        }
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run([
+      "motions",
+      "update",
+      "motn_source",
+      "--start-date",
+      "2026-09-01",
+      "--end-date",
+      "2026-09-30",
+      "--maximum-company-count",
+      "25",
+      "--json"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions update clears schedule and maximum company count with none", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((_url, options) => {
+      assert.deepEqual(JSON.parse(options.body), {
+        motion: {
+          starts_on: null,
+          ends_on: null,
+          maximum_company_count: null
+        }
+      });
+      return jsonResponse({prefix_id: "motn_source", name: "Unscheduled premise test"});
+    });
+
+    const exitCode = await run([
+      "motions",
+      "update",
+      "motn_source",
+      "--start-date",
+      "none",
+      "--end-date",
+      "none",
+      "--maximum-company-count",
+      "none",
+      "--json"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+  });
+});
+
 test("motions update patches play tags", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -3635,7 +3727,7 @@ test("motions update rejects invalid status without calling the api", async () =
 
     assert.equal(exitCode, 1);
     assert.equal(stdout.output, "");
-    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> \(\[--status <draft\|preparing\|active\|paused\|archived>\] \[--tags <tag\[,tag\.\.\.\]>\] \[--own-post-engagement <true\|false>\] \| --payload <file\.json>\)/);
+    assert.match(stderr.output, /Error: Usage: audienti motions update <motn_id> .*\[--start-date <YYYY-MM-DD\|none>\].*\[--maximum-company-count <n\|none>\].*--payload <file\.json>/);
   });
 });
 
@@ -9312,6 +9404,11 @@ test("analytics stages sends cohort filters and renders conversion and aging gri
             { key: "connected_rate", label: "Connected rate", kind: "rate" },
             { key: "reply_rate", label: "Reply rate", kind: "rate" }
           ],
+          total_values: {
+            prospects_found: { kind: "count", count: 10 },
+            connected_rate: { kind: "rate", numerator: 4, denominator: 8, rate: 50, maturing: false },
+            reply_rate: { kind: "rate", numerator: 2, denominator: 4, rate: 50, maturing: false }
+          },
           rows: [
             {
               label: "Jul 1 - Jul 7",
@@ -9330,11 +9427,13 @@ test("analytics stages sends cohort filters and renders conversion and aging gri
             {
               key: "connected",
               label: "Connected",
+              due_after_days: 7,
               current_count: 3,
               due_soon_count: 1,
               overdue_count: 2,
               overdue_rate: 66.7,
               median_stage_age_days: 5,
+              oldest_stage_age_days: 12,
               oldest_idle_days: 9
             }
           ]
@@ -9372,9 +9471,10 @@ test("analytics stages sends cohort filters and renders conversion and aging gri
     assert.match(stdout.output, /Connection maturity window: 21 days/);
     assert.match(stdout.output, /Weekly cohorts, newest first/);
     assert.match(stdout.output, /Jul 1 - Jul 7\s+10\s+4\/8 50% maturing\s+2\/4 50%/);
+    assert.match(stdout.output, /TOTAL\s+10\s+4\/8 50%\s+2\/4 50%/);
     assert.match(stdout.output, /Stage Aging/);
     assert.match(stdout.output, /Totals: 3 current, 1 due soon, 2 overdue \(66.7%\)/);
-    assert.match(stdout.output, /Connected\s+3\s+1\s+2\s+66.7%\s+5d\s+9d/);
+    assert.match(stdout.output, /Connected\s+7d\s+3\s+1\s+2\s+66.7%\s+5d\s+12d\s+9d/);
   });
 });
 
