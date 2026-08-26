@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.41] - 2026-08-26
+
+### Fixed
+
+- Track the account Operator outcome API contract update that accepts legacy null active membership statuses when recording visible read-model queue rows.
+
 ## [0.1.40] - 2026-08-26
 
 ### Changed
