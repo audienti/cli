@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.39] - 2026-08-26
+
+### Changed
+
+- Preserve the account Operator API contract while serving bounded pages from the asynchronous queue read model and recording actions without rebuilding the full audience queue.
+
 ## [0.1.38] - 2026-08-24
 
 ### Added
