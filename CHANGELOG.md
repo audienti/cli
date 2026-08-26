@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.40] - 2026-08-26
+
+### Changed
+
+- Expose effective workspace automation policy mode, source, and blocking reason for shared social cookies in account API readback.
+
 ## [0.1.39] - 2026-08-26
 
 ### Changed
