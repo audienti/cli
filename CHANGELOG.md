@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.42] - 2026-08-28
+
+### Changed
+
+- Track the account Operator API contract update for tenant-scoped projected queue reads, explicit count availability, legacy cursor fallback, and asynchronous outcome reconciliation.
+
 ## [0.1.41] - 2026-08-26
 
 ### Fixed
