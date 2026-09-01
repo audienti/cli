@@ -36,6 +36,16 @@ const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
 const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "paused", "archived"]);
 const PROSPECT_INACTIVE_REASON_VALUES = new Set(["nurture", "non_responsive", "not_fit", "bad_data_404"]);
 const PROSPECT_STATUS_VALUES = new Set(["active", ...PROSPECT_INACTIVE_REASON_VALUES, "rejected"]);
+const OUTBOUND_METRICS_OUTCOMES = new Set([
+  "success",
+  "failure",
+  "first_attempt_success",
+  "succeeded_after_retry",
+  "failed_without_retry",
+  "failed_after_retry",
+  "in_progress",
+  "unresolved"
+]);
 const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (--message <text> [--type <note|steer|voicemail_outreach|video_outreach>] [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
@@ -109,6 +119,7 @@ const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
 const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_METRICS_USAGE = "Usage: audienti analytics metrics [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD | --cohort-preset week-to-date] [--interval <daily|weekly>] [--user <account_user_id|email|name|me>] [--motion <motn_id>] [--play-tag <tag>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--social-cookie <scok_id>] [--platform <platform>] [--action <action_key>] [--outcome <success|failure|first_attempt_success|succeeded_after_retry|failed_without_retry|failed_after_retry|in_progress|unresolved>] [--json] [--account <acct_id>]";
 const ANALYTICS_STAGES_USAGE = "Usage: audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
@@ -311,6 +322,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["dashboard", "campaign", "campaigns"].includes(action)) return analyticsDashboard(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && action === "metrics") return analyticsMetrics(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "stages") return analyticsStages(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["cohorts", "cohort"].includes(action)) return analyticsCohorts(rest, context, { accountOverride });
 
@@ -325,13 +337,15 @@ function extractGlobalOptions(argv) {
     const arg = argv[index];
 
     if (arg === "--account") {
-      accountOverride = argv[index + 1];
-      if (!accountOverride || accountOverride.startsWith("--")) {
+      const rawAccountOverride = argv[index + 1];
+      if (!rawAccountOverride || rawAccountOverride.startsWith("--")) {
         throw new CommandError("--account requires an account id.");
       }
+      accountOverride = rawAccountOverride.trim();
+      if (!accountOverride) throw new CommandError("--account requires an account id.");
       index += 1;
     } else if (arg.startsWith("--account=")) {
-      accountOverride = arg.slice("--account=".length);
+      accountOverride = arg.slice("--account=".length).trim();
       if (!accountOverride) throw new CommandError("--account requires an account id.");
     } else {
       args.push(arg);
@@ -3257,6 +3271,18 @@ async function analyticsDashboard(args, context, { accountOverride } = {}) {
   renderAnalyticsDashboard(payload, context);
 }
 
+async function analyticsMetrics(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, analyticsMetricsOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_METRICS_USAGE);
+  validateAnalyticsMetricsValues(values);
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsMetrics(accountId, analyticsMetricsQuery(values, config, { accountOverride }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsMetrics(payload, context);
+}
+
 async function analyticsStages(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, analyticsStagesOptions());
   if (positionals.length > 0) throw new CommandError(ANALYTICS_STAGES_USAGE);
@@ -3549,6 +3575,26 @@ function analyticsStagesOptions() {
   };
 }
 
+function analyticsMetricsOptions() {
+  return {
+    ...jsonOptions(),
+    "cohort-start": { type: "string" },
+    "cohort-end": { type: "string" },
+    "cohort-preset": { type: "string" },
+    interval: { type: "string" },
+    user: { type: "string" },
+    motion: { type: "string" },
+    "play-tag": { type: "string" },
+    list: { type: "string" },
+    offer: { type: "string" },
+    icp: { type: "string" },
+    "social-cookie": { type: "string" },
+    platform: { type: "string" },
+    action: { type: "string" },
+    outcome: { type: "string" }
+  };
+}
+
 function analyticsCohortListOptions() {
   return {
     ...jsonOptions(),
@@ -3612,6 +3658,59 @@ function analyticsStagesQuery(values, config = {}, { accountOverride } = {}) {
     ...analyticsDashboardQuery(values, config, { accountOverride }),
     interval: values.interval
   });
+}
+
+function analyticsMetricsQuery(values, config = {}, { accountOverride } = {}) {
+  return compactObject({
+    cohort_start_date: values["cohort-start"],
+    cohort_end_date: values["cohort-end"],
+    cohort_preset: values["cohort-preset"] === "week-to-date" ? "week_to_date" : values["cohort-preset"],
+    interval: values.interval,
+    account_user_id: resolveAccountUserId(values.user, config, { accountOverride }),
+    motion_id: values.motion,
+    play_tag: values["play-tag"],
+    list_id: values.list,
+    offer_id: values.offer,
+    icp_id: values.icp,
+    social_cookie_id: values["social-cookie"],
+    platform: values.platform,
+    action_key: values.action,
+    outcome: values.outcome
+  });
+}
+
+function validateAnalyticsMetricsValues(values) {
+  for (const [key, value] of Object.entries(values)) {
+    if (key !== "json" && typeof value === "string" && value.trim() === "") {
+      throw new CommandError(`--${key} cannot be blank.`);
+    }
+  }
+
+  validateDatePair(values["cohort-start"], values["cohort-end"], "--cohort-start", "--cohort-end");
+  validateIsoDate(values["cohort-start"], "--cohort-start");
+  validateIsoDate(values["cohort-end"], "--cohort-end");
+
+  if (values["cohort-preset"] && (values["cohort-start"] || values["cohort-end"])) {
+    throw new CommandError("--cohort-preset cannot be combined with --cohort-start or --cohort-end.");
+  }
+  if (values["cohort-preset"] && values["cohort-preset"] !== "week-to-date") {
+    throw new CommandError("--cohort-preset must be week-to-date.");
+  }
+  if (values.interval && !["daily", "weekly"].includes(values.interval)) {
+    throw new CommandError("--interval must be daily or weekly.");
+  }
+  if (values.outcome && !OUTBOUND_METRICS_OUTCOMES.has(values.outcome)) {
+    throw new CommandError("--outcome must be one of success, failure, first_attempt_success, succeeded_after_retry, failed_without_retry, failed_after_retry, in_progress, unresolved.");
+  }
+}
+
+function validateIsoDate(value, flagName) {
+  if (!value) return;
+
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const date = match ? new Date(`${value}T00:00:00Z`) : null;
+  const valid = date && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  if (!valid) throw new CommandError(`${flagName} must be a valid date in YYYY-MM-DD format.`);
 }
 
 function validateDatePair(start, end, startFlag, endFlag) {
@@ -5867,6 +5966,102 @@ function renderAnalyticsDashboard(payload, context) {
   writeCountTable(context, "Current pipeline stages", payload?.pipeline_stage_counts, ["STAGE", "COUNT"], countRow);
 }
 
+function renderAnalyticsMetrics(payload, context) {
+  const cohort = payload?.cohort || {};
+  const summary = payload?.summary || {};
+  writeLine(context.stdout, "Outbound metrics");
+  writeLine(context.stdout, `Cohort: ${display(cohort.start_date, "-")} to ${display(cohort.end_date, "-")} (${display(cohort.field, "-")})`);
+  writeLine(context.stdout, `Current: ${metricsRangeLabel(cohort.start_at, cohort.end_at)}`);
+  writeLine(context.stdout, `Previous: ${metricsRangeLabel(cohort.previous_start_at, cohort.previous_end_at)}`);
+  writeLine(context.stdout, `Operations: ${display(summary.operation_count, "-")}`);
+  writeLine(context.stdout, `First-try success: ${metricsCountRateLabel(summary, "first_attempt_success")}`);
+  writeLine(context.stdout, `Recovered: ${metricsCountRateLabel(summary, "succeeded_after_retry")}`);
+  writeLine(context.stdout, `Final failures: ${metricsCountRateLabel(summary, "ultimate_failure")}`);
+  writeLine(context.stdout, `In progress: ${metricsCountRateLabel(summary, "in_progress")}`);
+  writeLine(context.stdout, `Attempts: ${display(summary.attempt_count, "-")}`);
+
+  renderAnalyticsMetricsGrid(payload?.grid, context);
+  renderAnalyticsMetricsActions(payload?.action_rows, context);
+  if (payload?.scope?.social_cookie == null) renderAnalyticsMetricsCookies(payload?.social_cookie_rows, context);
+}
+
+function metricsRangeLabel(startAt, endAt) {
+  return startAt && endAt ? `${startAt} to ${endAt}` : "not available";
+}
+
+function metricsCountRateLabel(summary, bucket) {
+  return `${display(summary?.[`${bucket}_count`], "-")} (${percentageLabel(summary?.[`${bucket}_rate`])})`;
+}
+
+function renderAnalyticsMetricsGrid(grid, context) {
+  const rows = Array.isArray(grid?.rows) ? grid.rows : [];
+  const intervalLabel = grid?.interval === "weekly" ? "Weekly" : "Daily";
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, `${intervalLabel} rows`);
+  if (rows.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, [
+    grid?.row_heading?.toUpperCase() || "PERIOD",
+    "OPERATIONS",
+    "FIRST-TRY SUCCESS",
+    "RECOVERED",
+    "FINAL FAILURES",
+    "IN PROGRESS",
+    "ATTEMPTS"
+  ], rows.map((row) => [
+    display(row?.label, "-"),
+    display(row?.summary?.operation_count, "-"),
+    metricsCountRateLabel(row?.summary, "first_attempt_success"),
+    metricsCountRateLabel(row?.summary, "succeeded_after_retry"),
+    metricsCountRateLabel(row?.summary, "ultimate_failure"),
+    metricsCountRateLabel(row?.summary, "in_progress"),
+    display(row?.summary?.attempt_count, "-")
+  ]), { numericColumns: [false, true, true, true, true, true, true] });
+}
+
+function renderAnalyticsMetricsActions(rows, context) {
+  const actions = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Action breakdown");
+  if (actions.length === 0) return writeLine(context.stdout, "None");
+
+  writeAnalyticsMetricsSummaryTable(context, ["ACTION", "KEY"], actions.map((row) => [
+    display(row?.label, "-"),
+    display(row?.key, "-")
+  ]), actions.map((row) => row?.summary));
+}
+
+function renderAnalyticsMetricsCookies(rows, context) {
+  const cookies = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Social Cookie breakdown");
+  if (cookies.length === 0) return writeLine(context.stdout, "None");
+
+  writeAnalyticsMetricsSummaryTable(context, ["SOCIAL COOKIE", "ID"], cookies.map((row) => [
+    display(row?.label, "-"),
+    display(row?.prefix_id, "-")
+  ]), cookies.map((row) => row?.summary));
+}
+
+function writeAnalyticsMetricsSummaryTable(context, identityHeaders, identityRows, summaries) {
+  const summaryHeaders = ["OPERATIONS", "FIRST-TRY SUCCESS", "RECOVERED", "FINAL FAILURES", "IN PROGRESS", "ATTEMPTS"];
+  const rows = identityRows.map((identity, index) => {
+    const summary = summaries[index];
+    return [
+      ...identity,
+      display(summary?.operation_count, "-"),
+      metricsCountRateLabel(summary, "first_attempt_success"),
+      metricsCountRateLabel(summary, "succeeded_after_retry"),
+      metricsCountRateLabel(summary, "ultimate_failure"),
+      metricsCountRateLabel(summary, "in_progress"),
+      display(summary?.attempt_count, "-")
+    ];
+  });
+  writeAlignedTable(context, [...identityHeaders, ...summaryHeaders], rows, {
+    numericColumns: [...identityHeaders.map(() => false), true, true, true, true, true, true]
+  });
+}
+
 function renderAnalyticsStages(payload, context) {
   const conversionGrid = payload?.conversion_grid || {};
   writeLine(context.stdout, `Stage analytics (${display(payload?.cohort?.label, "selected cohort")})`);
@@ -6772,6 +6967,7 @@ const HELP_TOPICS = new Map([
     "  Analytics",
     "    audienti analytics prospects --window 24h",
     "    audienti analytics dashboard --play-tag <tag>",
+    "    audienti analytics metrics --cohort-preset week-to-date",
     "    audienti analytics stages --interval weekly",
     "    audienti analytics cohorts create-list --name \"Blank note test\" --start 2026-07-20 --end 2026-07-20 --note-mode blank",
     "    audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>",
@@ -6794,6 +6990,7 @@ const HELP_TOPICS = new Map([
     "  Preview a campaign:  audienti writer test-run <prsp_id>",
     "  Analyze one motion:  audienti motions analytics <motn_id>",
     "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
+    "  Inspect outcomes:      audienti analytics metrics --cohort-preset week-to-date",
     "  Compare stage rates:  audienti analytics stages --interval weekly",
     "  Audit your work:     audienti analytics users --user me --window 30d",
     "  Review reminders:    audienti tasks list",
@@ -9557,6 +9754,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
+    "  audienti analytics metrics [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD | --cohort-preset week-to-date] [--interval <daily|weekly>] [--user <account_user_id|email|name|me>] [--motion <motn_id>] [--play-tag <tag>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--social-cookie <scok_id>] [--platform <platform>] [--action <action_key>] [--outcome <success|failure|first_attempt_success|succeeded_after_retry|failed_without_retry|failed_after_retry|in_progress|unresolved>] [--json]",
     "  audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
     "  audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--note-mode <any|with_note|blank>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
@@ -9575,6 +9773,7 @@ const HELP_TOPICS = new Map([
     "  --list <list_id>  Filter analytics to prospects in one list, including analytics cohort lists.",
     "  --play-tag <tag>  For dashboard analytics, filter to motions/lists tagged with a campaign tag.",
     "  --interval <weekly|monthly>  For stages analytics, select the conversion cohort grain.",
+    "  Metrics uses events.created_at root-operation cohorts and reports each operation's current outcome across its attempts; it is not an AccountProspect.created_at entry cohort.",
     "  --provenance <source>  Optional lower-level AccountProspect.intake_source filter.",
     "  --platform <linkedin|email|gmail>  For user analytics, filter events.platform. --channel is accepted as an alias.",
     "  cohort-analysis loops over recent weekly AccountProspect.created_at cohorts and compares their current stages.",
@@ -9612,6 +9811,43 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/analytics/dashboard.json"
+  ].join("\n")],
+
+  ["analytics metrics", [
+    "Usage:",
+    `  ${ANALYTICS_METRICS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Return account-scoped outbound operation outcomes with exactly one authenticated API request.",
+    "  The cohort is events.created_at: root operations created in the selected period, measured by their current outcomes.",
+    "  This differs from AccountProspect.created_at entry cohorts used by dashboard, stages, and prospect cohort analysis.",
+    "",
+    "Options:",
+    "  --cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>  Select an explicit inclusive operation cohort.",
+    "  --cohort-preset <week-to-date>  Select the server-defined week-to-date cohort; cannot be combined with explicit dates.",
+    "  --interval <daily|weekly>  Request daily or weekly operation rows. The server default is daily.",
+    "  --user <account_user_id|email|name|me>  Filter to one account user.",
+    "  --motion <motn_id>  Filter operations to prospects in one motion/play.",
+    "  --play-tag <tag>  Filter operations to prospects in motions/lists with the tag.",
+    "  --list <list_id>  Filter operations to prospects in one list.",
+    "  --offer <offr_id>  Filter operations to prospects for one offer.",
+    "  --icp <icp_id>  Filter operations to prospects for one ICP.",
+    "  --social-cookie <scok_id>  Filter to one account-accessible Social Cookie.",
+    "  --platform <platform>  Filter by the normalized event platform.",
+    "  --action <action_key>  Filter by the exact outbound action key.",
+    "  --outcome <success|failure|first_attempt_success|succeeded_after_retry|failed_without_retry|failed_after_retry|in_progress|unresolved>",
+    "    Umbrella filters: success, failure.",
+    "    Leaf outcomes: first_attempt_success, succeeded_after_retry, failed_without_retry, failed_after_retry, in_progress, unresolved.",
+    "  --json  Print the API response deeply unchanged.",
+    "",
+    "Output:",
+    "  Plain text formats only API-returned operation counts/rates, selected grid rows, actions, and account-wide cookie rows.",
+    "  JSON is the canonical outbound_metrics response without client-side cohort, outcome, count, or rate calculations.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/metrics.json"
   ].join("\n")],
 
   ["analytics stages", [
@@ -9874,6 +10110,7 @@ const HELP_TOPICS = new Map([
     "  audienti users activity me --window 7d",
     "  audienti analytics prospects --window 24h",
     "  audienti analytics dashboard --play-tag wine_campaign",
+    "  audienti analytics metrics --cohort-preset week-to-date",
     "  audienti analytics stages --interval weekly --play-tag wine_campaign",
     "  audienti analytics cohorts create-list --name \"Connection requests 2026-07-20\" --start 2026-07-20 --end 2026-07-20",
     "  audienti analytics users --user me --window 30d",

@@ -169,6 +169,7 @@ audienti lists routing-rules <list_id> apply
 audienti users activity --window 7d
 audienti analytics prospects --window 24h
 audienti analytics dashboard --play-tag wine_campaign
+audienti analytics metrics --cohort-preset week-to-date
 audienti analytics cohorts create-list --name "Blank note test" --start 2026-07-20 --end 2026-07-20 --note-mode blank
 audienti analytics users --user me --window 30d
 audienti analytics visibility --window 24h --user me
@@ -259,6 +260,46 @@ To compare recent weekly prospect cohorts by their current pipeline stages:
 audienti analytics prospects cohort-analysis --weeks 4 --motion <motn_id>
 ```
 
+To inspect the current outcomes of outbound operations created in a date range,
+use the account-scoped metrics report:
+
+```bash
+audienti analytics metrics --cohort-start 2026-08-24 --cohort-end 2026-08-30 --interval daily
+audienti analytics metrics --cohort-start 2026-08-24 --cohort-end 2026-08-30 --interval weekly
+audienti analytics metrics --cohort-preset week-to-date --user me --motion <motn_id> --play-tag <tag> --list <list_id> --offer <offr_id> --icp <icp_id> --social-cookie <scok_id> --platform linkedin --action messaging.message_sent --outcome succeeded_after_retry
+audienti analytics metrics --cohort-preset week-to-date --json
+```
+
+This is an `events.created_at` root-operation cohort, and each operation is
+classified by its current outcome across all of its attempts. It is distinct
+from the `AccountProspect.created_at` entry cohorts used by dashboard, stages,
+and prospect cohort analysis. The command
+makes one authenticated request to the account Metrics API. Plain text formats
+only the returned cohort ranges, Operations, First-try success, Recovered, Final
+failures, In progress, Attempts, selected daily or weekly grid rows, action rows,
+and account-wide Social Cookie rows. `--json` prints the API response deeply
+unchanged; the CLI does not recalculate cohorts, outcomes, counts, or rates.
+
+The six leaf outcomes are `first_attempt_success`, `succeeded_after_retry`,
+`failed_without_retry`, `failed_after_retry`, `in_progress`, and `unresolved`.
+The `success` and `failure` values are umbrella filters over their corresponding
+two terminal leaf outcomes.
+
+For example, the human output uses the server-provided values directly:
+
+```text
+Outbound metrics
+Cohort: 2026-08-24 to 2026-08-30 (events.created_at)
+Current: 2026-08-24T00:00:00-05:00 to 2026-08-31T00:00:00-05:00
+Previous: 2026-08-17T00:00:00-05:00 to 2026-08-24T00:00:00-05:00
+Operations: 1347
+First-try success: 1275 (94.7%)
+Recovered: 40 (3%)
+Final failures: 16 (1.2%)
+In progress: 16 (1.2%)
+Attempts: 1400
+```
+
 To materialize a connection-request activity cohort as a reusable list selector,
 then reuse it in analytics:
 
@@ -269,8 +310,9 @@ audienti analytics prospects --list <list_id> --window 30d
 audienti analytics users --user me --list <list_id> --start 2026-07-01 --end 2026-07-31
 ```
 
-Use `--cohort-start` and `--cohort-end` when the cohort is based on when people
-entered Audienti, a motion, or a receiving segment. Use `analytics cohorts
+For prospect, dashboard, and stages analytics, use `--cohort-start` and
+`--cohort-end` when the cohort is based on when people entered Audienti, a
+motion, or a receiving segment. Use `analytics cohorts
 create-list` followed by `--list` when the cohort is based on an event that
 happened later, such as connection requests sent in a date range. Rebuild the
 list when the event definition or date window changes so the analytics question

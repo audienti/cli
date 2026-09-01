@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.44] - 2026-09-01
+
+### Added
+
+- Add `audienti analytics metrics` for one-request account-scoped outbound operation cohorts, canonical operation and attempt counts, daily or weekly rows, six leaf outcome filters plus success/failure umbrellas, exact JSON output, and filters for account users, motions, tags, lists, offers, ICPs, Social Cookies, platforms, and actions.
+
 ## [0.1.42] - 2026-08-28
 
 ### Changed

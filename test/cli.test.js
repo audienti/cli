@@ -19,6 +19,250 @@ function completedSequenceExportJob(payload, report = {}) {
   };
 }
 
+function operationSummary({
+  operations,
+  attempts,
+  unsuccessfulAttempts,
+  retryOperations,
+  firstTry,
+  recovered,
+  failedWithoutRetry,
+  failedAfterRetry,
+  inProgress,
+  unresolved
+}) {
+  const rate = (count) => operations === 0 ? 0 : Number(((count / operations) * 100).toFixed(1));
+  const ultimateSuccess = firstTry + recovered;
+  const ultimateFailure = failedWithoutRetry + failedAfterRetry;
+
+  return {
+    operation_count: operations,
+    attempt_count: attempts,
+    unsuccessful_attempt_count: unsuccessfulAttempts,
+    retry_operation_count: retryOperations,
+    first_attempt_success_count: firstTry,
+    succeeded_after_retry_count: recovered,
+    failed_without_retry_count: failedWithoutRetry,
+    failed_after_retry_count: failedAfterRetry,
+    in_progress_count: inProgress,
+    unresolved_count: unresolved,
+    first_attempt_success_rate: rate(firstTry),
+    succeeded_after_retry_rate: rate(recovered),
+    failed_without_retry_rate: rate(failedWithoutRetry),
+    failed_after_retry_rate: rate(failedAfterRetry),
+    in_progress_rate: rate(inProgress),
+    unresolved_rate: rate(unresolved),
+    ultimate_success_count: ultimateSuccess,
+    ultimate_success_rate: rate(ultimateSuccess),
+    ultimate_failure_count: ultimateFailure,
+    ultimate_failure_rate: rate(ultimateFailure)
+  };
+}
+
+function outboundMetricsPayload(overrides = {}) {
+  const canonicalSummary = operationSummary({
+    operations: 6,
+    attempts: 9,
+    unsuccessfulAttempts: 5,
+    retryOperations: 3,
+    firstTry: 1,
+    recovered: 1,
+    failedWithoutRetry: 1,
+    failedAfterRetry: 1,
+    inProgress: 1,
+    unresolved: 1
+  });
+  const zeroCanonicalSummary = operationSummary({
+    operations: 0,
+    attempts: 0,
+    unsuccessfulAttempts: 0,
+    retryOperations: 0,
+    firstTry: 0,
+    recovered: 0,
+    failedWithoutRetry: 0,
+    failedAfterRetry: 0,
+    inProgress: 0,
+    unresolved: 0
+  });
+  const august25Summary = operationSummary({
+    operations: 4,
+    attempts: 6,
+    unsuccessfulAttempts: 3,
+    retryOperations: 2,
+    firstTry: 1,
+    recovered: 1,
+    failedWithoutRetry: 0,
+    failedAfterRetry: 1,
+    inProgress: 1,
+    unresolved: 0
+  });
+  const august24Summary = operationSummary({
+    operations: 2,
+    attempts: 3,
+    unsuccessfulAttempts: 2,
+    retryOperations: 1,
+    firstTry: 0,
+    recovered: 0,
+    failedWithoutRetry: 1,
+    failedAfterRetry: 0,
+    inProgress: 0,
+    unresolved: 1
+  });
+  const rateDeltaKeys = [
+    "first_attempt_success_rate", "succeeded_after_retry_rate", "failed_without_retry_rate",
+    "failed_after_retry_rate", "in_progress_rate", "unresolved_rate", "ultimate_success_rate",
+    "ultimate_failure_rate"
+  ];
+  const emptyRateDeltas = Object.fromEntries(rateDeltaKeys.map((key) => [key, null]));
+  const drilldownParams = (date) => ({
+    dashboard_metrics_cohort_start_date: "2026-08-24",
+    dashboard_metrics_cohort_end_date: "2026-08-25",
+    dashboard_metrics_interval: "daily",
+    dashboard_metrics_account_user_id: 42,
+    dashboard_metrics_motion_id: 11,
+    dashboard_metrics_play_tag: "wine_campaign",
+    dashboard_metrics_list_id: 12,
+    dashboard_metrics_offer_id: 13,
+    dashboard_metrics_icp_id: 14,
+    dashboard_metrics_platform: "linkedin",
+    dashboard_metrics_action_key: "action.brand_new",
+    dashboard_slice: "outbound_metrics",
+    dashboard_key: "action.brand_new",
+    dashboard_metrics_event_start_date: date,
+    dashboard_metrics_event_end_date: date,
+    surface_mode: "table"
+  });
+  const gridCell = (date, label, cellSummary) => ({
+    action_key: "action.brand_new",
+    summary: cellSummary,
+    health: "warning",
+    drilldown_params: drilldownParams(date),
+    accessible_label: `${label}, Server-defined action label: ${cellSummary.operation_count} operations`
+  });
+
+  return {
+    kind: "outbound_metrics",
+    scope: {
+      account_id: 101,
+      social_cookie: null,
+      social_cookie_fixed: false
+    },
+    cohort: {
+      preset: "custom",
+      start_date: "2026-08-24",
+      end_date: "2026-08-25",
+      start_at: "2026-08-24T00:00:00-05:00",
+      end_at: "2026-08-26T00:00:00-05:00",
+      end_exclusive: true,
+      previous_start_at: "2026-08-22T00:00:00-05:00",
+      previous_end_at: "2026-08-24T00:00:00-05:00",
+      duration_seconds: 172800.0,
+      field: "events.created_at",
+      time_zone: "Central Time (US & Canada)",
+      comparison_strategy: "immediately_preceding_equal_elapsed_period",
+      measurement: "Operations first attempted in the selected period; outcomes evaluated as of the captured timestamp"
+    },
+    filters: {
+      account_user: { id: 42, name: "User One", email: "one@example.com" },
+      motion: { id: 11, prefix_id: "motn_focus", name: "Focused Motion" },
+      play_tag: "wine_campaign",
+      list: { id: 12, prefix_id: "list_focus", name: "Focused List" },
+      offer: { id: 13, prefix_id: "offr_focus", name: "Focused Offer" },
+      icp: { id: 14, prefix_id: "icpp_focus", name: "Focused ICP" },
+      social_cookie: null,
+      platform: "linkedin",
+      action_key: "action.brand_new",
+      outcome: null,
+      interval: "daily"
+    },
+    metadata: {
+      evaluated_at: "2026-08-31T14:30:00.000000-05:00",
+      week_start: "monday",
+      prospect_filter: {
+        active: true,
+        keys: ["account_user_id", "motion_id", "play_tag", "list_id", "offer_id", "icp_id"],
+        unconnectable_events_excluded: true
+      },
+      prospect_filter_exclusion: "events without a matching prospect are excluded",
+      current_start_utc_offset: "-05:00",
+      current_end_utc_offset: "-05:00",
+      previous_start_utc_offset: "-05:00",
+      previous_end_utc_offset: "-05:00"
+    },
+    summary: canonicalSummary,
+    attempt_summary: {
+      attempt_count: 9,
+      successful_attempt_count: 2,
+      unsuccessful_attempt_count: 2,
+      open_attempt_count: 1,
+      superseded_attempt_count: 3,
+      other_attempt_count: 1
+    },
+    comparison: {
+      summary: zeroCanonicalSummary,
+      rate_deltas: emptyRateDeltas
+    },
+    attempt_state_rows: [
+      { state_key: "done", raw_state: 0, label: "Done", bucket: "success", count: 2, rate: 22.2 },
+      { state_key: "failed", raw_state: 7, label: "Failed", bucket: "failure", count: 2, rate: 22.2 },
+      { state_key: "processing", raw_state: 2, label: "Processing", bucket: "open", count: 1, rate: 11.1 },
+      { state_key: "retried", raw_state: 15, label: "Retried", bucket: "retry", count: 3, rate: 33.3 },
+      { state_key: "unknown:99", raw_state: 99, label: "Unknown state (99)", bucket: "other", count: 1, rate: 11.1 }
+    ],
+    action_rows: [
+      {
+        key: "action.brand_new",
+        label: "Server-defined action label",
+        summary: canonicalSummary,
+        previous_summary: zeroCanonicalSummary,
+        rate_deltas: emptyRateDeltas
+      }
+    ],
+    grid: {
+      interval: "daily",
+      row_heading: "Day",
+      action_columns: [{ key: "action.brand_new", label: "Server-defined action label" }],
+      rows: [
+        {
+          period_key: "2026-08-25", label: "Aug 25, 2026", start_date: "2026-08-25", end_date: "2026-08-25", current: false,
+          cells: [gridCell("2026-08-25", "Aug 25, 2026", august25Summary)], summary: august25Summary
+        },
+        {
+          period_key: "2026-08-24", label: "Aug 24, 2026", start_date: "2026-08-24", end_date: "2026-08-24", current: false,
+          cells: [gridCell("2026-08-24", "Aug 24, 2026", august24Summary)], summary: august24Summary
+        }
+      ],
+      totals: canonicalSummary
+    },
+    social_cookie_rows: [
+      {
+        id: 21,
+        prefix_id: "scok_focus",
+        username: "sender@example.com",
+        label: "sender@example.com",
+        service_identifier: "linkedin",
+        status: "active",
+        owner: { account_user_id: 42, user_id: 7, name: "User One", email: "one@example.com" },
+        platforms: ["linkedin"],
+        summary: canonicalSummary
+      }
+    ],
+    daily_rows: [
+      {
+        date: "2026-08-24",
+        label: "Aug 24",
+        summary: august24Summary
+      },
+      {
+        date: "2026-08-25",
+        label: "Aug 25",
+        summary: august25Summary
+      }
+    ],
+    ...overrides
+  };
+}
+
 test("global help lists commands and points agents at command-specific shapes", async () => {
   const stdout = captureStream();
   const stderr = captureStream();
@@ -8980,6 +9224,312 @@ test("operator next lets the server reject visibility outcome shortcuts", async 
     assert.equal(fetch.calls.length, 2);
     assert.equal(stdout.output, "");
     assert.match(stderr.output, /Visibility operator outcomes are not supported/);
+  });
+});
+
+test("analytics metrics help documents the account-scoped report without calling the API", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => {
+    throw new Error("help must not call the API");
+  });
+
+  const exitCode = await run(["analytics", "metrics", "help"], { stdout, fetch });
+
+  assert.equal(exitCode, 0);
+  assert.equal(fetch.calls.length, 0);
+  assert.match(stdout.output, /Usage:\n  audienti analytics metrics/);
+  assert.match(stdout.output, /--cohort-start <YYYY-MM-DD> --cohort-end <YYYY-MM-DD>/);
+  assert.match(stdout.output, /--cohort-preset <week-to-date>/);
+  assert.match(stdout.output, /--interval <daily\|weekly>/);
+  assert.match(stdout.output, /--user <account_user_id\|email\|name\|me>/);
+  assert.match(stdout.output, /--motion <motn_id>/);
+  assert.match(stdout.output, /--play-tag <tag>/);
+  assert.match(stdout.output, /--list <list_id>/);
+  assert.match(stdout.output, /--offer <offr_id>/);
+  assert.match(stdout.output, /--icp <icp_id>/);
+  assert.match(stdout.output, /--social-cookie <scok_id>/);
+  assert.match(stdout.output, /--platform <platform>/);
+  assert.match(stdout.output, /--action <action_key>/);
+  assert.match(stdout.output, /--outcome <success\|failure\|first_attempt_success\|succeeded_after_retry\|failed_without_retry\|failed_after_retry\|in_progress\|unresolved>/);
+  assert.match(stdout.output, /Leaf outcomes: first_attempt_success, succeeded_after_retry, failed_without_retry, failed_after_retry, in_progress, unresolved/);
+  assert.match(stdout.output, /Umbrella filters: success, failure/);
+  assert.match(stdout.output, /GET \/api\/v1\/accounts\/:account_id\/analytics\/metrics\.json/);
+});
+
+test("analytics metrics rejects invalid flags before making a request", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const cases = [
+      { args: ["--cohort-start", "2026-08-24"], error: /--cohort-start and --cohort-end must be provided together/ },
+      { args: ["--cohort-end", "2026-08-30"], error: /--cohort-start and --cohort-end must be provided together/ },
+      { args: ["--cohort-start", "2026-08-24", "--cohort-end", "2026-08-30", "--cohort-preset", "week-to-date"], error: /--cohort-preset cannot be combined with --cohort-start or --cohort-end/ },
+      { args: ["--cohort-preset", "month-to-date"], error: /--cohort-preset must be week-to-date/ },
+      { args: ["--interval", "monthly"], error: /--interval must be daily or weekly/ },
+      { args: ["--outcome", "retry"], error: /--outcome must be one of success, failure, first_attempt_success, succeeded_after_retry, failed_without_retry, failed_after_retry, in_progress, unresolved/ },
+      { args: ["--platform", ""], error: /--platform cannot be blank/ }
+    ];
+    const fetch = createFetch(() => {
+      throw new Error("invalid metrics flags must not call the API");
+    });
+
+    for (const { args, error } of cases) {
+      const stderr = captureStream();
+      const exitCode = await run(["analytics", "metrics", ...args], { env, fetch, stderr });
+
+      assert.equal(exitCode, 1);
+      assert.match(stderr.output, error);
+    }
+
+    assert.equal(fetch.calls.length, 0);
+  });
+});
+
+test("analytics metrics makes one authenticated GET with exact server query names and unchanged JSON", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One",
+      accountUserEmail: "one@example.com"
+    }, { env });
+
+    const basePayload = outboundMetricsPayload();
+    const selectedCookie = {
+      id: 21,
+      prefix_id: "scok_focus",
+      username: "sender@example.com",
+      service_identifier: "linkedin"
+    };
+    const responseBody = {
+      ...basePayload,
+      scope: {...basePayload.scope, social_cookie: selectedCookie},
+      filters: {...basePayload.filters, social_cookie: selectedCookie}
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.origin, "https://app.audienti.com");
+      assert.equal(url.pathname, "/api/v1/accounts/acct_override/analytics/metrics.json");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      assert.deepEqual(Object.fromEntries(url.searchParams), {
+        cohort_start_date: "2026-08-24",
+        cohort_end_date: "2026-08-25",
+        interval: "daily",
+        account_user_id: "me",
+        motion_id: "motn_focus",
+        play_tag: "wine_campaign",
+        list_id: "list_focus",
+        offer_id: "offr_focus",
+        icp_id: "icpp_focus",
+        social_cookie_id: "scok_focus",
+        platform: "linkedin",
+        action_key: "action.brand_new"
+      });
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run([
+      "analytics", "metrics",
+      "--cohort-start", "2026-08-24",
+      "--cohort-end", "2026-08-25",
+      "--interval", "daily",
+      "--user", "me",
+      "--motion", "motn_focus",
+      "--play-tag", "wine_campaign",
+      "--list", "list_focus",
+      "--offer", "offr_focus",
+      "--icp", "icpp_focus",
+      "--social-cookie", "scok_focus",
+      "--platform", "linkedin",
+      "--action", "action.brand_new",
+      "--json",
+      "--account", "acct_override"
+    ], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("analytics metrics accepts every outcome and resolves me only for the configured account", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One",
+      accountUserId: "42",
+      accountUserName: "User One"
+    }, { env });
+
+    for (const outcome of [
+      "success", "failure", "first_attempt_success", "succeeded_after_retry",
+      "failed_without_retry", "failed_after_retry", "in_progress", "unresolved"
+    ]) {
+      const fetch = createFetch((url) => {
+        assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/metrics.json");
+        assert.equal(url.searchParams.get("account_user_id"), "42");
+        assert.equal(url.searchParams.get("outcome"), outcome);
+        return jsonResponse(outboundMetricsPayload());
+      });
+      const stdout = captureStream();
+
+      const exitCode = await run(["analytics", "metrics", "--user", "me", "--outcome", outcome, "--json"], { env, fetch, stdout });
+
+      assert.equal(exitCode, 0);
+      assert.equal(fetch.calls.length, 1);
+    }
+  });
+});
+
+test("analytics metrics human output uses canonical operation fields and the selected daily grid rows", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/analytics/metrics.json");
+      assert.equal(url.searchParams.has("interval"), false);
+      return jsonResponse(outboundMetricsPayload());
+    });
+
+    const exitCode = await run(["analytics", "metrics"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /Outbound metrics/);
+    assert.match(stdout.output, /Cohort: 2026-08-24 to 2026-08-25 \(events\.created_at\)/);
+    assert.match(stdout.output, /Current: 2026-08-24T00:00:00-05:00 to 2026-08-26T00:00:00-05:00/);
+    assert.match(stdout.output, /Previous: 2026-08-22T00:00:00-05:00 to 2026-08-24T00:00:00-05:00/);
+    assert.match(stdout.output, /Operations: 6/);
+    assert.match(stdout.output, /First-try success: 1 \(16\.7%\)/);
+    assert.match(stdout.output, /Recovered: 1 \(16\.7%\)/);
+    assert.match(stdout.output, /Final failures: 2 \(33\.3%\)/);
+    assert.match(stdout.output, /In progress: 1 \(16\.7%\)/);
+    assert.match(stdout.output, /Attempts: 9/);
+    assert.match(stdout.output, /Daily rows/);
+    assert.match(stdout.output, /Aug 25, 2026\s+4\s+1 \(25%\)\s+1 \(25%\)\s+1 \(25%\)\s+1 \(25%\)\s+6/);
+    assert.match(stdout.output, /Aug 24, 2026\s+2\s+0 \(0%\)\s+0 \(0%\)\s+1 \(50%\)\s+0 \(0%\)\s+3/);
+    assert.match(stdout.output, /Server-defined action label\s+action\.brand_new\s+6\s+1 \(16\.7%\).*2 \(33\.3%\).*1 \(16\.7%\)\s+9/);
+    assert.match(stdout.output, /sender@example\.com\s+scok_focus\s+6\s+1 \(16\.7%\).*2 \(33\.3%\).*1 \(16\.7%\)\s+9/);
+    assert.doesNotMatch(stdout.output, /Retried/);
+  });
+});
+
+test("analytics metrics human output safely renders zero totals and selected weekly grid rows", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const zeroCanonicalSummary = operationSummary({
+      operations: 0,
+      attempts: 0,
+      unsuccessfulAttempts: 0,
+      retryOperations: 0,
+      firstTry: 0,
+      recovered: 0,
+      failedWithoutRetry: 0,
+      failedAfterRetry: 0,
+      inProgress: 0,
+      unresolved: 0
+    });
+    const payload = outboundMetricsPayload({
+      scope: {
+        account_id: 101,
+        social_cookie: {
+          id: 21,
+          prefix_id: "scok_focus",
+          username: "sender@example.com",
+          service_identifier: "linkedin"
+        },
+        social_cookie_fixed: false
+      },
+      filters: {
+        ...outboundMetricsPayload().filters,
+        social_cookie: {
+          id: 21,
+          prefix_id: "scok_focus",
+          username: "sender@example.com",
+          service_identifier: "linkedin"
+        },
+        interval: "weekly"
+      },
+      cohort: {
+        ...outboundMetricsPayload().cohort,
+        previous_start_at: null,
+        previous_end_at: null
+      },
+      summary: zeroCanonicalSummary,
+      comparison: null,
+      grid: {
+        interval: "weekly",
+        row_heading: "Week",
+        action_columns: [],
+        rows: [{ period_key: "2026-08-24", label: "Aug 24–25, 2026", start_date: "2026-08-24", end_date: "2026-08-25", current: false, cells: [], summary: zeroCanonicalSummary }],
+        totals: zeroCanonicalSummary
+      }
+    });
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.searchParams.get("interval"), "weekly");
+      return jsonResponse(payload);
+    });
+
+    const exitCode = await run(["analytics", "metrics", "--interval", "weekly"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /Operations: 0/);
+    assert.match(stdout.output, /First-try success: 0 \(0%\)/);
+    assert.match(stdout.output, /Recovered: 0 \(0%\)/);
+    assert.match(stdout.output, /Final failures: 0 \(0%\)/);
+    assert.match(stdout.output, /In progress: 0 \(0%\)/);
+    assert.match(stdout.output, /Attempts: 0/);
+    assert.match(stdout.output, /Previous: not available/);
+    assert.match(stdout.output, /Weekly rows/);
+    assert.match(stdout.output, /Aug 24–25, 2026\s+0\s+0 \(0%\)/);
+    assert.doesNotMatch(stdout.output, /Retried/);
+  });
+});
+
+test("analytics metrics rejects a whitespace-only global account before making a request", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("blank account override must not call the API");
+    });
+
+    const exitCode = await run(["analytics", "metrics", "--account", "   "], { env, fetch, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(fetch.calls.length, 0);
+    assert.match(stderr.output, /--account requires an account id/);
   });
 });
 

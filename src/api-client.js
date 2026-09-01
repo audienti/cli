@@ -663,6 +663,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["analytics", "dashboard"], query));
   }
 
+  analyticsMetrics(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["analytics", "metrics"], query));
+  }
+
   analyticsStages(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["analytics", "stages"], query));
   }
