@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.45] - 2026-09-02
+
+### Changed
+
+- Keep Operator and analytics API responses within shared product visibility while preserving true-user authorization for Operator queues.
+
 ## [0.1.44] - 2026-09-01
 
 ### Added
