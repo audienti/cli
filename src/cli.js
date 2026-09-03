@@ -65,6 +65,10 @@ const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [f
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
+const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--json] [--account <acct_id>]";
+const INBOX_OPS_FILTERS_USAGE = "Usage: audienti inbox-ops filters [--json] [--account <acct_id>]";
+const INBOX_OPS_RULE_USAGE = "Usage: audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
+const INBOX_OPS_ROW_ID_PATTERN = /^inbox_ops_message_[1-9]\d*$/;
 const DNC_ADD_USAGE = "Usage: audienti dnc add <email|citation_id|profile_url> [--json] [--account <acct_id>]";
 const DNC_IMPORT_USAGE = "Usage: audienti dnc import --file <txt|csv> [--json] [--account <acct_id>]";
 const DNC_REMOVE_USAGE = "Usage: audienti dnc remove <dnc_entry_id> [--json] [--account <acct_id>]";
@@ -330,6 +334,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
+  if (normalizedResource === "inbox-ops" && action === "queue") return inboxOpsQueue(rest, context, { accountOverride });
+  if (normalizedResource === "inbox-ops" && action === "filters") return inboxOpsFilters(rest, context, { accountOverride });
+  if (normalizedResource === "inbox-ops" && action === "rule") return inboxOpsRule(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["prospects", "prospect"].includes(action)) return analyticsProspects(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["users", "user"].includes(action)) return analyticsUsers(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
@@ -3212,6 +3219,60 @@ async function operatorQueue(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderOperatorQueue(payload, context);
+}
+
+async function inboxOpsQueue(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    page: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(INBOX_OPS_QUEUE_USAGE);
+
+  const page = normalizeOptionalPositiveInteger(values.page, "--page");
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.operatorQueue(accountId, compactObject({
+    opportunity_kind: "inbox",
+    operator_page: page
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderInboxOpsQueue(payload, context);
+}
+
+async function inboxOpsFilters(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(INBOX_OPS_FILTERS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.inboxOpsFilters(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderInboxOpsFilters(payload, context);
+}
+
+async function inboxOpsRule(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    scope: { type: "string" },
+    disposition: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(INBOX_OPS_RULE_USAGE);
+  if (!["sender", "domain"].includes(values.scope)) throw new CommandError("--scope must be sender or domain.");
+  if (!["allow", "filter"].includes(values.disposition)) throw new CommandError("--disposition must be allow or filter.");
+
+  const rowId = positionals[0];
+  if (!INBOX_OPS_ROW_ID_PATTERN.test(rowId)) {
+    throw new CommandError("<row_id> must match inbox_ops_message_<positive integer>.");
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateInboxOpsRule(accountId, rowId, {
+    scope: values.scope,
+    disposition: values.disposition
+  });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderInboxOpsRule(payload, context);
 }
 
 async function operatorFailedDrafts(args, context, { accountOverride } = {}) {
@@ -6151,6 +6212,51 @@ function renderOperatorQueue(payload, context) {
   writeOperatorRows(context, queue);
 }
 
+function renderInboxOpsQueue(payload, context) {
+  const decisionQueue = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
+  const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
+  if (rows.length === 0) return writeLine(context.stdout, "No Inbox Ops rows found.");
+
+  writeAlignedTable(context, ["ROW ID", "SENDER", "DOMAIN", "SUBJECT", "CONNECTED INBOX"], rows.map((row) => [
+    display(row?.id),
+    display(row?.inbox_ops?.sender),
+    display(row?.inbox_ops?.domain),
+    display(row?.inbox_ops?.subject),
+    display(row?.inbox_ops?.connected_account)
+  ]));
+  if (payload?.has_more === true && payload?.next_page) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `More rows: audienti inbox-ops queue --page ${payload.next_page}`);
+  }
+}
+
+function renderInboxOpsFilters(payload, context) {
+  const owner = payload?.owner || {};
+  const filters = payload?.email_filters || {};
+  writeLine(context.stdout, `Inbox Ops filters for ${display(owner.email || owner.name || owner.id)}`);
+  writeLine(context.stdout, `Subscriptions: ${filters.subscriptions === false ? "Show" : "Filter"}`);
+  writeLine(context.stdout, `Automated/no-reply: ${filters.automated_no_reply === false ? "Show" : "Filter"}`);
+  writeLine(context.stdout, `Provider promotions: ${filters.provider_promotions === false ? "Show" : "Filter"}`);
+  writeInboxOpsRules(context, "Sender rules", filters.sender_rules);
+  writeInboxOpsRules(context, "Domain rules", filters.domain_rules);
+}
+
+function writeInboxOpsRules(context, heading, rules) {
+  const rows = Object.entries(rules || {}).sort(([left], [right]) => left.localeCompare(right));
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, heading);
+  if (rows.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, ["KEY", "DISPOSITION"], rows.map(([key, disposition]) => [key, humanize(disposition)]));
+}
+
+function renderInboxOpsRule(payload, context) {
+  const rule = payload?.rule || {};
+  const action = rule.disposition === "allow" ? "Always showing" : "Always filtering";
+  writeLine(context.stdout, `${action} ${display(rule.scope)} ${display(rule.normalized_key)}.`);
+  writeLine(context.stdout, "Re-run `audienti inbox-ops queue` to inspect the current queue.");
+}
+
 function renderOperatorNext(row, context) {
   if (!row) return writeLine(context.stdout, "No operator moves found.");
 
@@ -7520,6 +7626,11 @@ const HELP_TOPICS = new Map([
   "    audienti operator queue",
   "    audienti operator failed-drafts",
   "    audienti operator failed-drafts requeue <row_id>",
+  "",
+  "  Inbox Ops",
+  "    audienti inbox-ops queue",
+  "    audienti inbox-ops filters",
+  "    audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter>",
   "",
     "  Analytics",
     "    audienti analytics motions",
@@ -10327,6 +10438,72 @@ const HELP_TOPICS = new Map([
     "  GET /api/v1/accounts/:account_id/tools/linkedin-review/reports/:id.json"
   ].join("\n")],
 
+  ["inbox-ops", [
+    "Usage:",
+    `  ${INBOX_OPS_QUEUE_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_FILTERS_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_RULE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Inspect the authenticated owner's private Inbox Ops queue and personal/global email rules, then set one authoritative sender or domain rule from a current queue row.",
+    "",
+    "Safety:",
+    "  Rules always apply to the token owner. This command does not accept --principal or a client-supplied sender/domain.",
+    "  The server resolves the normalized identity from the authorized current Inbox Ops row.",
+    "",
+    "Rule values:",
+    "  --scope sender|domain",
+    "  --disposition allow|filter",
+    "",
+    "API:",
+    "  queue: GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox",
+    "  filters: GET /api/v1/accounts/:account_id/inbox_ops/filters.json",
+    "  rule: PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json"
+  ].join("\n")],
+
+  ["inbox-ops queue", [
+    INBOX_OPS_QUEUE_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List one page of the authenticated owner's current private Inbox Ops rows with the authoritative sender/domain rule identity, subject, and connected inbox.",
+    "  When more rows exist, the plain output prints the next --page command.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox"
+  ].join("\n")],
+
+  ["inbox-ops filters", [
+    INBOX_OPS_FILTERS_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Read the authenticated owner's normalized personal/global Inbox Ops filters and sender/domain rules.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/inbox_ops/filters.json"
+  ].join("\n")],
+
+  ["inbox-ops rule", [
+    INBOX_OPS_RULE_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Set one allow or filter rule from an authorized current Inbox Ops row. The server derives the identity; the client cannot supply it.",
+    "",
+    "Rule values:",
+    "  --scope sender|domain",
+    "  --disposition allow|filter",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json"
+  ].join("\n")],
+
   ["operator", [
     "Usage:",
     "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
@@ -10342,7 +10519,7 @@ const HELP_TOPICS = new Map([
     "  --motion <motn_id>",
     "  --list <list_id>",
     "  --stage <stage>",
-    "  --opportunity-kind prospect|visibility",
+    "  --opportunity-kind prospect|visibility|inbox",
     "  --writing-status ready|drafting|draft_failed"
   ].join("\n")],
 
@@ -10854,6 +11031,9 @@ const HELP_TOPICS = new Map([
   "  audienti operator failed-drafts",
   "  audienti operator failed-drafts requeue <row_id>",
   "  audienti operator outcome <row_id> --payload <file.json>",
+  "  audienti inbox-ops queue",
+  "  audienti inbox-ops filters",
+  "  audienti inbox-ops rule <row_id> --scope sender --disposition filter",
     "",
     "7. Inspect account analytics",
     "  audienti users activity me --window 7d",

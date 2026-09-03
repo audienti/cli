@@ -657,6 +657,17 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["operator"], query));
   }
 
+  inboxOpsFilters(accountId) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", "filters"]));
+  }
+
+  updateInboxOpsRule(accountId, rowId, body) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", rowId, "rule"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
   operatorNext(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operator", "next"], query));
   }

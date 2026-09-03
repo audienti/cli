@@ -132,6 +132,9 @@ audienti motions activate <motn_id> --json
 audienti motions delete <motn_id> --confirm yes --json
 audienti operator next --json
 audienti operator next --plan
+audienti inbox-ops queue --json
+audienti inbox-ops filters --json
+audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> --json
 audienti analytics motions --json
 audienti analytics icps --json
 audienti analytics prospects --window 24h --json

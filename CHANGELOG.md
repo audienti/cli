@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.51] - 2026-09-03
+
+### Added
+
+- Add first-class `audienti inbox-ops queue`, `filters`, and `rule` commands backed by owner-scoped account APIs, authoritative row-derived sender/domain identities, all four allow/filter rule combinations, and unchanged JSON output.
+
 ## [0.1.50] - 2026-09-02
 
 ### Added

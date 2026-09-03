@@ -1078,6 +1078,14 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/audienti operator next/, /audienti operator failed-drafts/, /--opportunity-kind prospect\|visibility/]
     },
     {
+      args: ["inbox-ops", "help"],
+      expected: [/audienti inbox-ops queue/, /audienti inbox-ops filters/, /audienti inbox-ops rule <row_id>/, /sender\|domain/, /allow\|filter/]
+    },
+    {
+      args: ["inbox-ops", "rule", "help"],
+      expected: [/Usage: audienti inbox-ops rule <row_id>/, /sender\|domain/, /allow\|filter/, /server derives the identity/i]
+    },
+    {
       args: ["operator", "failed-drafts", "help"],
       expected: [/Usage:\n  audienti operator failed-drafts/, /requeue is async/i, /operator\/failed_drafts\/requeue\.json/]
     },
@@ -9907,6 +9915,208 @@ test("operator queue renders a clean aligned table with motion names", async () 
     assert.match(stdout.output, /MOVE ID\s+WORK TYPE\s+SUBJECT\s+MOTION\s+NEXT ACTION/);
     assert.match(stdout.output, /motion_visibility_123\s+Visibility\s+Visibility Author\s+Inbound Queue\s+Review comment/);
     assert.doesNotMatch(stdout.output, /Inbound Queue \(motn_inbound\)/);
+  });
+});
+
+test("inbox ops queue forces the private inbox lane and renders rule source identities", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator.json");
+      assert.equal(url.searchParams.get("opportunity_kind"), "inbox");
+      assert.equal(url.searchParams.get("operator_page"), "2");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        decision_queue: [{
+          id: "inbox_ops_message_123",
+          opportunity_kind: "inbox",
+          display_name: "News Team",
+          inbox_ops: {
+            sender: "news@alerts.example.com",
+            domain: "alerts.example.com",
+            subject: "Quarterly update",
+            channel: "Gmail",
+            connected_account: "owner@example.com",
+            state: "needs_action"
+          }
+        }],
+        has_more: true,
+        next_page: 3
+      });
+    });
+
+    const exitCode = await run(["inbox-ops", "queue", "--page", "2"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /ROW ID\s+SENDER\s+DOMAIN\s+SUBJECT/);
+    assert.match(stdout.output, /inbox_ops_message_123\s+news@alerts\.example\.com\s+alerts\.example\.com\s+Quarterly update/);
+    assert.match(stdout.output, /More rows: audienti inbox-ops queue --page 3/);
+  });
+});
+
+test("inbox ops filters reads the authenticated owner's normalized preferences", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/inbox_ops/filters.json");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        kind: "owner_personal_inbox_ops_filters",
+        owner: { id: "user_one", email: "owner@example.com" },
+        email_filters: {
+          subscriptions: true,
+          automated_no_reply: true,
+          provider_promotions: true,
+          sender_rules: { "news@example.com": "filter" },
+          domain_rules: { "vip.example.com": "allow" }
+        }
+      });
+    });
+
+    const exitCode = await run(["inbox-ops", "filters"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Inbox Ops filters for owner@example\.com/);
+    assert.match(stdout.output, /Sender rules/);
+    assert.match(stdout.output, /news@example\.com\s+Filter/);
+    assert.match(stdout.output, /Domain rules/);
+    assert.match(stdout.output, /vip\.example\.com\s+Allow/);
+  });
+});
+
+test("inbox ops rule maps all four owner-personal source rule actions", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/inbox_ops/inbox_ops_message_123/rule.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      const rule = JSON.parse(options.body);
+      requests.push(rule);
+      return jsonResponse({
+        rule: {
+          row_id: "inbox_ops_message_123",
+          ...rule,
+          normalized_key: rule.scope === "sender" ? "news@example.com" : "example.com"
+        },
+        email_filters: {
+          sender_rules: rule.scope === "sender" ? { "news@example.com": rule.disposition } : {},
+          domain_rules: rule.scope === "domain" ? { "example.com": rule.disposition } : {}
+        }
+      });
+    });
+
+    for (const scope of ["sender", "domain"]) {
+      for (const disposition of ["allow", "filter"]) {
+        const exitCode = await run([
+          "inbox-ops",
+          "rule",
+          "inbox_ops_message_123",
+          "--scope",
+          scope,
+          "--disposition",
+          disposition
+        ], { env, fetch, stdout });
+        assert.equal(exitCode, 0);
+      }
+    }
+
+    assert.deepEqual(requests, [
+      { scope: "sender", disposition: "allow" },
+      { scope: "sender", disposition: "filter" },
+      { scope: "domain", disposition: "allow" },
+      { scope: "domain", disposition: "filter" }
+    ]);
+    assert.match(stdout.output, /Always showing sender news@example\.com/);
+    assert.match(stdout.output, /Always filtering sender news@example\.com/);
+    assert.match(stdout.output, /Always showing domain example\.com/);
+    assert.match(stdout.output, /Always filtering domain example\.com/);
+    assert.match(stdout.output, /Re-run `audienti inbox-ops queue`/);
+  });
+});
+
+test("inbox ops rule rejects invalid values before calling the API", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => {
+      throw new Error("invalid Inbox Ops rule must not call the API");
+    });
+
+    const exitCode = await run([
+      "inbox-ops",
+      "rule",
+      "inbox_ops_message_123",
+      "--scope",
+      "thread",
+      "--disposition",
+      "delete"
+    ], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(fetch.calls.length, 0);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /--scope must be sender or domain/);
+  });
+});
+
+test("inbox ops rejects malformed row ids and principal selection before calling the API", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const fetch = createFetch(() => {
+      throw new Error("invalid Inbox Ops input must not call the API");
+    });
+
+    const malformedError = captureStream();
+    const malformedExitCode = await run([
+      "inbox-ops", "rule", "evnt_123", "--scope", "sender", "--disposition", "filter"
+    ], { env, fetch, stdout: captureStream(), stderr: malformedError });
+    assert.equal(malformedExitCode, 1);
+    assert.match(malformedError.output, /must match inbox_ops_message_<positive integer>/);
+
+    const principalError = captureStream();
+    const principalExitCode = await run([
+      "inbox-ops", "queue", "--principal", "42"
+    ], { env, fetch, stdout: captureStream(), stderr: principalError });
+    assert.equal(principalExitCode, 1);
+    assert.match(principalError.output, /Unknown option '--principal'/);
+    assert.equal(fetch.calls.length, 0);
   });
 });
 
