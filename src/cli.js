@@ -5451,6 +5451,8 @@ function renderMotionStatus(status, context) {
   renderExecutableConfiguration(status?.executable_configuration, context);
   if (status?.description) writeLine(context.stdout, status.description);
   if (status?.action?.label) writeLine(context.stdout, `Action: ${status.action.label}`);
+  renderDiscoveryRunReceipt(status?.discovery_run, context);
+  if (status?.next_eligible_at) writeLine(context.stdout, `Retry at: ${status.next_eligible_at}`);
 }
 
 function renderExecutableConfiguration(config, context) {
@@ -6499,6 +6501,12 @@ function renderMotionDiscoveryRun(payload, context) {
   writeLine(context.stdout, `${prefix} for ${display(label)}.`);
   writeLine(context.stdout, `Reason: ${display(payload?.reason)}`);
   writeLine(context.stdout, `Target count: ${display(payload?.target_count)}`);
+  renderDiscoveryRunReceipt(run, context);
+  if (payload?.next_eligible_at) writeLine(context.stdout, `Retry at: ${payload.next_eligible_at}`);
+  if (payload?.suggested_action) writeLine(context.stdout, `Next action: ${payload.suggested_action}`);
+}
+
+function renderDiscoveryRunReceipt(run, context) {
   if (run) {
     writeLine(context.stdout, `Run: ${display(run.id)} (${display(run.status)})`);
     if (run.queued_at) writeLine(context.stdout, `Queued: ${run.queued_at}`);
@@ -6509,8 +6517,6 @@ function renderMotionDiscoveryRun(payload, context) {
     }
     if (run.error_message) writeLine(context.stdout, `Error: ${run.error_message}`);
   }
-  if (payload?.next_eligible_at) writeLine(context.stdout, `Retry at: ${payload.next_eligible_at}`);
-  if (payload?.suggested_action) writeLine(context.stdout, `Next action: ${payload.suggested_action}`);
 }
 
 function renderQuickStartDraft(draft, context) {
@@ -9193,6 +9199,8 @@ const HELP_TOPICS = new Map([
     "  executable_configuration: { valid: boolean, reason_key: string | null, reason_label: string | null, description: string | null }",
     "  description: string",
     "  action: { key: string, label: string } | null",
+    "  next_eligible_at: persisted retry time when the server can calculate one",
+    "  discovery_run: latest run id, status, trigger, counts, timestamps, and error_message",
     "  stats: { target_count, deficit, projected_connectable, capacity, daily_target }",
     "",
     "API:",

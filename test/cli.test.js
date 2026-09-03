@@ -3478,6 +3478,20 @@ test("motions status renders executable configuration validity", async () => {
           reason_key: "missing_lopa_profile_urls",
           reason_label: "Missing tracked profile URLs",
           description: "Add at least one tracked LinkedIn profile URL before this motion can prepare or activate."
+        },
+        next_eligible_at: "2026-09-03T14:15:00Z",
+        discovery_run: {
+          id: 456,
+          status: "failed",
+          trigger: "operator_manual",
+          target_count: 25,
+          seen_count: 0,
+          accepted_count: 0,
+          rejected_count: 0,
+          queued_at: "2026-09-03T14:00:00Z",
+          started_at: "2026-09-03T14:00:01Z",
+          finished_at: "2026-09-03T14:00:02Z",
+          error_message: "provider budget exhausted"
         }
       });
     });
@@ -3489,7 +3503,24 @@ test("motions status renders executable configuration validity", async () => {
     assert.match(stdout.output, /Reason: No source profile/);
     assert.match(stdout.output, /Valid config: no/);
     assert.match(stdout.output, /Config reason: Missing tracked profile URLs/);
+    assert.match(stdout.output, /Run: 456 \(failed\)/);
+    assert.match(stdout.output, /Counts: 0 seen, 0 accepted, 0 rejected/);
+    assert.match(stdout.output, /Error: provider budget exhausted/);
+    assert.match(stdout.output, /Retry at: 2026-09-03T14:15:00Z/);
   });
+});
+
+test("motions status help documents lifecycle receipts and retry truth", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => {
+    throw new Error("help must not call the API");
+  });
+
+  const exitCode = await run(["motions", "status", "help"], { stdout, fetch });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /next_eligible_at: persisted retry time/);
+  assert.match(stdout.output, /discovery_run: latest run id, status, trigger, counts, timestamps, and error_message/);
 });
 
 test("motions show renders signal rows and motion configuration details", async () => {
