@@ -33,7 +33,7 @@ const DEFAULT_PROFILE_IDENTIFIERS = [
   "email/profile"
 ];
 const DELETE_CONFIRMATION_VALUES = new Set(["yes", "true", "y"]);
-const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "paused", "archived"]);
+const MOTION_STATUS_VALUES = new Set(["draft", "preparing", "active", "closing", "paused", "archived"]);
 const PROSPECT_INACTIVE_REASON_VALUES = new Set(["nurture", "non_responsive", "not_fit", "bad_data_404"]);
 const PROSPECT_STATUS_VALUES = new Set(["active", ...PROSPECT_INACTIVE_REASON_VALUES, "rejected"]);
 const OUTBOUND_METRICS_OUTCOMES = new Set([
@@ -51,6 +51,7 @@ const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id>
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
+const PROSPECTS_MOVE_ACCOUNT_USAGE = "Usage: audienti prospects move-account <prsp_id> --target-account <acct_id> [--assigned-user <id|me>] [--target-motion <motn_id>] [--target-list <list_id>] [--apply] [--json] [--account <source_acct_id>]";
 const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json] [--account <acct_id>]";
 const PROSPECTS_REPLAN_USAGE = "Usage: audienti prospects replan <prsp_id> [--apply] [--json] [--account <acct_id>]";
 const PROSPECTS_REENRICH_USAGE = "Usage: audienti prospects reenrich <prsp_id> [--profile <prof_id|citation_id>] [--apply] [--json] [--account <acct_id>]";
@@ -75,6 +76,8 @@ const TASKS_LIST_USAGE = "Usage: audienti tasks list [--status <open|completed>]
 const TASKS_ADD_USAGE = "Usage: audienti tasks add --title <text> --due <time> [--prospect <prsp_id>] [--list <list_id>] [--assigned-user <id|me>] [--notes <text>] [--json] [--account <acct_id>]";
 const TASKS_COMPLETE_USAGE = "Usage: audienti tasks complete <ptsk_id> [--json] [--account <acct_id>]";
 const USERS_ACTIVITY_USAGE = "Usage: audienti users activity [account_user_id|me] [--mode <actor|account_usage|related>] [--window <24h|7d|30d>] [--platform <linkedin|email|gmail>] [--query <text>] [--limit <n>] [--page <n>] [--json] [--account <acct_id>]";
+const USERS_AUTOMATION_SHOW_USAGE = "Usage: audienti users automation show <account_user_id|me> [--platform linkedin] [--json] [--account <acct_id>]";
+const USERS_AUTOMATION_UPDATE_USAGE = "Usage: audienti users automation update <account_user_id|me> --payload <file.json> [--apply] [--json] [--account <acct_id>]";
 const SETUP_PLAY_PREFLIGHT_USAGE = "Usage: audienti setup play preflight [--principal <account_user_id|email|name|me>] [--platform linkedin] [--json] [--account <acct_id>]";
 const OFFERS_SHOW_USAGE = "Usage: audienti offers show <offr_id> [--json] [--account <acct_id>]";
 const OFFERS_UPDATE_USAGE = "Usage: audienti offers update <offr_id> [--name <text>] [--description <text>] [--url <url>] [--json] [--account <acct_id>]";
@@ -82,7 +85,7 @@ const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
 const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
@@ -104,7 +107,10 @@ const MOTIONS_ABM_COMPANIES_LIST_USAGE = "Usage: audienti motions abm-companies 
 const MOTIONS_ABM_COMPANIES_ADD_USAGE = "Usage: audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_REMOVE_USAGE = "Usage: audienti motions abm-companies <motn_id> remove <row_id> [--json] [--account <acct_id>]";
 const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
+const ICPS_LIST_USAGE = "Usage: audienti icps list [--status <active|archived|all>] [--tag <tag>] [--json] [--account <acct_id>]";
 const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> ([--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const ICPS_ARCHIVE_USAGE = "Usage: audienti icps archive <icp_id> [--json] [--account <acct_id>]";
+const ICPS_RESTORE_USAGE = "Usage: audienti icps restore <icp_id> [--json] [--account <acct_id>]";
 const ICPS_ADD_TAG_USAGE = "Usage: audienti icps add-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const ICPS_REMOVE_TAG_USAGE = "Usage: audienti icps remove-tag <icp_id> <tag> [--json] [--account <acct_id>]";
 const LISTS_ADD_TAG_USAGE = "Usage: audienti lists add-tag <list_id> <tag> [--json] [--account <acct_id>]";
@@ -119,6 +125,8 @@ const ANALYTICS_PROSPECTS_USAGE = "Usage: audienti analytics prospects [--window
 const ANALYTICS_PROSPECTS_COHORT_ANALYSIS_USAGE = "Usage: audienti analytics prospects cohort-analysis [--weeks <n>] [--window 24h] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_USERS_USAGE = "Usage: audienti analytics users [--user <account_user_id|email|name|me>] [--window 30d | --start YYYY-MM-DD --end YYYY-MM-DD] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--provenance <source>] [--platform <linkedin|email|gmail>] [--json] [--account <acct_id>]";
 const ANALYTICS_DASHBOARD_USAGE = "Usage: audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const ANALYTICS_MOTIONS_USAGE = "Usage: audienti analytics motions [--json] [--account <acct_id>]";
+const ANALYTICS_ICPS_USAGE = "Usage: audienti analytics icps [--json] [--account <acct_id>]";
 const ANALYTICS_METRICS_USAGE = "Usage: audienti analytics metrics [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD | --cohort-preset week-to-date] [--interval <daily|weekly>] [--user <account_user_id|email|name|me>] [--motion <motn_id>] [--play-tag <tag>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--social-cookie <scok_id>] [--platform <platform>] [--action <action_key>] [--outcome <success|failure|first_attempt_success|succeeded_after_retry|failed_without_retry|failed_after_retry|in_progress|unresolved>] [--json] [--account <acct_id>]";
 const ANALYTICS_STAGES_USAGE = "Usage: audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
@@ -218,6 +226,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
+  if (normalizedResource === "users" && action === "automation") return usersAutomation(rest, context, { accountOverride });
   if (normalizedResource === "setup" && action === "play" && rest[0] === "preflight") return setupPlayPreflight(rest.slice(1), context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "show") return offersShow(rest, context, { accountOverride });
@@ -226,8 +235,11 @@ async function dispatch(argv, context) {
   if (normalizedResource === "offers" && action === "delete") return offersDelete(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "list") return icpsList(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "show") return icpsShow(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "analytics") return analyticsIcps(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "create") return icpsCreate(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "update") return icpsUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "archive") return icpsLifecycleMutation("archive", rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "restore") return icpsLifecycleMutation("restore", rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "add-tag") return icpsTagMutation("add", rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "remove-tag") return icpsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "companies" && action === "search") return companiesSearch(rest, context, { accountOverride });
@@ -287,6 +299,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "check") return prospectsCheck(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "move-account") return prospectsMoveAccount(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "set-status") return prospectsSetStatus(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "replan") return prospectsReplan(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "reenrich") return prospectsReenrich(rest, context, { accountOverride });
@@ -322,6 +335,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "content") return analyticsContent(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["dashboard", "campaign", "campaigns"].includes(action)) return analyticsDashboard(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["motions", "plays"].includes(action)) return analyticsMotions(rest, context, { accountOverride });
+  if (normalizedResource === "analytics" && ["icps", "icp"].includes(action)) return analyticsIcps(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "metrics") return analyticsMetrics(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && action === "stages") return analyticsStages(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["cohorts", "cohort"].includes(action)) return analyticsCohorts(rest, context, { accountOverride });
@@ -896,6 +911,60 @@ async function usersActivity(args, context, { accountOverride } = {}) {
   renderUserActivity(payload, context);
 }
 
+async function usersAutomation(args, context, { accountOverride } = {}) {
+  const [action, ...rest] = args;
+  if (action === "show") return usersAutomationShow(rest, context, { accountOverride });
+  if (action === "update") return usersAutomationUpdate(rest, context, { accountOverride });
+
+  throw new CommandError(`${USERS_AUTOMATION_SHOW_USAGE}\n${USERS_AUTOMATION_UPDATE_USAGE}`);
+}
+
+async function usersAutomationShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    platform: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(USERS_AUTOMATION_SHOW_USAGE);
+
+  const platform = automationPlatform(values.platform);
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const accountUserId = resolveAccountUserId(positionals[0], config, { accountOverride });
+  const payload = await client.userAutomation(accountId, accountUserId, { platform });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderUserAutomation(payload, context);
+}
+
+async function usersAutomationUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    payload: { type: "string" },
+    apply: { type: "boolean" }
+  });
+  if (positionals.length !== 1 || !values.payload) throw new CommandError(USERS_AUTOMATION_UPDATE_USAGE);
+
+  const platform = automationPlatform();
+  const requestedAutomation = await readJsonPayload(values.payload);
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const accountUserId = resolveAccountUserId(positionals[0], config, { accountOverride });
+  const payload = await client.updateUserAutomation(
+    accountId,
+    accountUserId,
+    { automation: { ...requestedAutomation, platform, apply: Boolean(values.apply) } },
+    { platform }
+  );
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderUserAutomation(payload, context);
+}
+
+function automationPlatform(value = "linkedin") {
+  const platform = String(value || "").trim().toLowerCase();
+  if (platform !== "linkedin") throw new CommandError("--platform must be linkedin.");
+
+  return platform;
+}
+
 async function setupPlayPreflight(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -1008,15 +1077,33 @@ async function offersDelete(args, context, { accountOverride } = {}) {
 async function icpsList(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    tag: { type: "string" }
+    tag: { type: "string" },
+    status: { type: "string" }
   });
-  if (positionals.length > 0) throw new CommandError("Usage: audienti icps list [--tag <tag>] [--json] [--account <acct_id>]");
+  const status = values.status;
+  if (positionals.length > 0 || (status && !["active", "archived", "all"].includes(status))) throw new CommandError(ICPS_LIST_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const icps = filterRecordsByTag(await client.icps(accountId), values.tag, "tags");
+  const icps = filterRecordsByTag(await client.icps(accountId, { status }), values.tag, "tags");
   if (values.json) return writeJson(context.stdout, icps);
 
   renderIcps(icps, context);
+}
+
+async function icpsLifecycleMutation(action, args, context, { accountOverride } = {}) {
+  const usageText = action === "archive" ? ICPS_ARCHIVE_USAGE : ICPS_RESTORE_USAGE;
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(usageText);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const result = action === "archive" ?
+    await client.archiveIcp(accountId, positionals[0]) :
+    await client.restoreIcp(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, result);
+
+  const verb = action === "archive" ? "Archived" : "Restored";
+  writeLine(context.stdout, `${verb} ICP ${display(result?.icp?.name)} (${display(result?.icp?.prefix_id)}).`);
+  writeIcpLifecycleEffects(result, context);
 }
 
 async function icpsShow(args, context, { accountOverride } = {}) {
@@ -2396,6 +2483,53 @@ async function prospectsShow(args, context, { accountOverride } = {}) {
   renderProspect(prospect, context);
 }
 
+async function prospectsMoveAccount(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    "target-account": { type: "string" },
+    "assigned-user": { type: "string" },
+    "target-motion": { type: "string" },
+    "target-list": { type: "string" },
+    apply: { type: "boolean" }
+  });
+  if (positionals.length !== 1 || !values["target-account"]) {
+    throw new CommandError(PROSPECTS_MOVE_ACCOUNT_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const prospectId = positionals[0];
+  const request = compactObject({
+    target_account_id: values["target-account"],
+    assigned_user_id: values["assigned-user"],
+    target_motion_id: values["target-motion"],
+    target_list_id: values["target-list"]
+  });
+  const preview = await performProspectAccountMove(() =>
+    client.moveProspectAccount(accountId, prospectId, { ...request, apply: false }));
+
+  if (!values.apply) {
+    if (values.json) writeJson(context.stdout, preview.payload);
+    else renderProspectAccountMove(preview.payload, context, { applying: false });
+    return preview.rejected ? 1 : 0;
+  }
+
+  if (preview.rejected || preview.payload?.success !== true || preview.payload?.eligible !== true || !preview.payload?.manifest_digest) {
+    if (values.json) writeJson(context.stdout, preview.payload);
+    else renderProspectAccountMove(preview.payload, context, { applying: true });
+    return 1;
+  }
+
+  const final = await performProspectAccountMove(() => client.moveProspectAccount(accountId, prospectId, {
+    ...request,
+    apply: true,
+    manifest_digest: preview.payload.manifest_digest
+  }));
+  if (values.json) writeJson(context.stdout, final.payload);
+  else renderProspectAccountMove(final.payload, context, { applying: true });
+
+  return final.rejected || final.payload?.applied !== true ? 1 : 0;
+}
+
 async function prospectsReplan(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -3269,6 +3403,28 @@ async function analyticsDashboard(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderAnalyticsDashboard(payload, context);
+}
+
+async function analyticsMotions(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_MOTIONS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsMotions(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsMotions(payload, context);
+}
+
+async function analyticsIcps(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(ANALYTICS_ICPS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.analyticsIcps(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderAnalyticsIcps(payload, context);
 }
 
 async function analyticsMetrics(args, context, { accountOverride } = {}) {
@@ -4571,6 +4727,77 @@ function renderUserActivity(payload, context) {
   }
 }
 
+function renderUserAutomation(payload, context) {
+  const accountUser = payload?.account_user || {};
+  const socialCookie = payload?.social_cookie || {};
+  const snapshot = payload?.current || payload?.after || {};
+  const mode = payload?.applied === true ? "applied" : (payload?.preview === true ? "preview" : "current");
+  const platform = socialCookie.service_identifier || "linkedin";
+
+  writeLine(
+    context.stdout,
+    `Automation ${mode}: ${accountUserLabel(accountUser)} | ${platform} | policy ${display(snapshot.policy_source, "unknown")}`
+  );
+  renderUserAutomationSchedule(snapshot, context);
+  renderUserAutomationControls(snapshot, context);
+  renderUserAutomationLimits(snapshot?.limits, context);
+
+  if (payload?.preview === true) {
+    writeLine(context.stdout, "No changes applied. Review the preview, then rerun with --apply.");
+  } else if (payload?.applied === true && payload?.audit_id) {
+    writeLine(context.stdout, `Audit: ${payload.audit_id}`);
+  }
+}
+
+function renderUserAutomationSchedule(snapshot, context) {
+  if (!snapshot?.time_zone && snapshot?.in_working_hours === undefined) return;
+
+  const parts = [display(snapshot.time_zone, "unknown timezone")];
+  if (snapshot.in_working_hours !== undefined) {
+    parts.push(snapshot.in_working_hours ? "in working hours" : "outside working hours");
+  }
+  if (snapshot.today_window?.summary) parts.push(`today ${snapshot.today_window.summary}`);
+  writeLine(context.stdout, `Schedule: ${parts.join(" | ")}`);
+}
+
+function renderUserAutomationControls(snapshot, context) {
+  const controls = snapshot?.controls || {};
+  const entries = [
+    ["automatic sending", controls.automatic_sending_enabled],
+    ["visibility operations", controls.visibility_operations_autopilot_enabled],
+    ["risk cooldown", snapshot?.risk_cooldown_enabled]
+  ].filter(([, enabled]) => enabled !== undefined);
+  if (entries.length === 0) return;
+
+  writeLine(context.stdout, `Controls: ${entries.map(([label, enabled]) => `${label} ${enabled ? "on" : "off"}`).join(" | ")}`);
+}
+
+function renderUserAutomationLimits(limits, context) {
+  const categories = Array.isArray(limits?.categories) ? limits.categories : [];
+  const categorySummaries = categories.map(automationDailyLimitSummary).filter(Boolean);
+  if (categorySummaries.length > 0) {
+    writeLine(context.stdout, `Daily category limits: ${categorySummaries.join(" | ")}`);
+  }
+
+  const aggregateSummary = automationDailyLimitSummary(limits?.aggregate_visibility);
+  if (aggregateSummary) writeLine(context.stdout, `Aggregate visibility: ${aggregateSummary.replace(/^Aggregate visibility\s+/i, "")}`);
+
+  const bindingLimits = Array.isArray(limits?.binding_limits) ? limits.binding_limits.filter(Boolean) : [];
+  if (bindingLimits.length > 0) writeLine(context.stdout, `Binding limits: ${bindingLimits.join(", ")}`);
+}
+
+function automationDailyLimitSummary(limit) {
+  if (!limit || typeof limit !== "object") return null;
+
+  const label = display(limit.label || limit.category, "Limit");
+  const used = limit.used?.daily ?? limit.usage?.daily;
+  const effective = limit.effective?.daily;
+  const remaining = limit.remaining?.daily;
+  if (used === undefined && effective === undefined && remaining === undefined) return null;
+
+  return `${label} ${display(used, "?")}/${display(effective, "?")} daily (${display(remaining, "?")} remaining)`;
+}
+
 function renderSetupPlayPreflight(payload, context) {
   const accountUser = payload?.account_user || {};
   const socialCookie = payload?.social_cookie || null;
@@ -4581,6 +4808,7 @@ function renderSetupPlayPreflight(payload, context) {
     `Setup preflight: ${display(payload?.platform, "linkedin")} for ${display(accountUser.name || accountUser.email)} (${display(accountUser.id)})`
   );
   writeLine(context.stdout, `Status: ${payload?.ready ? "ready" : "blocked"} (${display(payload?.reason, "unknown")})`);
+  renderSetupUserLocation(accountUser.location, context);
 
   if (socialCookie) {
     writeLine(
@@ -4590,6 +4818,7 @@ function renderSetupPlayPreflight(payload, context) {
     writeLine(context.stdout, `Connection status: ${display(socialCookie.status)}`);
     writeLine(context.stdout, `Mapped to account: ${socialCookie.accessible_to_account ? "yes" : "no"}`);
     writeLine(context.stdout, `Actionable: ${socialCookie.actionable ? "yes" : "no"}`);
+    renderSetupProxyLocation(socialCookie.proxy_location, context);
     renderSetupAutomationSummary(socialCookie.automation || {}, context);
   } else {
     writeLine(context.stdout, "Connected account: none");
@@ -4614,6 +4843,101 @@ function renderSetupAutomationSummary(automation, context) {
   ];
 
   writeLine(context.stdout, `Automation: ${summary.join(", ")}`);
+  if (automation.time_zone || automation.today_window || automation.in_working_hours !== undefined) {
+    writeLine(
+      context.stdout,
+      [
+        `Working hours: ${display(automation.time_zone, "unknown timezone")}`,
+        `today ${display(automation.today_window?.summary, "unknown")}`,
+        `currently ${automation.in_working_hours ? "inside" : "outside"}`
+      ].join(", ")
+    );
+  }
+  renderSetupPacingSummary(automation.pacing, context);
+}
+
+function renderSetupUserLocation(location, context) {
+  const country = location?.country_code || "not configured";
+  const place = [location?.city, location?.state_code].filter(Boolean).join(", ");
+  const details = [place, location?.time_zone].filter(Boolean).join("; ");
+  writeLine(context.stdout, `User location: ${country}${details ? ` (${details})` : ""}`);
+}
+
+function renderSetupProxyLocation(proxyLocation, context) {
+  const configured = proxyLocation?.configured || {};
+  const configuredCountry = configured.country_code || "not configured";
+  const configuredPlace = [configured.city, configured.state_code].filter(Boolean).join(", ");
+  const configuredDetails = [configuredPlace, configured.postal_code].filter(Boolean).join(" ");
+  writeLine(
+    context.stdout,
+    `Cookie proxy location: ${configuredCountry}${configuredDetails ? ` (${configuredDetails})` : ""}`
+  );
+
+  const effective = proxyLocation?.effective || {};
+  const effectivePlace = [effective.country_code, effective.region, effective.city].filter(Boolean).join(", ");
+  if (!effectivePlace && proxyLocation?.source && proxyLocation.source !== "unavailable") {
+    writeLine(context.stdout, `Effective proxy: not verified (${proxyLocation.source})`);
+    return;
+  }
+  if (!effectivePlace || proxyLocation?.source === "unavailable") {
+    writeLine(context.stdout, "Effective proxy: unavailable");
+    return;
+  }
+
+  const evidence = [proxyLocation?.source, effective.checked_at ? `checked ${effective.checked_at}` : null]
+    .filter(Boolean)
+    .join("; ");
+  writeLine(context.stdout, `Effective proxy: ${effectivePlace}${evidence ? ` (${evidence})` : ""}`);
+}
+
+function renderSetupPacingSummary(pacing, context) {
+  if (!pacing) return;
+
+  const quotas = pacing.weekly_quotas || {};
+  writeLine(
+    context.stdout,
+    [
+      `Weekly quotas: profile visits ${formatSetupQuota(quotas.profile_visits)}`,
+      `invitations ${formatSetupQuota(quotas.invitations)}`,
+      `messages ${formatSetupQuota(quotas.messages)}`
+    ].join(", ")
+  );
+  const motionActiveDays = Array.isArray(pacing.motion_active_days) ? pacing.motion_active_days : [];
+  writeLine(context.stdout, `Motion active days: ${motionActiveDays.join(", ") || "none"}`);
+  writeLine(context.stdout, `Outstanding invitation cap: ${display(pacing.outstanding_invitation_cap)}`);
+
+  const ramp = pacing.ramp_config || {};
+  writeLine(
+    context.stdout,
+    `Invitation ramp: ${display(ramp.starting_daily_invitations)}/day start, +${display(ramp.weekly_increment)}/week`
+  );
+
+  const current = pacing.current || {};
+  const inventoryBlocked = Boolean(current.inventory_blocking_reason);
+  writeLine(
+    context.stdout,
+    [
+      `${inventoryBlocked ? "Invitation pacing headroom" : "Invitation capacity"}: ${display(current.daily_usage)} used today`,
+      `${display(current.daily_target)} daily target`,
+      `${display(current.ramp_limit_today)} ramp limit today`,
+      `${display(current.effective_available)} ${inventoryBlocked ? "headroom" : "available"} (binding: ${display(current.binding_constraint)})`
+    ].join(", ")
+  );
+  if (current.current_outstanding !== undefined || current.remaining_outstanding_slots !== undefined) {
+    writeLine(
+      context.stdout,
+      `Outstanding invitations: ${display(current.current_outstanding)} current, ${display(current.remaining_outstanding_slots)} slots remaining`
+    );
+  }
+  if (current.inventory_blocking_reason) {
+    writeLine(context.stdout, `Invitation inventory: blocked (${current.inventory_blocking_reason})`);
+  }
+}
+
+function formatSetupQuota(value) {
+  if (value === null) return "unlimited";
+  if (value === undefined) return "unknown";
+  return display(value);
 }
 
 function renderCountRows(context, label, rows) {
@@ -4647,13 +4971,14 @@ function renderOffer(offer, context) {
 function renderIcps(icps, context) {
   if (!Array.isArray(icps) || icps.length === 0) return writeLine(context.stdout, "No ICPs found.");
 
-  writeLine(context.stdout, "ICP ID\tNAME\tTAGS\tDISCOVERY KEYWORD\tSENIORITY MODE\tAGENT");
+  writeLine(context.stdout, "ICP ID\tNAME\tSTATUS\tTAGS\tDISCOVERY KEYWORD\tSENIORITY MODE\tAGENT");
   for (const icp of icps) {
     writeLine(
       context.stdout,
       [
         display(icp.prefix_id),
         display(icp.name),
+        icp.archived === true ? "archived" : "active",
         display(Array.isArray(icp.tags) && icp.tags.length > 0 ? icp.tags.join(",") : "-"),
         display(icp.discovery_keyword),
         display(icp.seniority_match_mode),
@@ -4665,11 +4990,25 @@ function renderIcps(icps, context) {
 
 function renderIcp(icp, context) {
   writeLine(context.stdout, `ICP: ${display(icp?.name)} (${display(icp?.prefix_id)})`);
+  writeLine(context.stdout, `Status: ${icp?.archived === true ? "archived" : "active"}`);
   if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
   if (icp?.notes) writeLine(context.stdout, `Notes: ${icp.notes}`);
   if (icp?.discovery_keyword) writeLine(context.stdout, `Discovery keyword: ${icp.discovery_keyword}`);
   if (icp?.seniority_match_mode) writeLine(context.stdout, `Seniority match mode: ${icp.seniority_match_mode}`);
   if (icp?.agent?.name) writeLine(context.stdout, `Agent: ${icp.agent.name}`);
+}
+
+function writeIcpLifecycleEffects(result, context) {
+  const motions = Array.isArray(result?.primary_motions) ? result.primary_motions : [];
+  if (motions.length > 0) {
+    const counts = new Map();
+    for (const motion of motions) counts.set(motion.status, (counts.get(motion.status) || 0) + 1);
+    const summary = [...counts.entries()].map(([status, count]) => `${count} ${status}`).join(", ");
+    writeLine(context.stdout, `Primary motions: ${summary}.`);
+  } else {
+    writeLine(context.stdout, "Primary motions: none.");
+  }
+  writeLine(context.stdout, `Secondary motion links preserved: ${display(result?.secondary_motion_count, 0)}.`);
 }
 
 function renderCompanies(payload, context) {
@@ -4749,6 +5088,93 @@ async function performBulkMutation(perform) {
     }
     throw error;
   }
+}
+
+async function performProspectAccountMove(perform) {
+  try {
+    return { payload: await perform(), rejected: false };
+  } catch (error) {
+    const body = error instanceof ApiError && error.body && typeof error.body === "object" ? error.body : null;
+    if (body && (body.schema_version !== undefined || body.error_kind !== undefined)) {
+      return { payload: body, rejected: true };
+    }
+    throw error;
+  }
+}
+
+function renderProspectAccountMove(payload, context, { applying }) {
+  const phase = payload?.applied ? "applied" : "preview";
+  writeLine(context.stdout, `Move account ${phase} for ${entityLabel(payload?.prospect)}.`);
+  writeLine(context.stdout, `Source: ${entityLabel(payload?.source)}`);
+  writeLine(context.stdout, `Target: ${entityLabel(payload?.target)}`);
+  writeLine(context.stdout, `Eligible: ${payload?.eligible ? "yes" : "no"}`);
+  writeLine(context.stdout, `Applied: ${payload?.applied ? "yes" : "no"}`);
+
+  const source = payload?.source || {};
+  const sourceLists = Array.isArray(source.lists) ? source.lists.map(entityLabel).filter(Boolean) : [];
+  writeLine(context.stdout, `Current assignee: ${entityLabel(source.assigned_user) || "unassigned"}`);
+  writeLine(context.stdout, `Current motion: ${entityLabel(source.motion) || "none"}`);
+  writeLine(context.stdout, `Current lists: ${sourceLists.join(", ") || "none"}`);
+
+  const mappings = payload?.mappings || {};
+  writeLine(context.stdout, `Assigned user: ${entityLabel(mappings.assigned_user) || "not mapped"}`);
+  writeLine(context.stdout, `Target motion: ${entityLabel(mappings.motion) || "not mapped"}`);
+  writeLine(context.stdout, `Target list: ${entityLabel(mappings.list) || "not mapped"}`);
+
+  renderProspectAccountMoveCounts("Last 30 days", payload?.summary_30_days, context);
+  renderProspectAccountMoveCounts("All time", payload?.all_time_counts, context);
+
+  for (const [disposition, counts] of Object.entries(payload?.dispositions || {})) {
+    renderProspectAccountMoveCounts(humanize(disposition), counts, context);
+  }
+  renderProspectAccountMoveExpectedState(payload?.expected_state, context);
+  renderProspectAccountMoveIssues("Blockers", payload?.blockers, context);
+  renderProspectAccountMoveIssues("Warnings", payload?.warnings, context);
+  if (payload?.refresh?.status) {
+    writeLine(context.stdout, `Refresh: ${display(payload.refresh.status)}`);
+  }
+  if (payload?.error) writeLine(context.stdout, `Error: ${singleLine(payload.error)}`);
+
+  if (!applying && payload?.success && !payload?.applied) {
+    writeLine(context.stdout, "Run again with --apply to move this prospect.");
+  } else if (applying && payload?.eligible !== true) {
+    writeLine(context.stdout, "The preview is not eligible to apply.");
+  } else if (applying && !payload?.applied) {
+    writeLine(context.stdout, "The account move was not applied.");
+  }
+}
+
+function renderProspectAccountMoveCounts(label, counts, context) {
+  if (!counts || typeof counts !== "object") return;
+
+  const entries = Object.entries(counts).filter(([, count]) => Number(count) !== 0);
+  if (entries.length === 0) return;
+  writeLine(context.stdout, `${label}: ${entries.map(([key, count]) => `${humanize(key)} ${display(count)}`).join(", ")}`);
+}
+
+function renderProspectAccountMoveIssues(label, issues, context) {
+  if (!Array.isArray(issues) || issues.length === 0) return;
+
+  writeLine(context.stdout, `${label}: ${issues.length}`);
+  for (const issue of issues) {
+    const message = typeof issue === "string" ? issue : issue?.message || issue?.error || issue?.reason || JSON.stringify(issue);
+    writeLine(context.stdout, `- ${singleLine(message)}`);
+  }
+}
+
+function renderProspectAccountMoveExpectedState(expectedState, context) {
+  if (!expectedState || typeof expectedState !== "object") return;
+
+  const source = expectedState.source || {};
+  const target = expectedState.target || {};
+  writeLine(
+    context.stdout,
+    `Expected source: account prospect ${source.account_prospect ? "present" : "absent"}, executable work ${source.executable_work ? "present" : "absent"}`
+  );
+  writeLine(
+    context.stdout,
+    `Expected target: account prospect ${target.account_prospect ? "present" : "absent"}, events ${display(target.event_count, 0)}`
+  );
 }
 
 function renderBulkMutationResult(payload, context, { successLabel, zeroSuccessLabel }) {
@@ -5966,6 +6392,132 @@ function renderAnalyticsDashboard(payload, context) {
   writeCountTable(context, "Current pipeline stages", payload?.pipeline_stage_counts, ["STAGE", "COUNT"], countRow);
 }
 
+function renderAnalyticsMotions(payload, context) {
+  const current = payload?.current || {};
+  const recent = payload?.recent || {};
+  const totals = payload?.totals || {};
+
+  writeLine(context.stdout, "Motion portfolio analytics");
+  writeLine(context.stdout, `Current prospects: ${integerLabel(current.total_count)}`);
+  writeLine(context.stdout, `Last 7 days: ${integerLabel(recent.total_count)} (${motionAnalyticsWindowLabel(recent.window)})`);
+  writeLine(context.stdout, `Motions: ${integerLabel(totals.motion_count)}`);
+  writeLine(context.stdout, `Contributing motions: ${integerLabel(totals.contributing_motion_count)}`);
+  writeLine(context.stdout, `Active without contribution: ${integerLabel(totals.active_without_contribution_count)}`);
+  writeLine(context.stdout, `Current attribution uses the current motion association. Unattributed currently means ${display(current.unattributed_label, "No current motion")}.`);
+  writeLine(context.stdout, `Last 7 days uses the recorded source motion. Unattributed means ${display(recent.unattributed_label, "No attributable source motion")}.`);
+
+  writeMotionMixTable(payload?.prospect_mix, context);
+  writeMotionContributionTable(payload?.motions, context);
+}
+
+function renderAnalyticsIcps(payload, context) {
+  const current = payload?.current || {};
+  const recent = payload?.recent || {};
+  const totals = payload?.totals || {};
+
+  writeLine(context.stdout, "ICP portfolio analytics");
+  writeLine(context.stdout, `Current prospects: ${integerLabel(current.total_count)}`);
+  writeLine(context.stdout, `Last 7 days: ${integerLabel(recent.total_count)} (${motionAnalyticsWindowLabel(recent.window)})`);
+  writeLine(context.stdout, `ICPs: ${integerLabel(totals.icp_count)}`);
+  writeLine(context.stdout, `Contributing ICPs: ${integerLabel(totals.contributing_icp_count)}`);
+  writeLine(context.stdout, `No recent contribution: ${integerLabel(totals.without_recent_contribution_count)}`);
+  writeLine(context.stdout, `Current and last-seven-day counts use the recorded source ICP. Unattributed means ${display(current.unattributed_label, "No attributable source ICP")}.`);
+
+  writeIcpMixTable(payload?.prospect_mix, context);
+  writeIcpContributionTable(payload?.icps, context);
+}
+
+function writeIcpMixTable(rows, context) {
+  const mix = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Prospect mix");
+  if (mix.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, ["ICP", "STATUS", "AGE", "CURRENT", "CURRENT %", "LAST 7 DAYS", "LAST 7 DAYS %"], mix.map((row) => [
+    display(row?.name, "Unattributed"),
+    row?.archived === true ? "archived" : (row?.id ? "active" : "-"),
+    compactAgeLabel(row?.created_at, context.now()),
+    display(row?.current?.count, 0),
+    percentageLabel(row?.current?.percentage),
+    display(row?.recent?.count, 0),
+    percentageLabel(row?.recent?.percentage)
+  ]), { numericColumns: [false, false, false, true, true, true, true] });
+}
+
+function writeIcpContributionTable(rows, context) {
+  const icps = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "ICP contribution");
+  if (icps.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, ["ICP", "ID", "STATUS", "MOTIONS", "CURRENT", "LAST 7 DAYS", "CONTRIBUTING"], icps.map((row) => [
+    display(row?.name, "Unattributed"),
+    display(row?.prefix_id, "-"),
+    row?.archived === true ? "archived" : (row?.id ? "active" : "-"),
+    display(row?.linked_motion_count, 0),
+    display(row?.current_prospect_count, 0),
+    display(row?.recent_prospect_count, 0),
+    row?.contributing === true ? "yes" : "no"
+  ]), { numericColumns: [false, false, false, true, true, true, false] });
+}
+
+function writeMotionMixTable(rows, context) {
+  const mix = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Prospect mix");
+  if (mix.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, ["TYPE", "CURRENT", "CURRENT %", "LAST 7 DAYS", "LAST 7 DAYS %"], mix.map((row) => [
+    display(row?.label || row?.key),
+    display(row?.current?.count, 0),
+    percentageLabel(row?.current?.percentage),
+    display(row?.recent?.count, 0),
+    percentageLabel(row?.recent?.percentage)
+  ]), { numericColumns: [false, true, true, true, true] });
+}
+
+function writeMotionContributionTable(rows, context) {
+  const motions = Array.isArray(rows) ? rows : [];
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Motion contribution");
+  if (motions.length === 0) return writeLine(context.stdout, "None");
+
+  writeAlignedTable(context, ["MOTION", "ID", "TYPE", "STATUS", "CURRENT", "LAST 7 DAYS", "CONTRIBUTING"], motions.map((row) => [
+    display(row?.name, "Unattributed"),
+    display(row?.prefix_id, "-"),
+    display(row?.kind, "unattributed"),
+    display(row?.status, "-"),
+    display(row?.current_prospect_count, 0),
+    display(row?.recent_prospect_count, 0),
+    row?.contributing === true ? "yes" : "no"
+  ]), { numericColumns: [false, false, false, false, true, true, false] });
+}
+
+function motionAnalyticsWindowLabel(window) {
+  if (!window?.started_at || !window?.ended_at) return "rolling window";
+
+  return `${window.started_at} to ${window.ended_at}`;
+}
+
+function integerLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-US") : display(value, 0);
+}
+
+function compactAgeLabel(createdAt, now) {
+  if (!createdAt) return "-";
+
+  const created = new Date(createdAt);
+  const reference = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(created.getTime()) || Number.isNaN(reference.getTime())) return "-";
+
+  const days = Math.max(0, Math.floor((reference.getTime() - created.getTime()) / 86_400_000));
+  if (days < 30) return `${days}d`;
+  if (days < 365) return `${Math.floor(days / 30)}mo`;
+
+  return `${Math.floor(days / 365)}y`;
+}
+
 function renderAnalyticsMetrics(payload, context) {
   const cohort = payload?.cohort || {};
   const summary = payload?.summary || {};
@@ -6873,6 +7425,8 @@ const HELP_TOPICS = new Map([
     "    audienti users list",
     "    audienti users select <account_user_id|email|name|me>",
     "    audienti users activity [account_user_id|me]",
+    "    audienti users automation show <account_user_id|me>",
+    "    audienti users automation update <account_user_id|me> --payload <file.json> [--apply]",
     "",
     "  Motions / plays",
     "    audienti motions list",
@@ -6909,6 +7463,7 @@ const HELP_TOPICS = new Map([
     "    audienti prospects check [filters]",
     "    audienti prospects show <prsp_id>",
     "    audienti prospects assign <prsp_id> --assigned-user <id|me|unassign>",
+    "    audienti prospects move-account <prsp_id> --target-account <acct_id> [--apply]",
     "    audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected>",
     "    audienti prospects replan <prsp_id> [--apply]",
     "    audienti prospects reenrich <prsp_id> [--apply]",
@@ -6941,9 +7496,11 @@ const HELP_TOPICS = new Map([
     "    audienti offers show <offr_id>",
     "    audienti offers update <offr_id> [--name <text>]",
     "    audienti offers delete <offr_id> --confirm <yes|true|Y|y>",
-    "    audienti icps list [--tag <tag>]",
+    "    audienti icps list [--status <active|archived|all>] [--tag <tag>]",
     "    audienti icps show <icp_id>",
     "    audienti icps update <icp_id> [--tags <tag[,tag...]> | --payload <file.json>]",
+    "    audienti icps archive <icp_id>",
+    "    audienti icps restore <icp_id>",
     "    audienti icps add-tag <icp_id> <tag>",
     "    audienti icps remove-tag <icp_id> <tag>",
     "    audienti companies search --query <text>",
@@ -6965,6 +7522,7 @@ const HELP_TOPICS = new Map([
   "    audienti operator failed-drafts requeue <row_id>",
   "",
     "  Analytics",
+    "    audienti analytics motions",
     "    audienti analytics prospects --window 24h",
     "    audienti analytics dashboard --play-tag <tag>",
     "    audienti analytics metrics --cohort-preset week-to-date",
@@ -6989,6 +7547,7 @@ const HELP_TOPICS = new Map([
     "  Inspect a prospect:  audienti prospects show <prsp_id> --json",
     "  Preview a campaign:  audienti writer test-run <prsp_id>",
     "  Analyze one motion:  audienti motions analytics <motn_id>",
+    "  Audit motion mix:    audienti analytics motions",
     "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
     "  Inspect outcomes:      audienti analytics metrics --cohort-preset week-to-date",
     "  Compare stage rates:  audienti analytics stages --interval weekly",
@@ -7230,6 +7789,13 @@ const HELP_TOPICS = new Map([
     "  ready: true when the selected principal has a mapped, actionable platform account",
     "  reason: ready | needs_setup | needs_account_access | needs_reconnect",
     "  setup_url: direct operations URL for creating a connected account",
+    "  social_cookie.automation.active_days: normalized active day tokens used by server automation guards",
+    "  social_cookie.automation.working_hours: normalized timed windows by day token; omitted days are all-day or inactive based on active_days",
+    "  social_cookie.automation.time_zone: effective timezone used by server automation guards",
+    "  social_cookie.automation.in_working_hours: server-side current schedule decision",
+    "  account_user.location: configured user location used as the proxy fallback; unknown fields are null",
+    "  social_cookie.proxy_location: configured and last-verified effective proxy geography plus its source",
+    "  social_cookie.automation.pacing: effective LinkedIn quotas, ramp settings, invitation inventory authority, and current capacity",
     "  social_cookie.urls.mapping_url: owner URL for granting account access",
     "  social_cookie.urls.edit_url: operations URL for reconnect/settings review when mapped",
     "",
@@ -7246,6 +7812,8 @@ const HELP_TOPICS = new Map([
     "  audienti users list [--json]",
     "  audienti users select <account_user_id|email|name|me>",
     "  audienti users activity [account_user_id|me] [--json]",
+    "  audienti users automation show <account_user_id|me> [--platform linkedin] [--json]",
+    "  audienti users automation update <account_user_id|me> --payload <file.json> [--apply] [--json]",
     "",
     "Status: implemented",
     "",
@@ -7254,6 +7822,61 @@ const HELP_TOPICS = new Map([
     "",
     "CLI synonym:",
     "  `principals` is accepted anywhere `users` is accepted"
+  ].join("\n")],
+
+  ["users automation", [
+    "Usage:",
+    `  ${USERS_AUTOMATION_SHOW_USAGE.slice("Usage: ".length)}`,
+    `  ${USERS_AUTOMATION_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Inspect or propose account-user-specific LinkedIn automation controls and safety limits.",
+    "  Updates preview by default. Only --apply requests persistence."
+  ].join("\n")],
+
+  ["users automation show", [
+    "Usage:",
+    `  ${USERS_AUTOMATION_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Read the selected account user's configured and effective automation policy, current usage, remaining capacity, and binding limits.",
+    "",
+    "Behavior:",
+    "  platform defaults to linkedin and currently accepts linkedin only.",
+    "  JSON output is the unchanged server response.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/users/:id/automation.json?platform=linkedin"
+  ].join("\n")],
+
+  ["users automation update", [
+    "Usage:",
+    `  ${USERS_AUTOMATION_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Preview or apply principal-specific LinkedIn controls and hourly, daily, or weekly safety limits.",
+    "",
+    "Behavior:",
+    "  The command does not persist without --apply.",
+    "  The CLI merges platform=linkedin and apply=false|true into the payload; those values cannot be overridden by the file.",
+    "  Omitted controls are preserved by the server. JSON output is the unchanged server response.",
+    "",
+    "Payload fields:",
+    "  automation_controls: automation booleans, including writing, contact, visibility, and risk-cooldown gates",
+    "  action_limits: hourly/daily/weekly caps keyed by profile_view, follow, like, invite, message, comment, or aggregate visibility",
+    "  visibility_ramp: enabled, starting_daily_limit, weekly_increment, and optional started_at",
+    "",
+    "Request body:",
+    "  { \"automation\": { ...payload, \"platform\": \"linkedin\", \"apply\": false } }",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/users/:id/automation.json?platform=linkedin"
   ].join("\n")],
 
   ["users list", [
@@ -7420,12 +8043,15 @@ const HELP_TOPICS = new Map([
 
   ["icps", [
     "Usage:",
-    "  audienti icps list [--tag <tag>] [--json]",
+    "  audienti icps list [--status <active|archived|all>] [--tag <tag>] [--json]",
     "  audienti icps show <icp_id> [--json]",
     "  audienti icps create (--name <text> | --payload <file.json>) [--json]",
     "  audienti icps update <icp_id> ([--tags <tag[,tag...]>] | --payload <file.json>) [--json]",
+    "  audienti icps analytics [--json]",
     "  audienti icps add-tag <icp_id> <tag> [--json]",
     "  audienti icps remove-tag <icp_id> <tag> [--json]",
+    "  audienti icps archive <icp_id> [--json]",
+    "  audienti icps restore <icp_id> [--json]",
     "",
     "Status: implemented",
     "",
@@ -7433,13 +8059,31 @@ const HELP_TOPICS = new Map([
     "  List the ICPs available to the current account so an agent can choose icp_id for motion creation or targeting work."
   ].join("\n")],
 
+  ["icps analytics", [
+    "Usage:",
+    `  ${ANALYTICS_ICPS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show the account ICP portfolio's current prospect source mix and rolling seven-day contribution.",
+    "",
+    "Attribution:",
+    "  Current and last-seven-day counts use the recorded source ICP and fall back to the current motion ICP only when source is blank.",
+    "  Unattributed means no attributable account source ICP.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/icps.json"
+  ].join("\n")],
+
   ["icps list", [
     "Usage:",
-    "  audienti icps list [--tag <tag>] [--json] [--account <acct_id>]",
+    `  ${ICPS_LIST_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
     "Options:",
+    "  --status <active|archived|all>  Default: active",
     "  --tag <tag>  Filter locally to ICPs whose tags include the normalized tag",
     "",
     "API:",
@@ -7449,10 +8093,38 @@ const HELP_TOPICS = new Map([
     "  id: integer",
     "  prefix_id: icpp_",
     "  name: string",
+    "  archived: boolean",
+    "  archived_at: ISO-8601 string | null",
     "  notes: string | null",
     "  tags: [string]",
     "  discovery_keyword: string | null",
     "  agent: { id, name } | null"
+  ].join("\n")],
+
+  ["icps archive", [
+    "Usage:",
+    `  ${ICPS_ARCHIVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Hides the ICP from new selection. Active primary motions enter closing; inactive and transition primary motions archive; secondary links remain.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/icps/:id/archive.json"
+  ].join("\n")],
+
+  ["icps restore", [
+    "Usage:",
+    `  ${ICPS_RESTORE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Makes the ICP selectable again without reactivating any motion.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/icps/:id/restore.json"
   ].join("\n")],
 
   ["icps create", [
@@ -8556,7 +9228,9 @@ const HELP_TOPICS = new Map([
     "",
     "Input shape:",
     "  motn_id: motn_ prefix id",
-    "  status: draft | preparing | active | paused | archived | optional",
+    "  status: draft | preparing | active | closing | paused | archived | optional",
+    "  principal_account_user_id: account user id | me | optional in payload mode",
+    "  list_id: list_ prefix id, numeric id, or null | optional in payload mode",
     "  tags: comma-separated tag list | optional",
     "  start-date: YYYY-MM-DD | none | optional",
     "  end-date: YYYY-MM-DD | none | optional",
@@ -8565,6 +9239,7 @@ const HELP_TOPICS = new Map([
     "",
     "Behavior:",
     "  Choose either --payload or simple flags. Updates only the provided fields. Use none to clear a schedule date or company cap. Sending --tags replaces the motion's full tag set.",
+    "  Payload mode can replace the motion principal and backing list. The principal must belong to the selected account; list_id null clears the backing list.",
     "  The company cap stops only new company discovery; existing company research, people discovery, prospect intake, and automation continue.",
     "  Payload mode supports outbound signal_rows or legacy signal_questions; supplied rows replace the motion's active ready signals.",
     "  posting_language is only supported on company-scope hiring signal rows; use topics for person discussion evidence.",
@@ -8735,6 +9410,7 @@ const HELP_TOPICS = new Map([
     "  audienti prospects check [--json|--csv] [filters]",
     "  audienti prospects show <prsp_id> [--json]",
     "  audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json]",
+    "  audienti prospects move-account <prsp_id> --target-account <acct_id> [--apply] [--json]",
     "  audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json]",
     "  audienti prospects replan <prsp_id> [--apply] [--json]",
     "  audienti prospects reenrich <prsp_id> [--profile <prof_id|citation_id>] [--apply] [--json]",
@@ -8884,6 +9560,30 @@ const HELP_TOPICS = new Map([
     "    \"prospect_ids\": [\"prsp_abc123\", \"prsp_def456\"],",
     "    \"assigned_user_id\": \"me\"",
     "  }"
+  ].join("\n")],
+
+  ["prospects move-account", [
+    "Usage:",
+    `  ${PROSPECTS_MOVE_ACCOUNT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Move one prospect and its account-scoped history between accounts where you are an administrator.",
+    "",
+    "Behavior:",
+    "  The command previews before applying and never applies an ineligible preview.",
+    "  Pass --apply to run a fresh preview, then apply that exact manifest digest.",
+    "  --account selects the source account; --target-account selects the destination.",
+    "  --json prints the final server response unchanged.",
+    "",
+    "Optional target mappings:",
+    "  --assigned-user <account_user_id|me>",
+    "  --target-motion <motn_id>",
+    "  --target-list <list_id>",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospects/:id/move_account.json"
   ].join("\n")],
 
   ["prospects set-status", [
@@ -9752,6 +10452,8 @@ const HELP_TOPICS = new Map([
 
   ["analytics", [
     "Usage:",
+    "  audienti analytics motions [--json]",
+    "  audienti analytics icps [--json]",
     "  audienti analytics prospects [--window 24h] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--motion <motn_id>] [--list <list_id>] [--user <account_user_id|email|name|me>] [--json]",
     "  audienti analytics dashboard [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--json]",
     "  audienti analytics metrics [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD | --cohort-preset week-to-date] [--interval <daily|weekly>] [--user <account_user_id|email|name|me>] [--motion <motn_id>] [--play-tag <tag>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--social-cookie <scok_id>] [--platform <platform>] [--action <action_key>] [--outcome <success|failure|first_attempt_success|succeeded_after_retry|failed_without_retry|failed_after_retry|in_progress|unresolved>] [--json]",
@@ -9781,7 +10483,54 @@ const HELP_TOPICS = new Map([
     "  --user <account_user_id|email|name|me>  Narrow analytics to one account user. For prospect analytics, this means prospects assigned to that account user. Email/name partials are accepted when they match exactly one account user.",
     "",
     "Output:",
-    "  Account-scoped analytics for prospects, campaign dashboard counts, users, visibility engagement, and ContentOps publishing."
+    "  Account-scoped analytics for the motion portfolio, ICP portfolio, prospects, campaign dashboard counts, users, visibility engagement, and ContentOps publishing."
+  ].join("\n")],
+
+  ["analytics motions", [
+    "Usage:",
+    `  ${ANALYTICS_MOTIONS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show the account motion portfolio's current prospect mix and rolling seven-day contribution.",
+    "",
+    "Attribution:",
+    "  Current counts use each prospect's current motion association; Unattributed means no current motion.",
+    "  Last-seven-day counts use the recorded source motion and fall back to the current motion only when source is blank.",
+    "  Recent Unattributed means no attributable account source motion.",
+    "",
+    "Output shape:",
+    "  current and recent: totals plus explicit attribution semantics",
+    "  totals: motion and contribution counts",
+    "  prospect_mix[]: overall and rolling-seven-day count and percentage by motion type",
+    "  motions[]: current and rolling-seven-day prospect counts for every account motion",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/motions.json"
+  ].join("\n")],
+
+  ["analytics icps", [
+    "Usage:",
+    `  ${ANALYTICS_ICPS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show the account ICP portfolio's current prospect source mix and rolling seven-day contribution.",
+    "",
+    "Attribution:",
+    "  Current and last-seven-day counts use the recorded source ICP and fall back to the current motion ICP only when source is blank.",
+    "  Unattributed means no attributable account source ICP.",
+    "",
+    "Output shape:",
+    "  current and recent: totals plus explicit attribution semantics",
+    "  totals: ICP and contribution counts",
+    "  prospect_mix[]: ICP created_at plus overall and rolling-seven-day count and percentage",
+    "  icps[]: ICP created_at plus current and rolling-seven-day prospect counts",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/analytics/icps.json"
   ].join("\n")],
 
   ["analytics dashboard", [

@@ -51,6 +51,17 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["users"]));
   }
 
+  userAutomation(accountId, userId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["users", userId, "automation"], query));
+  }
+
+  updateUserAutomation(accountId, userId, body, query = {}) {
+    return this.requestJson(accountPath(accountId, ["users", userId, "automation"], query), {
+      method: "PATCH",
+      body
+    });
+  }
+
   socialCookies(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["social_cookies"], query));
   }
@@ -87,8 +98,8 @@ export class AudientiClient {
     });
   }
 
-  icps(accountId) {
-    return this.requestJson(accountPath(accountId, ["icps"]));
+  icps(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["icps"], query));
   }
 
   icp(accountId, icpId) {
@@ -106,6 +117,20 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["icps", icpId]), {
       method: "PATCH",
       body
+    });
+  }
+
+  archiveIcp(accountId, icpId) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "archive"]), {
+      method: "POST",
+      body: {}
+    });
+  }
+
+  restoreIcp(accountId, icpId) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "restore"]), {
+      method: "POST",
+      body: {}
     });
   }
 
@@ -467,6 +492,13 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId]));
   }
 
+  moveProspectAccount(accountId, prospectId, body) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "move_account"]), {
+      method: "POST",
+      body
+    });
+  }
+
   replanProspect(accountId, prospectId, body = {}) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "replan"]), {
       method: "POST",
@@ -661,6 +693,14 @@ export class AudientiClient {
 
   analyticsDashboard(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["analytics", "dashboard"], query));
+  }
+
+  analyticsMotions(accountId) {
+    return this.requestJson(accountPath(accountId, ["analytics", "motions"]));
+  }
+
+  analyticsIcps(accountId) {
+    return this.requestJson(accountPath(accountId, ["analytics", "icps"]));
   }
 
   analyticsMetrics(accountId, query = {}) {

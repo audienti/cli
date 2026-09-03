@@ -4,7 +4,50 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.50] - 2026-09-02
+
+### Added
+
+- Add preview-first `audienti prospects move-account` with dual-account selection, optional destination assignment, motion and list mappings, manifest-bound apply, stable human-readable summaries, and unchanged final JSON output.
+
+## [0.1.49] - 2026-09-02
+
+### Added
+
+- Expose configured user and social-cookie proxy geography, effective proxy source, and server-calculated LinkedIn quotas, warm-up ramp, outstanding-invitation inventory state, and current invitation capacity in `audienti setup play preflight` without exposing proxy or authentication secrets.
+
+## [0.1.48] - 2026-09-02
+
+### Added
+
+- Add account-scoped `audienti users automation show` and preview-first `update` commands for principal-specific LinkedIn controls, category and aggregate visibility limits, warm-up ramping, unchanged JSON readback, and explicit `--apply` persistence.
+- Add reversible `audienti icps archive` and `restore` commands, active/archived/all list filtering, lifecycle status in ICP analytics, and inspectable primary-motion and preserved-secondary-link effects.
+
+## [0.1.47] - 2026-09-02
+
+### Added
+
+- Expose server-derived social-cookie active days, working hours, effective timezone, and current in-window status in `audienti setup play preflight`.
+
+### Changed
+
+- Allow `audienti motions update <motn_id> --payload <file.json>` to replace an account-scoped motion principal and backing list, including `list_id: null` clearing.
+
+## [0.1.46] - 2026-09-02
+
+### Added
+
+- Add `audienti analytics icps` and the account-scoped ICP analytics API for current source-ICP prospect mix, rolling seven-day contribution, per-ICP counts, creation timestamps and human-readable ages, and explicit unattributed semantics.
+
+### Changed
+
+- Allow `audienti motions update <motn_id> --status closing` for motion wind-downs that stop discovery while admitted Operator work drains.
+
 ## [0.1.45] - 2026-09-02
+
+### Added
+
+- Add `audienti analytics motions` and the account-scoped motion analytics API for current prospect mix, rolling seven-day recorded-source contribution, per-motion counts, explicit attribution semantics, and unchanged machine-readable JSON output.
 
 ### Changed
 

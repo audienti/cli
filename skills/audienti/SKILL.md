@@ -70,9 +70,17 @@ Useful MCP tools:
 - `auth.me` confirms the token identity.
 - `accounts.list` shows accessible accounts.
 - `setup.play_preflight` returns connected-account readiness and setup or
-  mapping URLs.
+  mapping URLs, including the selected sender's active days, working hours,
+  effective timezone, current in-window status, configured user fallback
+  location, effective proxy geography and source, and server-calculated
+  LinkedIn pacing and outstanding-invitation inventory authority under
+  `social_cookie.automation`. Treat `ready: true` as connection readiness, not
+  approval to start automation.
 - `offers.create`, `icps.create`, and `motions.create` set up the offer, ICP,
   and play.
+- Use `audienti icps list --status all` to audit active and archived ICPs. Use
+  `audienti icps archive <icp_id>` for reversible cleanup and `restore` to make
+  the ICP selectable again; restore never reactivates motions.
 - Use `audienti motions abm-companies <motn_id> add --file <txt|json>` to attach
   a positive company filter list for isolated ABM discovery runs.
 - `analytics.stages` returns stage conversion cohorts and stage aging.
@@ -85,6 +93,9 @@ Useful MCP tools:
   payload or behavior is unclear.
 - Inspect the current resource before a create, update, attach, delete, or
   operator outcome writeback.
+- For account-user automation, run `users automation show`, then preview the
+  exact payload without `--apply`. Apply only after explicit authorization and
+  verify the applied response/readback.
 - Treat the production API as the source of truth. Persist durable work in
   Audienti rather than leaving it only in agent prose.
 - Keep current gaps explicit. Do not imply that unsupported actions execute.
@@ -96,10 +107,15 @@ audienti help agent-workflows
 audienti prospects list --query "name or company" --wide --json
 audienti prospects list --assigned-user unassigned --json
 audienti prospects assign <prsp_id> --assigned-user me --json
+audienti prospects move-account <prsp_id> --account <source_acct_id> --target-account <target_acct_id> --json
+audienti prospects move-account <prsp_id> --account <source_acct_id> --target-account <target_acct_id> --assigned-user me --apply --json
 audienti prospects set-status <prsp_id> --status not_fit --json
 audienti prospects lock <prsp_id> --note "Emergency hold" --json
 audienti prospects unlock <prsp_id> --json
 audienti users activity me --window 7d --json
+audienti users automation show <account_user_id|me> --platform linkedin --json --account <acct_id>
+audienti users automation update <account_user_id|me> --payload automation-controls.json --json --account <acct_id>
+audienti users automation update <account_user_id|me> --payload automation-controls.json --apply --json --account <acct_id>
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json
 audienti lists routing-rules <list_id> list --json
@@ -111,10 +127,13 @@ audienti motions abm-companies <motn_id> add --file abm-domains.txt --json
 audienti motions abm-companies <motn_id> list --json
 audienti motions update <motn_id> --status paused --json
 audienti motions update <motn_id> --start-date 2026-09-01 --end-date 2026-09-30 --maximum-company-count 25 --json
+audienti motions update <motn_id> --payload motion-principal-list.json --json
 audienti motions activate <motn_id> --json
 audienti motions delete <motn_id> --confirm yes --json
 audienti operator next --json
 audienti operator next --plan
+audienti analytics motions --json
+audienti analytics icps --json
 audienti analytics prospects --window 24h --json
 audienti analytics stages --window 30d
 audienti analytics visibility --window 24h --user me --json
@@ -131,6 +150,83 @@ audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --rep
 audienti writer test-run <prsp_id> --mode step --branch no-accept --step 3 --report <rprt_id> --no-wait
 audienti writer test-run show <prsp_id> <rprt_id>
 ```
+
+## Prospect Account Moves
+
+Use `audienti prospects move-account` only to transfer one prospect and its
+account-scoped history, not to copy it. `--account` is the source account and
+`--target-account` is the destination. The authenticated user must administer
+both accounts.
+
+Start with a preview and inspect `eligible`, `blockers`, `mappings`,
+`dispositions`, and `expected_state`:
+
+```bash
+audienti prospects move-account <prsp_id> \
+  --account <source_acct_id> \
+  --target-account <target_acct_id> \
+  --assigned-user <target_account_user_id|me> \
+  --target-motion <target_motn_id> \
+  --target-list <target_list_id> \
+  --json
+```
+
+Omit mappings that were not explicitly chosen; never infer a target motion,
+list, agent, or research mapping by name. Apply only after the preview is
+eligible and the user authorizes the move:
+
+```bash
+audienti prospects move-account <prsp_id> \
+  --account <source_acct_id> \
+  --target-account <target_acct_id> \
+  --assigned-user <target_account_user_id|me> \
+  --target-motion <target_motn_id> \
+  --target-list <target_list_id> \
+  --apply \
+  --json
+```
+
+With `--apply`, the CLI performs a fresh preview and submits that response's
+`manifest_digest`; it does not reuse an older preview. Treat a stale manifest,
+any blocker, or any failed response as not applied, then inspect current source
+and target state before retrying.
+
+## Account-User Automation Safety
+
+`audienti users automation show <account_user_id|me>` resolves one connected
+account through the selected account, account user, and LinkedIn platform. Use
+per-command `--account` for administrative inspection without changing the
+saved default. Fail closed on API ambiguity or missing access; do not substitute
+another connected account.
+
+Automation updates are preview-first:
+
+```bash
+audienti users automation show 136 --platform linkedin --json --account acct_example
+audienti users automation update 136 --payload automation-controls.json --json --account acct_example
+audienti users automation update 136 --payload automation-controls.json --apply --json --account acct_example
+audienti users automation show 136 --platform linkedin --json --account acct_example
+```
+
+The payload object accepts `automation_controls`, `action_limits`, and
+`visibility_ramp`. Action-limit keys are `profile_view`, `follow`, `like`,
+`invite`, `message`, `comment`, and aggregate `visibility`; each action limit
+may provide `hourly`, `daily`, and `weekly`. `follow` covers follow/unfollow,
+`like` covers like/unlike, and `message` covers messages/InMail. A ramp accepts
+`enabled`, `starting_daily_limit`, `weekly_increment`, and optional
+`started_at`.
+
+The CLI wraps the file as `{ automation: { ...payload, platform: "linkedin",
+apply: false|true } }`; file values cannot override the command's platform or
+apply decision. Omitted settings are preserved by the server. Use unchanged
+JSON output to compare current, before, and after snapshots, including policy
+source, schedule/timezone, configured/default/effective limits, used and
+remaining capacity, binding limits, preview/applied state, and applied audit id.
+
+For a new account, keep contact and writing controls disabled, enable risk
+cooldown, and bound `visibility` to the authorized active-day warm-up level.
+Never infer that `ready: true`, paused motions, or prepared queue work authorizes
+provider execution.
 
 List routing-rule create and update commands accept the same normalized
 condition and action data as the list UI. Inspect the ordered rules first, use

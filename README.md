@@ -4,7 +4,8 @@ Audienti CLI is the agent-first command-line client for the Audienti production
 API and the local bridge for Audienti's app-hosted MCP endpoint. It lets local
 coding agents and operators inspect accounts,
 create and manage plays, import prospects, build lists, manage task reminders,
-configure list routing rules, and work supported operator flows.
+configure list routing rules and account-user automation safety, and work
+supported operator flows.
 
 ## Install
 
@@ -137,14 +138,18 @@ Common inspection commands:
 audienti update check
 audienti operator next --plan
 audienti writer test-run <prsp_id>
+audienti analytics motions --json
+audienti analytics icps --json
 audienti motions analytics <motn_id>
 audienti motions run-discovery <motn_id>
 audienti motions quick-start --url https://example.com --wait --confirm
 audienti motions abm-companies <motn_id> add --file abm-domains.txt
 audienti motions abm-companies <motn_id> list
+audienti motions update <motn_id> --status closing
 audienti motions update <motn_id> --status paused
 audienti motions update <motn_id> --start-date 2026-09-01 --end-date 2026-09-30 --maximum-company-count 25
 audienti motions update <motn_id> --own-post-engagement true
+audienti motions update <motn_id> --payload motion-principal-list.json
 audienti motions update <motn_id> --payload motion-signals.json
 audienti motions activate <motn_id>
 audienti motions delete <motn_id> --confirm yes
@@ -167,6 +172,9 @@ audienti company-rules list
 audienti lists routing-rules <list_id> list
 audienti lists routing-rules <list_id> apply
 audienti users activity --window 7d
+audienti users automation show 136 --platform linkedin --json --account <acct_id>
+audienti users automation update 136 --payload automation-controls.json --json --account <acct_id>
+audienti users automation update 136 --payload automation-controls.json --apply --json --account <acct_id>
 audienti analytics prospects --window 24h
 audienti analytics dashboard --play-tag wine_campaign
 audienti analytics metrics --cohort-preset week-to-date
@@ -318,6 +326,112 @@ happened later, such as connection requests sent in a date range. Rebuild the
 list when the event definition or date window changes so the analytics question
 stays auditable.
 
+`audienti setup play preflight` includes the selected sender's server-derived
+working schedule under `social_cookie.automation`, including `active_days`,
+normalized `working_hours`, effective `time_zone`, and current
+`in_working_hours` state. The human-readable output reports the same timezone,
+today's window, and whether provider execution is currently inside the window.
+It also reports the configured user fallback location, the connected account's
+configured and last-verified effective proxy geography, and the proxy source
+without exposing proxy URLs, credentials, egress IPs, or browser session data.
+For LinkedIn, `social_cookie.automation.pacing` includes effective weekly
+quotas, daily targets, motion active days, the outstanding-invitation cap, ramp
+configuration, current outstanding inventory, any inventory blocker, and current
+invitation capacity calculated by the server. A `null` weekly quota means
+unlimited.
+
+Use `users automation` to inspect or change one account user's LinkedIn safety
+policy without changing the saved account selection:
+
+```bash
+audienti users automation show 136 --platform linkedin --json --account acct_example
+audienti users automation update 136 --payload automation-controls.json --json --account acct_example
+audienti users automation update 136 --payload automation-controls.json --apply --json --account acct_example
+```
+
+`update` is preview-only unless `--apply` is present. The CLI always sends
+`platform: "linkedin"` and an explicit `apply` boolean after the file fields,
+so a payload file cannot silently opt into applying a change. The server scopes
+the connected account through the selected account plus account user, preserves
+omitted controls, returns the before and proposed/actual after states, and
+records an audit event only for an applied update. `--json` prints the server
+payload unchanged.
+
+An `automation-controls.json` warm-up payload can use every automation gate,
+independent action limits, an aggregate visibility limit, and a weekly ramp:
+
+```json
+{
+  "automation_controls": {
+    "automatic_sending_enabled": false,
+    "visibility_operations_autopilot_enabled": true,
+    "post_comment_autopilot_enabled": false,
+    "connection_request_autopilot_enabled": false,
+    "inmail_autopilot_enabled": false,
+    "direct_message_autopilot_enabled": false,
+    "email_sending_autopilot_enabled": false,
+    "manual_action_handoff_enabled": false,
+    "risk_cooldown_enabled": true
+  },
+  "action_limits": {
+    "profile_view": { "hourly": 2, "daily": 4, "weekly": 20 },
+    "follow": { "hourly": 2, "daily": 3, "weekly": 15 },
+    "like": { "hourly": 1, "daily": 2, "weekly": 10 },
+    "invite": { "hourly": 1, "daily": 2, "weekly": 10 },
+    "message": { "hourly": 1, "daily": 2, "weekly": 10 },
+    "comment": { "hourly": 1, "daily": 1, "weekly": 5 },
+    "visibility": { "hourly": 3, "daily": 8, "weekly": 40 }
+  },
+  "visibility_ramp": {
+    "enabled": true,
+    "starting_daily_limit": 8,
+    "weekly_increment": 2
+  }
+}
+```
+
+`follow` covers follows and unfollows; `like` covers likes and unlikes;
+`message` covers messages and InMail. `visibility` is the aggregate cap across
+profile views, follows/unfollows, and likes/unlikes. The show/preview readback
+includes configured, default, effective, used, and remaining hourly, daily,
+and weekly values plus the currently binding limits.
+
+Motion update payload mode can replace the selected principal and backing list:
+
+```json
+{
+  "principal_account_user_id": 136,
+  "list_id": "list_abc123"
+}
+```
+
+The principal and list are resolved inside the selected account. Use
+`"list_id": null` to clear the backing list.
+
+To inspect the account's current prospect mix by motion type and compare it
+with the rolling seven-day recorded-source contribution:
+
+```bash
+audienti analytics motions
+audienti analytics motions --json
+```
+
+Current Unattributed counts mean no current motion association. Rolling
+seven-day Unattributed counts mean no attributable recorded source motion; the
+server falls back to the current motion only when recorded source data is
+blank.
+
+To inspect the account's current prospect mix by source ICP and compare it
+with the rolling seven-day source contribution:
+
+```bash
+audienti analytics icps
+audienti analytics icps --json
+```
+
+Unattributed means no attributable account source ICP. The server falls back
+to the current motion ICP only when recorded ICP source data is blank.
+
 To see whether one motion is producing prospects by day, and where each
 produced-day cohort currently sits in the funnel:
 
@@ -362,12 +476,19 @@ To create or update an ICP from a rich JSON payload:
 ```bash
 audienti icps create --payload icp.json
 audienti icps update <icp_id> --payload icp-patch.json
+audienti icps list --status all
+audienti icps archive <icp_id>
+audienti icps restore <icp_id>
 ```
 
 `icps update --payload` accepts the same human-readable facet keys as create.
 Supplied facet collections, such as `company_sizes_attributes`, replace that
 collection in place; omitted fields and collections remain unchanged. Invalid
 lookup values fail server-side without partially applying the patch.
+Archive is reversible and is the normal cleanup action. It removes the ICP from
+new selection, closes active primary motions so admitted work can drain,
+archives inactive primary motions, and preserves secondary motion links.
+Restoring the ICP does not reactivate motions.
 
 To audit one account user's outbound actions, optionally narrowed to one motion
 and one AccountProspect.created_at cohort:
@@ -445,6 +566,19 @@ To reassign or clear ownership for existing prospects:
 audienti prospects assign <prsp_id> --assigned-user <account_user_id|me>
 audienti prospects assign <prsp_id> --assigned-user unassign
 ```
+
+To preview moving a prospect and its account-scoped history into another
+account where you are also an administrator:
+
+```bash
+audienti prospects move-account <prsp_id> --account <source_acct_id> --target-account <target_acct_id>
+audienti prospects move-account <prsp_id> --account <source_acct_id> --target-account <target_acct_id> --assigned-user me --target-motion <motn_id> --target-list <list_id> --apply
+```
+
+The command is preview-only unless `--apply` is present. Apply always requests
+a fresh preview first and submits the returned `manifest_digest`, so a move is
+rejected when the underlying state changes. `--json` prints the preview or final
+apply response unchanged.
 
 To make emergency prospect state changes without going through a motion:
 
