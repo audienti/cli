@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.52] - 2026-09-03
+
+### Added
+
+- Add direct, server-normalized `inbox-ops rule set` and `inbox-ops rule remove` commands for sender and domain rules while retaining authorized row-derived updates.
+
 ## [0.1.51] - 2026-09-03
 
 ### Added

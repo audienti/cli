@@ -668,6 +668,20 @@ export class AudientiClient {
     });
   }
 
+  setInboxOpsRule(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", "rules"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  removeInboxOpsRule(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", "rules"]), {
+      method: "DELETE",
+      body
+    });
+  }
+
   operatorNext(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["operator", "next"], query));
   }
@@ -823,7 +837,7 @@ function errorMessage(status, body) {
 
   if (status === 422) {
     const reasons = [body?.errors, body?.details].find(Array.isArray);
-    const details = reasons?.length > 0 ? reasons.join(", ") : body?.error;
+    const details = reasons?.length > 0 ? reasons.join(", ") : body?.message || body?.error;
     return details ? `Audienti rejected the request: ${details}` : "Audienti rejected the request.";
   }
 

@@ -1083,7 +1083,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["inbox-ops", "rule", "help"],
-      expected: [/Usage: audienti inbox-ops rule <row_id>/, /sender\|domain/, /allow\|filter/, /server derives the identity/i]
+      expected: [/audienti inbox-ops rule <row_id>/, /inbox-ops rule set/, /inbox-ops rule remove/, /sender\|domain/, /allow\|filter/, /server/i]
     },
     {
       args: ["operator", "failed-drafts", "help"],
@@ -10055,6 +10055,91 @@ test("inbox ops rule maps all four owner-personal source rule actions", async ()
     assert.match(stdout.output, /Always showing domain example\.com/);
     assert.match(stdout.output, /Always filtering domain example\.com/);
     assert.match(stdout.output, /Re-run `audienti inbox-ops queue`/);
+  });
+});
+
+test("inbox ops rule set and remove manage normalized sender and domain keys", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/inbox_ops/rules.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      const rule = JSON.parse(options.body);
+      requests.push({ method: options.method, rule });
+      const normalizedKey = rule.scope === "sender" ? "news@example.com" : "example.com";
+      return jsonResponse({
+        rule: {
+          action: options.method === "DELETE" ? "remove" : "set",
+          scope: rule.scope,
+          disposition: rule.disposition,
+          normalized_key: normalizedKey
+        },
+        email_filters: { sender_rules: {}, domain_rules: {} }
+      });
+    });
+
+    assert.equal(await run([
+      "inbox-ops", "rule", "set",
+      "--scope", "sender",
+      "--key", "News Team <NEWS@Example.COM>",
+      "--disposition", "filter"
+    ], { env, fetch, stdout }), 0);
+    assert.equal(await run([
+      "inbox-ops", "rule", "remove",
+      "--scope", "domain",
+      "--key", "@Example.COM."
+    ], { env, fetch, stdout }), 0);
+
+    assert.deepEqual(requests, [
+      {
+        method: "PATCH",
+        rule: { scope: "sender", key: "News Team <NEWS@Example.COM>", disposition: "filter" }
+      },
+      {
+        method: "DELETE",
+        rule: { scope: "domain", key: "@Example.COM." }
+      }
+    ]);
+    assert.match(stdout.output, /Always filtering sender news@example\.com/);
+    assert.match(stdout.output, /Removed domain rule example\.com/);
+  });
+});
+
+test("inbox ops direct rules surface server key validation messages", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      error: "invalid_inbox_ops_rule",
+      message: "Domain identity could not be normalized."
+    }, { status: 422 }));
+
+    const exitCode = await run([
+      "inbox-ops", "rule", "set",
+      "--scope", "domain",
+      "--key", "not a domain",
+      "--disposition", "filter"
+    ], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(fetch.calls.length, 1);
+    assert.equal(stdout.output, "");
+    assert.match(stderr.output, /Audienti rejected the request: Domain identity could not be normalized\./);
   });
 });
 

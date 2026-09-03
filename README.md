@@ -215,17 +215,19 @@ audienti operator next --done --note "Connection request sent."
 ```
 
 Inbox Ops has its own owner-scoped CLI surface. Queue rows expose the stable row
-id used by the rule command; sender and domain values are always derived by the
-server from that authorized row:
+id used by the row-based rule command. Rules can also be set or removed directly
+by sender or domain; the server normalizes and validates every supplied key:
 
 ```bash
 audienti inbox-ops queue [--page <n>]
 audienti inbox-ops filters
 audienti inbox-ops rule <row_id> --scope sender --disposition filter
 audienti inbox-ops rule <row_id> --scope domain --disposition allow
+audienti inbox-ops rule set --scope sender --key news@example.com --disposition filter
+audienti inbox-ops rule remove --scope domain --key example.com
 ```
 
-The four rule combinations mirror the Operator card actions. They update only
+The rule commands mirror the Operator card actions. They update only
 the authenticated owner's personal/global Inbox Ops preferences and do not
 archive mail, call the provider, or add a DNC entry.
 

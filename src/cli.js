@@ -68,6 +68,8 @@ const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-dr
 const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--json] [--account <acct_id>]";
 const INBOX_OPS_FILTERS_USAGE = "Usage: audienti inbox-ops filters [--json] [--account <acct_id>]";
 const INBOX_OPS_RULE_USAGE = "Usage: audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
+const INBOX_OPS_RULE_SET_USAGE = "Usage: audienti inbox-ops rule set --scope <sender|domain> --key <email|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
+const INBOX_OPS_RULE_REMOVE_USAGE = "Usage: audienti inbox-ops rule remove --scope <sender|domain> --key <email|domain> [--json] [--account <acct_id>]";
 const INBOX_OPS_ROW_ID_PATTERN = /^inbox_ops_message_[1-9]\d*$/;
 const DNC_ADD_USAGE = "Usage: audienti dnc add <email|citation_id|profile_url> [--json] [--account <acct_id>]";
 const DNC_IMPORT_USAGE = "Usage: audienti dnc import --file <txt|csv> [--json] [--account <acct_id>]";
@@ -3251,6 +3253,10 @@ async function inboxOpsFilters(args, context, { accountOverride } = {}) {
 }
 
 async function inboxOpsRule(args, context, { accountOverride } = {}) {
+  if (args[0] === "set" || args[0] === "remove") {
+    return inboxOpsRuleKeyMutation(args[0], args.slice(1), context, { accountOverride });
+  }
+
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     scope: { type: "string" },
@@ -3270,6 +3276,38 @@ async function inboxOpsRule(args, context, { accountOverride } = {}) {
     scope: values.scope,
     disposition: values.disposition
   });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderInboxOpsRule(payload, context);
+}
+
+async function inboxOpsRuleKeyMutation(action, args, context, { accountOverride } = {}) {
+  const usage = action === "set" ? INBOX_OPS_RULE_SET_USAGE : INBOX_OPS_RULE_REMOVE_USAGE;
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    scope: { type: "string" },
+    key: { type: "string" },
+    disposition: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(usage);
+  if (!["sender", "domain"].includes(values.scope)) throw new CommandError("--scope must be sender or domain.");
+  if (!String(values.key || "").trim()) throw new CommandError("--key is required.");
+  if (action === "set" && !["allow", "filter"].includes(values.disposition)) {
+    throw new CommandError("--disposition must be allow or filter.");
+  }
+  if (action === "remove" && values.disposition) {
+    throw new CommandError("inbox-ops rule remove does not accept --disposition.");
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const body = compactObject({
+    scope: values.scope,
+    key: values.key,
+    disposition: action === "set" ? values.disposition : undefined
+  });
+  const payload = action === "set"
+    ? await client.setInboxOpsRule(accountId, body)
+    : await client.removeInboxOpsRule(accountId, body);
   if (values.json) return writeJson(context.stdout, payload);
 
   renderInboxOpsRule(payload, context);
@@ -6252,6 +6290,11 @@ function writeInboxOpsRules(context, heading, rules) {
 
 function renderInboxOpsRule(payload, context) {
   const rule = payload?.rule || {};
+  if (rule.action === "remove") {
+    writeLine(context.stdout, `Removed ${display(rule.scope)} rule ${display(rule.normalized_key)}.`);
+    return writeLine(context.stdout, "Re-run `audienti inbox-ops queue` to inspect the current queue.");
+  }
+
   const action = rule.disposition === "allow" ? "Always showing" : "Always filtering";
   writeLine(context.stdout, `${action} ${display(rule.scope)} ${display(rule.normalized_key)}.`);
   writeLine(context.stdout, "Re-run `audienti inbox-ops queue` to inspect the current queue.");
@@ -10443,15 +10486,17 @@ const HELP_TOPICS = new Map([
     `  ${INBOX_OPS_QUEUE_USAGE.slice("Usage: ".length)}`,
     `  ${INBOX_OPS_FILTERS_USAGE.slice("Usage: ".length)}`,
     `  ${INBOX_OPS_RULE_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_RULE_SET_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_RULE_REMOVE_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
     "Purpose:",
-    "  Inspect the authenticated owner's private Inbox Ops queue and personal/global email rules, then set one authoritative sender or domain rule from a current queue row.",
+    "  Inspect the authenticated owner's private Inbox Ops queue and personal/global email rules, then set or remove sender and domain rules.",
     "",
     "Safety:",
-    "  Rules always apply to the token owner. This command does not accept --principal or a client-supplied sender/domain.",
-    "  The server resolves the normalized identity from the authorized current Inbox Ops row.",
+    "  Rules always apply to the token owner. Row-based updates derive identity from an authorized current Inbox Ops row.",
+    "  Key-based set/remove commands normalize and validate the supplied sender or domain on the server.",
     "",
     "Rule values:",
     "  --scope sender|domain",
@@ -10460,7 +10505,8 @@ const HELP_TOPICS = new Map([
     "API:",
     "  queue: GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox",
     "  filters: GET /api/v1/accounts/:account_id/inbox_ops/filters.json",
-    "  rule: PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json"
+    "  rule: PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json",
+    "  keyed rules: PATCH|DELETE /api/v1/accounts/:account_id/inbox_ops/rules.json"
   ].join("\n")],
 
   ["inbox-ops queue", [
@@ -10489,19 +10535,27 @@ const HELP_TOPICS = new Map([
   ].join("\n")],
 
   ["inbox-ops rule", [
-    INBOX_OPS_RULE_USAGE,
+    "Usage:",
+    `  ${INBOX_OPS_RULE_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_RULE_SET_USAGE.slice("Usage: ".length)}`,
+    `  ${INBOX_OPS_RULE_REMOVE_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
     "Purpose:",
-    "  Set one allow or filter rule from an authorized current Inbox Ops row. The server derives the identity; the client cannot supply it.",
+    "  Set one allow or filter rule from an authorized current Inbox Ops row, or set/remove a normalized rule by key.",
+    "",
+    "Safety:",
+    "  The server derives row-based identities and normalizes and validates direct sender/domain keys.",
+    "  Every mutation applies only to the authenticated token owner's personal/global preferences.",
     "",
     "Rule values:",
     "  --scope sender|domain",
     "  --disposition allow|filter",
     "",
     "API:",
-    "  PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json"
+    "  row: PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json",
+    "  key: PATCH|DELETE /api/v1/accounts/:account_id/inbox_ops/rules.json"
   ].join("\n")],
 
   ["operator", [
@@ -11034,6 +11088,8 @@ const HELP_TOPICS = new Map([
   "  audienti inbox-ops queue",
   "  audienti inbox-ops filters",
   "  audienti inbox-ops rule <row_id> --scope sender --disposition filter",
+  "  audienti inbox-ops rule set --scope sender --key news@example.com --disposition filter",
+  "  audienti inbox-ops rule remove --scope domain --key example.com",
     "",
     "7. Inspect account analytics",
     "  audienti users activity me --window 7d",
