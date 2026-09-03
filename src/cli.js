@@ -1752,12 +1752,27 @@ async function motionsRunDiscovery(args, context, { accountOverride } = {}) {
   if (positionals.length !== 1) throw new CommandError(MOTIONS_RUN_DISCOVERY_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.runMotionDiscovery(accountId, positionals[0], compactObject({
-    target_count: normalizeOptionalPositiveInteger(values["target-count"], "--target-count")
-  }));
-  if (values.json) return writeJson(context.stdout, payload);
+  let payload;
+  try {
+    payload = await client.runMotionDiscovery(accountId, positionals[0], compactObject({
+      target_count: normalizeOptionalPositiveInteger(values["target-count"], "--target-count")
+    }));
+  } catch (error) {
+    if (!(error instanceof ApiError) || !error.body || typeof error.body !== "object") throw error;
+
+    payload = error.body;
+    if (values.json) writeJson(context.stdout, payload);
+    else renderMotionDiscoveryRun(payload, context);
+    return 1;
+  }
+
+  if (values.json) {
+    writeJson(context.stdout, payload);
+    return payload?.enqueued ? 0 : 1;
+  }
 
   renderMotionDiscoveryRun(payload, context);
+  return payload?.enqueued ? 0 : 1;
 }
 
 async function motionsQuickStart(args, context, { accountOverride } = {}) {
@@ -6478,11 +6493,24 @@ function renderMotionAnalytics(payload, context) {
 
 function renderMotionDiscoveryRun(payload, context) {
   const motion = payload?.motion || {};
+  const run = payload?.run;
   const label = entityLabel(motion) || payload?.motion_id;
   const prefix = payload?.enqueued ? "Discovery queued" : "Discovery not queued";
   writeLine(context.stdout, `${prefix} for ${display(label)}.`);
   writeLine(context.stdout, `Reason: ${display(payload?.reason)}`);
   writeLine(context.stdout, `Target count: ${display(payload?.target_count)}`);
+  if (run) {
+    writeLine(context.stdout, `Run: ${display(run.id)} (${display(run.status)})`);
+    if (run.queued_at) writeLine(context.stdout, `Queued: ${run.queued_at}`);
+    if (run.started_at) writeLine(context.stdout, `Started: ${run.started_at}`);
+    if (run.finished_at) writeLine(context.stdout, `Finished: ${run.finished_at}`);
+    if ([run.seen_count, run.accepted_count, run.rejected_count].some((value) => value != null)) {
+      writeLine(context.stdout, `Counts: ${display(run.seen_count)} seen, ${display(run.accepted_count)} accepted, ${display(run.rejected_count)} rejected`);
+    }
+    if (run.error_message) writeLine(context.stdout, `Error: ${run.error_message}`);
+  }
+  if (payload?.next_eligible_at) writeLine(context.stdout, `Retry at: ${payload.next_eligible_at}`);
+  if (payload?.suggested_action) writeLine(context.stdout, `Next action: ${payload.suggested_action}`);
 }
 
 function renderQuickStartDraft(draft, context) {
@@ -9199,15 +9227,28 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Queue an immediate discovery run for one discovery-capable motion or play.",
+    "  Queue an immediate discovery run for one executable outbound, inbound, or LOPA motion or play.",
+    "  An accepted response means the server persisted a pending run receipt before queuing work.",
     "",
     "Options:",
     "  --target-count <n>  Override the manual replenishment target count for this launch.",
     "",
     "Output shape:",
-    "  enqueued: true when Motions::DiscoverJob was queued",
-    "  reason: launched | run_in_progress | lock_contention | target_met | enqueue_failed",
+    "  enqueued: true only when a durable run receipt exists and Motions::DiscoverJob was queued",
+    "  reason: launched or the authoritative rejection/failure reason",
     "  target_count: requested target count",
+    "  next_eligible_at: retry time when the server can calculate one",
+    "  suggested_action: concrete operator guidance when blocked",
+    "  run: id, status, trigger, target/count fields, timestamps, and error_message",
+    "",
+    "Exit status:",
+    "  0 when discovery was accepted and queued; 1 when rejected or enqueueing failed.",
+    "  With --json, rejected responses remain machine-readable on stdout.",
+    "",
+    "Common reasons:",
+    "  run_in_progress | recent_manual_launch | lock_contention | target_met",
+    "  strategy_inventory_exhausted | producer_cooling | enqueue_failed | launch_stalled",
+    "  completed_empty | discovery_failed | job_failed",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/motions/:id/run_discovery.json"
