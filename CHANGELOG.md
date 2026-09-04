@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.53] - 2026-09-04
+
+### Changed
+
+- Reject cross-account or conflicting Operator principal parameters through the account API, and preserve true-user privacy semantics for projected Operator reads.
+
 ## [0.1.52] - 2026-09-03
 
 ### Added
