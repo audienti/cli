@@ -355,6 +355,13 @@ today's window, and whether provider execution is currently inside the window.
 It also reports the configured user fallback location, the connected account's
 configured and last-verified effective proxy geography, and the proxy source
 without exposing proxy URLs, credentials, egress IPs, or browser session data.
+For authorized LinkedIn account owners and admins, `social_cookie.capabilities.linkedin`
+reports Audienti's stored `premium` and `sales_navigator` booleans plus the
+`checked_at` timestamp. Text output shows yes, no, or unknown and when detection
+last ran. Null or missing values mean unknown, including older server responses
+and unavailable access. These are stored observations that may be stale;
+preflight does not perform a fresh provider check. `--json` preserves the server
+payload unchanged.
 For LinkedIn, `social_cookie.automation.pacing` includes effective weekly
 quotas, daily targets, motion active days, the outstanding-invitation cap, ramp
 configuration, current outstanding inventory, any inventory blocker, and current

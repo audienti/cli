@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.57] - 2026-09-05
+
+### Added
+
+- Show the selected LinkedIn account's stored Premium and Sales Navigator status and last detection timestamp in setup preflight, preserving unknown values and the unchanged JSON response.
+
 ## [0.1.56] - 2026-09-05
 
 ### Added

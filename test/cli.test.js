@@ -909,6 +909,8 @@ test("help works as the final word at resource and nested command levels", async
         /Usage:\n  audienti setup play preflight/,
         /account_user\.location/,
         /social_cookie\.proxy_location/,
+        /social_cookie\.capabilities\.linkedin/,
+        /Preflight does not check the provider again/,
         /social_cookie\.automation\.pacing/,
         /GET \/api\/v1\/accounts\/:account_id\/social_cookies\.json/
       ]
@@ -2058,6 +2060,9 @@ test("setup play preflight checks connected account readiness for the saved prin
         status: "active",
         accessible_to_account: true,
         actionable: true,
+        capabilities: {
+          linkedin: { premium: true, sales_navigator: false, checked_at: "2026-09-01T12:00:00Z" }
+        },
         proxy_location: {
           configured: { country_code: "US", state_code: "NY", city: "New York", postal_code: "10001" },
           effective: {
@@ -2126,6 +2131,7 @@ test("setup play preflight checks connected account readiness for the saved prin
     assert.match(stdout.output, /Status: ready \(ready\)/);
     assert.match(stdout.output, /Connected account: user-one \(scok_linkedin\)/);
     assert.match(stdout.output, /Mapped to account: yes/);
+    assert.match(stdout.output, /LinkedIn capabilities \(stored\): Premium yes, Sales Navigator no; last checked 2026-09-01T12:00:00Z/);
     assert.match(stdout.output, /User location: US \(New York, NY; Eastern Time \(US & Canada\)\)/);
     assert.match(stdout.output, /Cookie proxy location: US \(New York, NY 10001\)/);
     assert.match(stdout.output, /Effective proxy: US, New York, New York \(social_cookie; checked 2026-08-31T12:00:00Z\)/);
@@ -2136,6 +2142,10 @@ test("setup play preflight checks connected account readiness for the saved prin
     assert.match(stdout.output, /Invitation capacity: 0 used today, 25 daily target, 5 ramp limit today, 5 available \(binding: ramp_limit\)/);
     assert.match(stdout.output, /Outstanding invitations: 12 current, 188 slots remaining/);
     assert.match(stdout.output, /Edit URL: https:\/\/app\.audienti\.com\/operations\/users\/42\/social_cookies\/scok_linkedin\/edit/);
+
+    const jsonStdout = captureStream();
+    assert.equal(await run(["setup", "play", "preflight", "--json"], { env, fetch, stdout: jsonStdout }), 0);
+    assert.deepEqual(JSON.parse(jsonStdout.output), responseBody);
   });
 });
 
@@ -2213,7 +2223,30 @@ test("setup play preflight tolerates an older server without location or pacing 
     assert.match(stdout.output, /User location: not configured/);
     assert.match(stdout.output, /Cookie proxy location: not configured/);
     assert.match(stdout.output, /Effective proxy: unavailable/);
+    assert.match(stdout.output, /LinkedIn capabilities \(stored\): Premium unknown, Sales Navigator unknown; last checked not recorded/);
     assert.doesNotMatch(stdout.output, /Invitation capacity:/);
+  });
+});
+
+test("setup preflight preserves false and unknown stored capabilities without labeling other platforms", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    for (const [platform, capabilities, expected] of [
+      ["linkedin", { linkedin: { premium: false, sales_navigator: true, checked_at: null } }, /Premium no, Sales Navigator yes; last checked not recorded/],
+      ["linkedin", { linkedin: { premium: null, sales_navigator: null, checked_at: null } }, /Premium unknown, Sales Navigator unknown; last checked not recorded/],
+      ["linkedin", null, /Premium unknown, Sales Navigator unknown; last checked not recorded/],
+      ["gmail", null, null]
+    ]) {
+      const stdout = captureStream();
+      const fetch = createFetch(() => jsonResponse({
+        platform,
+        account_user: { id: 42, name: "User One" },
+        social_cookie: { service_identifier: platform, capabilities }
+      }));
+      assert.equal(await run(["setup", "play", "preflight"], { env, fetch, stdout }), 0);
+      if (expected) assert.match(stdout.output, expected);
+      else assert.doesNotMatch(stdout.output, /LinkedIn capabilities/);
+    }
   });
 });
 

@@ -4977,6 +4977,9 @@ function renderSetupPlayPreflight(payload, context) {
     writeLine(context.stdout, `Connection status: ${display(socialCookie.status)}`);
     writeLine(context.stdout, `Mapped to account: ${socialCookie.accessible_to_account ? "yes" : "no"}`);
     writeLine(context.stdout, `Actionable: ${socialCookie.actionable ? "yes" : "no"}`);
+    if ((socialCookie.service_identifier || payload?.platform) === "linkedin") {
+      renderSetupLinkedInCapabilities(socialCookie.capabilities?.linkedin, context);
+    }
     renderSetupProxyLocation(socialCookie.proxy_location, context);
     renderSetupAutomationSummary(socialCookie.automation || {}, context);
   } else {
@@ -4992,6 +4995,14 @@ function renderSetupPlayPreflight(payload, context) {
   } else if (urls.edit_url) {
     writeLine(context.stdout, `Edit URL: ${urls.edit_url}`);
   }
+}
+
+function renderSetupLinkedInCapabilities(capabilities, context) {
+  const storedBoolean = (value) => value === true ? "yes" : value === false ? "no" : "unknown";
+  writeLine(
+    context.stdout,
+    `LinkedIn capabilities (stored): Premium ${storedBoolean(capabilities?.premium)}, Sales Navigator ${storedBoolean(capabilities?.sales_navigator)}; last checked ${display(capabilities?.checked_at, "not recorded")}`
+  );
 }
 
 function renderSetupAutomationSummary(automation, context) {
@@ -8069,6 +8080,8 @@ const HELP_TOPICS = new Map([
     "  social_cookie.automation.in_working_hours: server-side current schedule decision",
     "  account_user.location: configured user location used as the proxy fallback; unknown fields are null",
     "  social_cookie.proxy_location: configured and last-verified effective proxy geography plus its source",
+    "  social_cookie.capabilities.linkedin: stored premium and sales_navigator booleans (null means unknown), plus checked_at; missing or unauthorized data is unknown",
+    "  Stored capabilities may be stale. Preflight does not check the provider again.",
     "  social_cookie.automation.pacing: effective LinkedIn quotas, ramp settings, invitation inventory authority, and current capacity",
     "  social_cookie.urls.mapping_url: owner URL for granting account access",
     "  social_cookie.urls.edit_url: operations URL for reconnect/settings review when mapped",
