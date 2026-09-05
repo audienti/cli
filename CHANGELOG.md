@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.55] - 2026-09-05
+
+### Changed
+
+- Preserve the actual viewer's private-owner authorization through Operator API reads, failed-draft retries, and outcome refreshes, including guarded default, Inbox, and Network projection reads.
+
 ## [0.1.54] - 2026-09-04
 
 ### Changed
