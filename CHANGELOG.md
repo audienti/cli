@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.56] - 2026-09-05
+
+### Added
+
+- Configure Motion Approach-guided adaptive post-accept planning with Approach alone; explicit clearing restores the existing sequence, without a separate mode selector.
+- Answer current planner or writer questions with `operator answer`, exact-row refetching and stale-context protection; show prompts and candidate options in queue and next output.
+
 ## [0.1.55] - 2026-09-05
 
 ### Changed

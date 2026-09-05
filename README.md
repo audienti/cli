@@ -7,6 +7,10 @@ create and manage plays, import prospects, build lists, manage task reminders,
 configure list routing rules and account-user automation safety, and work
 supported operator flows.
 
+The Motion Approach guides post-accept planning and writing. Set it with `audienti motions update motn_123 --approach "Test the premise before asking for a meeting"` or the `approach` field in a create/update payload. A nonblank Approach automatically chooses adaptive planning; blank, nil, or whitespace uses the existing sequence. `--approach ""` explicitly clears it and restores the existing sequence. There is no separate planning-mode selector. Existing sending controls still apply.
+
+`audienti operator queue` and `operator next` show planner and writer questions with candidate options. Answer one with `audienti operator answer <row_id> --choice <id>` or `--answer "Your guidance"`. The command fetches that exact row even when it is not the next move, then submits its current fingerprints. Stale or double answers return 409; an accepted answer returns 202 planning. Answers guide only the current decision. Planning and preview never authorize sending.
+
 ## Install
 
 Requires Node.js 20 or newer.

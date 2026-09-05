@@ -10,6 +10,10 @@ the production contract. The packaged `audienti-mcp` command is only a local
 stdio bridge for MCP hosts. Do not build a parallel wrapper or call
 undocumented API endpoints.
 
+Set `approach` in a Motion create/update payload, or use `motions update <id> --approach "..."`. A nonblank Approach automatically guides adaptive planning and writing; blank, nil, or whitespace keeps the existing sequence. The simple `--approach ""` flag explicitly clears the guidance and restores that sequence. There is no separate planning-mode selector, and existing sending controls still apply.
+
+When Operator exposes `answer_planner_question`, read its prompt and candidate options with `operator queue` or `operator next`. Use `operator answer <row_id> --choice <id>` or `--answer "..."`, exactly one input. This command refetches the exact row and submits the current row and decision fingerprints. Do not substitute a generic outcome, a reusable steer note, or a guessed send. A 409 means refresh the question; 202 means the answer was recorded and planning continues. Answers apply only to that decision.
+
 ## Setup
 
 1. Verify the command is installed:

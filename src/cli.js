@@ -91,7 +91,7 @@ const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
 const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] [--approach <text>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
@@ -336,6 +336,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
+  if (normalizedResource === "operator" && action === "answer") return operatorAnswer(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "queue") return inboxOpsQueue(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "filters") return inboxOpsFilters(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "rule") return inboxOpsRule(rest, context, { accountOverride });
@@ -1923,6 +1924,7 @@ async function motionsCreate(args, context, { accountOverride } = {}) {
 
 function normalizeMotionCreatePayload(payload) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+  rejectMotionPlanningMode(payload);
   validateMotionSignalRows(payload);
   if (String(payload.kind || "").trim().toLowerCase() !== "inbound") return payload;
   if (Object.prototype.hasOwnProperty.call(payload, "inbound_channels")) return payload;
@@ -2007,6 +2009,7 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
     ...jsonOptions(),
     payload: { type: "string" },
     status: { type: "string" },
+    approach: { type: "string" },
     tags: { type: "string" },
     "own-post-engagement": { type: "string" },
     "start-date": { type: "string" },
@@ -2033,6 +2036,7 @@ async function motionUpdatePayload(values) {
     }
 
     const payload = await readJsonPayload(values.payload);
+    rejectMotionPlanningMode(payload);
     validateMotionSignalRows(payload);
     return payload;
   }
@@ -2043,6 +2047,7 @@ async function motionUpdatePayload(values) {
     own_post_engagement: values["own-post-engagement"] !== undefined ? parseBooleanString(values["own-post-engagement"], "--own-post-engagement") : undefined
   });
   const nullableSettings = {
+    approach: values.approach,
     starts_on: normalizeMotionDate(values["start-date"], "--start-date"),
     ends_on: normalizeMotionDate(values["end-date"], "--end-date"),
     maximum_company_count: normalizeMotionMaximumCompanyCount(values["maximum-company-count"])
@@ -2056,11 +2061,18 @@ async function motionUpdatePayload(values) {
 
 function motionSimpleFieldsPresent(values) {
   return Boolean(values.status) ||
+    values.approach !== undefined ||
     values.tags !== undefined ||
     values["own-post-engagement"] !== undefined ||
     values["start-date"] !== undefined ||
     values["end-date"] !== undefined ||
     values["maximum-company-count"] !== undefined;
+}
+
+function rejectMotionPlanningMode(payload) {
+  if (payload && Object.prototype.hasOwnProperty.call(payload, "post_accept_planning_mode")) {
+    throw new CommandError("post_accept_planning_mode is read-only. Set a nonblank Approach for adaptive planning, or clear Approach to use the existing sequence.");
+  }
 }
 
 function normalizeMotionDate(value, flagName) {
@@ -3410,6 +3422,39 @@ async function operatorOutcome(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, response);
 
   renderOperatorOutcome(response, context);
+}
+
+async function operatorAnswer(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    choice: { type: "string" },
+    principal: { type: "string" },
+    answer: { type: "string" }
+  });
+  if (positionals.length !== 1 || (values.choice !== undefined) === (values.answer !== undefined)) {
+    throw new CommandError("Usage: audienti operator answer <row_id> (--choice <id> | --answer <text>) [--json] [--account <acct_id>]");
+  }
+  if (!String(values.choice ?? values.answer).trim()) throw new CommandError("The choice or answer must not be blank.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const filters = compactObject({ principal_account_user_id: values.principal });
+  const payload = await client.operatorRow(accountId, positionals[0], filters);
+  const row = payload?.row;
+  const action = row?.next_action;
+  if (String(row?.id) !== positionals[0] || action?.type !== "answer_planner_question" ||
+      !row.fingerprint || !action.decision_id || !action.context_fingerprint) {
+    throw new CommandError("This row has no current planner question. Refresh the Operator queue.");
+  }
+  const response = await client.operatorAnswer(accountId, {
+    ...filters,
+    row_id: row.id,
+    fingerprint: row.fingerprint,
+    decision_id: action.decision_id,
+    context_fingerprint: action.context_fingerprint,
+    ...(values.choice !== undefined ? { choice_id: values.choice } : { answer: values.answer })
+  });
+  if (values.json) return writeJson(context.stdout, response);
+  writeLine(context.stdout, "Answer recorded. Planning the next step.");
 }
 
 async function analyticsProspects(args, context, { accountOverride } = {}) {
@@ -5321,6 +5366,10 @@ function renderMotion(motion, context) {
   writeLine(context.stdout, `Motion: ${display(motion?.name)} (${display(motion?.prefix_id)})`);
   writeLine(context.stdout, `Status: ${display(motion?.status)}`);
   writeLine(context.stdout, `Kind: ${display(motion?.kind)}`);
+  writeLine(context.stdout, `Approach: ${display(motion?.approach, "not set")}`);
+  if (typeof motion?.post_accept_actions_enabled === "boolean") {
+    writeLine(context.stdout, `Post-accept actions: ${motion.post_accept_actions_enabled ? "enabled" : "disabled"}`);
+  }
   writeLine(context.stdout, `Start date: ${display(motion?.starts_on, "not set")}`);
   writeLine(context.stdout, `End date: ${display(motion?.ends_on, "not set")}`);
   writeLine(context.stdout, `Maximum companies: ${display(motion?.maximum_company_count, "not set")}`);
@@ -5973,6 +6022,10 @@ function renderSequenceStep(step, index, context) {
   if (step.body) writeLine(context.stdout, `   Body: ${step.body}`);
   if (step.empty_body_reason) writeLine(context.stdout, `   Empty body reason: ${step.empty_body_reason}`);
   if (step.missing_reason) writeLine(context.stdout, `   Missing reason: ${step.missing_reason}`);
+  if (step.kind === "decision") {
+    for (const option of step.next_action?.options || []) writeLine(context.stdout, `   ${display(option.id)}: ${display(option.label)}`);
+    if (step.eligible_action_families?.length) writeLine(context.stdout, `   Eligible next steps: ${step.eligible_action_families.map(humanize).join(", ")}`);
+  }
 }
 
 function renderProspectSequenceExport(payload, context) {
@@ -6265,6 +6318,7 @@ function renderOperatorQueue(payload, context) {
   }
 
   writeOperatorRows(context, queue);
+  queue.forEach((row) => renderPlannerQuestion(row, context));
 }
 
 function renderInboxOpsQueue(payload, context) {
@@ -6321,6 +6375,17 @@ function renderOperatorNext(row, context) {
   if (!row) return writeLine(context.stdout, "No operator moves found.");
 
   writeOperatorRows(context, [row]);
+  renderPlannerQuestion(row, context);
+}
+
+function renderPlannerQuestion(row, context) {
+  const action = row?.next_action;
+  if (action?.type !== "answer_planner_question") return;
+  writeLine(context.stdout, `Question (${row.id}): ${display(action.prompt)}`);
+  for (const option of action.options || []) {
+    writeLine(context.stdout, `  ${display(option.id)}: ${display(option.label)}`);
+  }
+  writeLine(context.stdout, `Answer: audienti operator answer ${row.id} --choice <id> or --answer <text>`);
 }
 
 function renderOperatorPlan(row, context) {
@@ -6329,6 +6394,7 @@ function renderOperatorPlan(row, context) {
   const nextAction = row.next_action || {};
   const cta = row.cta || {};
   const draft = row.operator_draft || {};
+  renderPlannerQuestion(row, context);
 
   writeLine(context.stdout, "Static operator plan");
   writeLine(context.stdout, `Move: ${display(row.id)}`);
@@ -6594,6 +6660,22 @@ function renderAnalyticsMotions(payload, context) {
 
   writeMotionMixTable(payload?.prospect_mix, context);
   writeMotionContributionTable(payload?.motions, context);
+  renderAdaptiveTreatments(payload?.adaptive_treatments, context);
+}
+
+function renderAdaptiveTreatments(rollup, context) {
+  if (!rollup) return;
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Adaptive treatments (all time; exact outbound-event outcome links)");
+  const rows = rollup.treatments || [];
+  if (rows.length > 0) {
+    writeAlignedTable(context, ["SOURCE MOTION", "APPROACH", "OUTBOUND", "REPLIES", "MEETING ASKS", "ACCEPTED", "QUESTIONS", "MEAN ANSWER (s)"], rows.map((row) => [
+      display(row.source_motion_id), display(row.approach_digest).slice(0, 12), integerLabel(row.outbound_count),
+      integerLabel(row.replies), integerLabel(row.meeting_asks), integerLabel(row.meetings_accepted),
+      `${integerLabel(row.questions)}/${integerLabel(row.decision_count)}`, display(row.mean_answer_latency_seconds)
+    ]));
+  } else writeLine(context.stdout, "No adaptive treatments yet.");
+  writeLine(context.stdout, `Adaptive prospects without an adaptive message link: ${integerLabel(rollup.unattributed?.replies)} replies, ${integerLabel(rollup.unattributed?.meetings_accepted)} accepted meetings.`);
 }
 
 function renderAnalyticsIcps(payload, context) {
@@ -7624,7 +7706,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions abm-companies <motn_id> list",
     "    audienti motions abm-companies <motn_id> add <domain_or_linkedin_url>...",
     "    audienti motions create --payload <file.json>",
-    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <date|none>] [--end-date <date|none>] [--maximum-company-count <n|none>]",
+    "    audienti motions update <motn_id> [--status <state>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <date|none>] [--end-date <date|none>] [--maximum-company-count <n|none>] [--approach <text>]",
     "    audienti motions update <motn_id> --payload <file.json>",
     "    audienti motions add-tag <motn_id> <tag>",
     "    audienti motions remove-tag <motn_id> <tag>",
@@ -7702,6 +7784,7 @@ const HELP_TOPICS = new Map([
     "",
   "  Operator queue",
   "    audienti operator next --plan",
+  "    audienti operator answer <row_id> (--choice <id> | --answer <text>)",
   "    audienti operator next --done --note <text>",
   "    audienti operator queue",
   "    audienti operator failed-drafts",
@@ -9358,7 +9441,7 @@ const HELP_TOPICS = new Map([
     "Input shape:",
     "  name: string",
     "  premise: string",
-    "  approach: string | optional",
+    "  approach: string | optional; a nonblank Approach guides adaptive planning, while blank uses the existing sequence",
     "  kind: outbound | inbound | lopa | transition",
     "  status: draft | active | paused | archived",
     "  offer_id: offr_ prefix id",
@@ -9435,6 +9518,7 @@ const HELP_TOPICS = new Map([
     "Input shape:",
     "  motn_id: motn_ prefix id",
     "  status: draft | preparing | active | closing | paused | archived | optional",
+    "  approach: string | optional; a nonblank Approach guides adaptive planning; --approach \"\" restores the existing sequence",
     "  principal_account_user_id: account user id | me | optional in payload mode",
     "  list_id: list_ prefix id, numeric id, or null | optional in payload mode",
     "  tags: comma-separated tag list | optional",
@@ -10617,6 +10701,7 @@ const HELP_TOPICS = new Map([
     "  audienti operator failed-drafts [--json]",
     "  audienti operator failed-drafts requeue (--all | <row_id> [row_id...])",
     "  audienti operator outcome <row_id> --payload <file.json>",
+    "  audienti operator answer <row_id> (--choice <id> | --answer <text>)",
     "",
     "Status: read commands, failed draft requeue, and prospect next-move writeback implemented",
     "",
@@ -10705,6 +10790,23 @@ const HELP_TOPICS = new Map([
     "API:",
     "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=prospect&writing_status=draft_failed",
     "  POST /api/v1/accounts/:account_id/operator/failed_drafts/requeue.json"
+  ].join("\n")],
+
+  ["operator answer", [
+    "Usage:",
+    "  audienti operator answer <row_id> (--choice <id> | --answer <text>) [--json] [--account <acct_id>]",
+    "  --principal <account_user_id> selects the same authorized sender scope used by operator queue.",
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Refetches the exact current row, including questions that are not the next move, then sends its decision and fingerprints.",
+    "  Choose exactly one candidate id or a nonblank answer. Answers apply only to this decision; stale or already answered questions return 409.",
+    "  A 202 planning response records the answer; it does not authorize a provider send.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/operator/row.json?row_id=:row_id",
+    "  POST /api/v1/accounts/:account_id/operator/answer.json"
   ].join("\n")],
 
   ["operator outcome", [

@@ -686,6 +686,14 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["operator", "next"], query));
   }
 
+  operatorRow(accountId, rowId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["operator", "row"], { ...query, row_id: rowId }));
+  }
+
+  operatorAnswer(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["operator", "answer"]), { method: "POST", body });
+  }
+
   requeueOperatorFailedDrafts(accountId, body = {}) {
     return this.requestJson(accountPath(accountId, ["operator", "failed_drafts", "requeue"]), {
       method: "POST",
