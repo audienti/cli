@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.54] - 2026-09-04
+
+### Changed
+
+- Make `audienti motions run-discovery` expose the durable discovery-run receipt, exact rejection reason, retry time, scope outcome, and distinct submitted and promoted counts; rejected launches now exit nonzero while preserving structured `--json` output.
+
 ## [0.1.53] - 2026-09-04
 
 ### Changed

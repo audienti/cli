@@ -3478,6 +3478,24 @@ test("motions status renders executable configuration validity", async () => {
           reason_key: "missing_lopa_profile_urls",
           reason_label: "Missing tracked profile URLs",
           description: "Add at least one tracked LinkedIn profile URL before this motion can prepare or activate."
+        },
+        next_eligible_at: "2026-09-03T14:15:00Z",
+        discovery_run: {
+          id: 456,
+          status: "failed",
+          trigger: "operator_manual",
+          target_count: 25,
+          seen_count: 0,
+          accepted_count: 0,
+          submitted_count: 0,
+          promoted_count: 0,
+          rejected_count: 0,
+          outcome: "scope_execution_failed",
+          scope_counts: { planned: 4, successful: 3, failed: 1, blocked: 0 },
+          queued_at: "2026-09-03T14:00:00Z",
+          started_at: "2026-09-03T14:00:01Z",
+          finished_at: "2026-09-03T14:00:02Z",
+          error_message: "provider budget exhausted"
         }
       });
     });
@@ -3489,7 +3507,26 @@ test("motions status renders executable configuration validity", async () => {
     assert.match(stdout.output, /Reason: No source profile/);
     assert.match(stdout.output, /Valid config: no/);
     assert.match(stdout.output, /Config reason: Missing tracked profile URLs/);
+    assert.match(stdout.output, /Run: 456 \(failed\)/);
+    assert.match(stdout.output, /Counts: 0 seen, 0 submitted, 0 promoted, 0 rejected/);
+    assert.match(stdout.output, /Outcome: scope_execution_failed/);
+    assert.match(stdout.output, /Scopes: 4 planned, 3 successful, 1 failed, 0 blocked/);
+    assert.match(stdout.output, /Error: provider budget exhausted/);
+    assert.match(stdout.output, /Retry at: 2026-09-03T14:15:00Z/);
   });
+});
+
+test("motions status help documents lifecycle receipts and retry truth", async () => {
+  const stdout = captureStream();
+  const fetch = createFetch(() => {
+    throw new Error("help must not call the API");
+  });
+
+  const exitCode = await run(["motions", "status", "help"], { stdout, fetch });
+
+  assert.equal(exitCode, 0);
+  assert.match(stdout.output, /next_eligible_at: persisted retry time/);
+  assert.match(stdout.output, /discovery_run: latest run id, status, trigger, seen\/submitted\/promoted\/rejected counts, scope counts, outcome, timestamps, and error_message/);
 });
 
 test("motions show renders signal rows and motion configuration details", async () => {
@@ -3849,7 +3886,23 @@ test("motions run-discovery posts launch request and renders queue result", asyn
         motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion", kind: "outbound", status: "active" },
         enqueued: true,
         reason: "launched",
-        target_count: 25
+        target_count: 25,
+        run: {
+          id: 456,
+          status: "pending",
+          trigger: "operator_manual",
+          target_count: 25,
+          seen_count: 0,
+          accepted_count: 0,
+          submitted_count: 0,
+          promoted_count: 0,
+          rejected_count: 0,
+          scope_counts: { planned: 0, successful: 0, failed: 0, blocked: 0 },
+          queued_at: "2026-09-03T14:00:00Z",
+          started_at: null,
+          finished_at: null,
+          error_message: null
+        }
       }, { status: 202 });
     });
 
@@ -3859,10 +3912,12 @@ test("motions run-discovery posts launch request and renders queue result", asyn
     assert.match(stdout.output, /Discovery queued for Focused Motion \(motn_focus\)\./);
     assert.match(stdout.output, /Reason: launched/);
     assert.match(stdout.output, /Target count: 25/);
+    assert.match(stdout.output, /Run: 456 \(pending\)/);
+    assert.match(stdout.output, /Queued: 2026-09-03T14:00:00Z/);
   });
 });
 
-test("motions run-discovery supports target count json output and account override", async () => {
+test("motions run-discovery preserves rejected json output and exits nonzero", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
       host: "https://app.audienti.com",
@@ -3876,20 +3931,54 @@ test("motions run-discovery supports target count json output and account overri
       motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion" },
       enqueued: false,
       reason: "run_in_progress",
-      target_count: 5
+      target_count: 5,
+      next_eligible_at: "2026-09-03T14:15:00Z",
+      suggested_action: "Wait for the current discovery run to finish.",
+      run: { id: 456, status: "running", trigger: "operator_manual" }
     };
     const stdout = captureStream();
     const fetch = createFetch((url, options) => {
       assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_two/motions/motn_focus/run_discovery.json");
       assert.equal(options.method, "POST");
       assert.deepEqual(JSON.parse(options.body), { target_count: 5 });
-      return jsonResponse(responseBody);
+      return jsonResponse(responseBody, { status: 409 });
     });
 
     const exitCode = await run(["--account", "acct_two", "plays", "run-discovery", "motn_focus", "--target-count", "5", "--json"], { env, fetch, stdout });
 
-    assert.equal(exitCode, 0);
+    assert.equal(exitCode, 1);
     assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("motions run-discovery renders the authoritative rejected launch reason", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const responseBody = {
+      motion_id: "motn_focus",
+      motion: { id: 123, prefix_id: "motn_focus", name: "Focused Motion", kind: "inbound", status: "active" },
+      enqueued: false,
+      reason: "strategy_inventory_exhausted",
+      target_count: 25,
+      suggested_action: "Add another search strategy before retrying."
+    };
+    const fetch = createFetch(() => jsonResponse(responseBody, { status: 422 }));
+
+    const exitCode = await run(["motions", "run-discovery", "motn_focus"], { env, fetch, stdout, stderr });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stderr.output, "");
+    assert.match(stdout.output, /Discovery not queued for Focused Motion \(motn_focus\)\./);
+    assert.match(stdout.output, /Reason: strategy_inventory_exhausted/);
+    assert.match(stdout.output, /Next action: Add another search strategy before retrying\./);
   });
 });
 

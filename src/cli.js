@@ -1752,12 +1752,27 @@ async function motionsRunDiscovery(args, context, { accountOverride } = {}) {
   if (positionals.length !== 1) throw new CommandError(MOTIONS_RUN_DISCOVERY_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.runMotionDiscovery(accountId, positionals[0], compactObject({
-    target_count: normalizeOptionalPositiveInteger(values["target-count"], "--target-count")
-  }));
-  if (values.json) return writeJson(context.stdout, payload);
+  let payload;
+  try {
+    payload = await client.runMotionDiscovery(accountId, positionals[0], compactObject({
+      target_count: normalizeOptionalPositiveInteger(values["target-count"], "--target-count")
+    }));
+  } catch (error) {
+    if (!(error instanceof ApiError) || !error.body || typeof error.body !== "object") throw error;
+
+    payload = error.body;
+    if (values.json) writeJson(context.stdout, payload);
+    else renderMotionDiscoveryRun(payload, context);
+    return 1;
+  }
+
+  if (values.json) {
+    writeJson(context.stdout, payload);
+    return payload?.enqueued ? 0 : 1;
+  }
 
   renderMotionDiscoveryRun(payload, context);
+  return payload?.enqueued ? 0 : 1;
 }
 
 async function motionsQuickStart(args, context, { accountOverride } = {}) {
@@ -5436,6 +5451,8 @@ function renderMotionStatus(status, context) {
   renderExecutableConfiguration(status?.executable_configuration, context);
   if (status?.description) writeLine(context.stdout, status.description);
   if (status?.action?.label) writeLine(context.stdout, `Action: ${status.action.label}`);
+  renderDiscoveryRunReceipt(status?.discovery_run, context);
+  if (status?.next_eligible_at) writeLine(context.stdout, `Retry at: ${status.next_eligible_at}`);
 }
 
 function renderExecutableConfiguration(config, context) {
@@ -6478,11 +6495,31 @@ function renderMotionAnalytics(payload, context) {
 
 function renderMotionDiscoveryRun(payload, context) {
   const motion = payload?.motion || {};
+  const run = payload?.run;
   const label = entityLabel(motion) || payload?.motion_id;
   const prefix = payload?.enqueued ? "Discovery queued" : "Discovery not queued";
   writeLine(context.stdout, `${prefix} for ${display(label)}.`);
   writeLine(context.stdout, `Reason: ${display(payload?.reason)}`);
   writeLine(context.stdout, `Target count: ${display(payload?.target_count)}`);
+  renderDiscoveryRunReceipt(run, context);
+  if (payload?.next_eligible_at) writeLine(context.stdout, `Retry at: ${payload.next_eligible_at}`);
+  if (payload?.suggested_action) writeLine(context.stdout, `Next action: ${payload.suggested_action}`);
+}
+
+function renderDiscoveryRunReceipt(run, context) {
+  if (run) {
+    writeLine(context.stdout, `Run: ${display(run.id)} (${display(run.status)})`);
+    if (run.queued_at) writeLine(context.stdout, `Queued: ${run.queued_at}`);
+    if (run.started_at) writeLine(context.stdout, `Started: ${run.started_at}`);
+    if (run.finished_at) writeLine(context.stdout, `Finished: ${run.finished_at}`);
+    if ([run.seen_count, run.submitted_count, run.accepted_count, run.promoted_count, run.rejected_count].some((value) => value != null)) {
+      const submittedCount = run.submitted_count ?? run.accepted_count;
+      writeLine(context.stdout, `Counts: ${display(run.seen_count)} seen, ${display(submittedCount)} submitted, ${display(run.promoted_count)} promoted, ${display(run.rejected_count)} rejected`);
+    }
+    if (run.outcome) writeLine(context.stdout, `Outcome: ${run.outcome}`);
+    if (run.scope_counts) writeLine(context.stdout, `Scopes: ${display(run.scope_counts.planned)} planned, ${display(run.scope_counts.successful)} successful, ${display(run.scope_counts.failed)} failed, ${display(run.scope_counts.blocked)} blocked`);
+    if (run.error_message) writeLine(context.stdout, `Error: ${run.error_message}`);
+  }
 }
 
 function renderQuickStartDraft(draft, context) {
@@ -9165,6 +9202,8 @@ const HELP_TOPICS = new Map([
     "  executable_configuration: { valid: boolean, reason_key: string | null, reason_label: string | null, description: string | null }",
     "  description: string",
     "  action: { key: string, label: string } | null",
+    "  next_eligible_at: persisted retry time when the server can calculate one",
+    "  discovery_run: latest run id, status, trigger, seen/submitted/promoted/rejected counts, scope counts, outcome, timestamps, and error_message",
     "  stats: { target_count, deficit, projected_connectable, capacity, daily_target }",
     "",
     "API:",
@@ -9199,15 +9238,28 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Queue an immediate discovery run for one discovery-capable motion or play.",
+    "  Queue an immediate discovery run for one executable outbound, inbound, or LOPA motion or play.",
+    "  An accepted response means the server persisted a pending run receipt before queuing work.",
     "",
     "Options:",
     "  --target-count <n>  Override the manual replenishment target count for this launch.",
     "",
     "Output shape:",
-    "  enqueued: true when Motions::DiscoverJob was queued",
-    "  reason: launched | run_in_progress | lock_contention | target_met | enqueue_failed",
+    "  enqueued: true only when a durable run receipt exists and Motions::DiscoverJob was queued",
+    "  reason: launched or the authoritative rejection/failure reason",
     "  target_count: requested target count",
+    "  next_eligible_at: retry time when the server can calculate one",
+    "  suggested_action: concrete operator guidance when blocked",
+    "  run: id, status, trigger, target, seen/submitted/promoted/rejected counts, scope counts, outcome, timestamps, and error_message",
+    "",
+    "Exit status:",
+    "  0 when discovery was accepted and queued; 1 when rejected or enqueueing failed.",
+    "  With --json, rejected responses remain machine-readable on stdout.",
+    "",
+    "Common reasons:",
+    "  run_in_progress | recent_manual_launch | lock_contention | target_met",
+    "  strategy_inventory_exhausted | producer_cooling | enqueue_failed | launch_stalled",
+    "  completed_empty | discovery_failed | job_failed",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/motions/:id/run_discovery.json"

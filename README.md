@@ -470,6 +470,15 @@ used by the operator surface:
 audienti motions run-discovery <motn_id>
 ```
 
+Outbound, inbound, and LOPA motions are accepted only when their current
+configuration and discovery producer are executable. An accepted response
+includes a durable `run` receipt that starts in `pending` before the discovery
+job is queued. Rejected launches exit nonzero and report the authoritative
+`reason`, optional `next_eligible_at`, and `suggested_action`; `--json` preserves
+that structured response on stdout for automation. Completed receipts keep
+candidate `submitted_count` separate from the current persisted
+`promoted_count`, and expose completed, failed, and blocked scope counts.
+
 To check whether a motion has executable configuration before preparing,
 activating, or running discovery:
 
@@ -480,7 +489,8 @@ audienti motions status <motn_id> --json
 
 The JSON response includes `executable_configuration.valid` plus a reason when
 the config is incomplete, such as missing outbound signals or missing LOPA
-tracked profile URLs.
+tracked profile URLs. Its latest discovery receipt uses the same submitted,
+promoted, and scope outcome fields as `run-discovery`.
 
 To create and launch a quick-start motion from a company URL:
 
