@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.59] - 2026-09-06
+
+### Changed
+
+- Read eligible Operator queues from their latest published state while changes process, retaining current ownership checks and twenty-row API pagination.
+
+### Fixed
+
+- Restore ordinary Prospect, Content, Visibility, Network, and Inbox priority order while preserving urgent reply and planner precedence.
+
 ## [0.1.58] - 2026-09-06
 
 ### Fixed
