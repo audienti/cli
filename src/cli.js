@@ -65,7 +65,16 @@ const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [f
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
-const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--json] [--account <acct_id>]";
+const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
+const OPERATOR_PAGINATION_HELP = [
+  "Read pagination:",
+  "  --page <n>       Positive page number",
+  "  --offset <n>     Exact returned next_offset, including zero",
+  "  --cursor <token> Opaque returned next_cursor; cannot be combined with --offset",
+  "  Follow the printed continuation with the same account and filters, even after an empty page.",
+  "  Pagination is not accepted with outcome or requeue operations.",
+  ""
+];
 const INBOX_OPS_FILTERS_USAGE = "Usage: audienti inbox-ops filters [--json] [--account <acct_id>]";
 const INBOX_OPS_RULE_USAGE = "Usage: audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
 const INBOX_OPS_RULE_SET_USAGE = "Usage: audienti inbox-ops rule set --scope <sender|domain> --key <email|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
@@ -3240,32 +3249,30 @@ async function toolsLinkedinReviewStatus(args, context, { accountOverride } = {}
 }
 
 async function operatorQueue(args, context, { accountOverride } = {}) {
-  const { values, positionals } = parseCommandArgs(args, operatorFilterOptions());
+  const { values, positionals } = parseCommandArgs(args, operatorFilterOptions(operatorPaginationOptions()));
   if (positionals.length > 0) throw new CommandError("Usage: audienti operator queue [--json] [filters] [--account <acct_id>]");
 
+  const query = { ...operatorQuery(values), ...operatorPaginationQuery(values) };
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.operatorQueue(accountId, operatorQuery(values));
+  const payload = await client.operatorQueue(accountId, query);
   if (values.json) return writeJson(context.stdout, payload);
 
-  renderOperatorQueue(payload, context);
+  renderOperatorRead(payload, context, { command: "operator queue", accountId, query }, () => renderOperatorQueue(payload, context));
 }
 
 async function inboxOpsQueue(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    page: { type: "string" }
+    ...operatorPaginationOptions()
   });
   if (positionals.length > 0) throw new CommandError(INBOX_OPS_QUEUE_USAGE);
 
-  const page = normalizeOptionalPositiveInteger(values.page, "--page");
+  const query = { opportunity_kind: "inbox", ...operatorPaginationQuery(values) };
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.operatorQueue(accountId, compactObject({
-    opportunity_kind: "inbox",
-    operator_page: page
-  }));
+  const payload = await client.operatorQueue(accountId, query);
   if (values.json) return writeJson(context.stdout, payload);
 
-  renderInboxOpsQueue(payload, context);
+  renderOperatorRead(payload, context, { command: "inbox-ops queue", accountId, query }, () => renderInboxOpsQueue(payload, context));
 }
 
 async function inboxOpsFilters(args, context, { accountOverride } = {}) {
@@ -3345,14 +3352,15 @@ async function operatorFailedDrafts(args, context, { accountOverride } = {}) {
     return operatorFailedDraftsRequeue(args.slice(1), context, { accountOverride });
   }
 
-  const { values, positionals } = parseCommandArgs(args, operatorFailedDraftOptions());
+  const { values, positionals } = parseCommandArgs(args, operatorFailedDraftOptions(operatorPaginationOptions()));
   if (positionals.length > 0) throw new CommandError(OPERATOR_FAILED_DRAFTS_USAGE);
 
+  const query = { ...operatorFailedDraftQuery(values), ...operatorPaginationQuery(values) };
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.operatorQueue(accountId, operatorFailedDraftQuery(values));
+  const payload = await client.operatorQueue(accountId, query);
   if (values.json) return writeJson(context.stdout, payload);
 
-  renderOperatorFailedDrafts(payload, context);
+  renderOperatorRead(payload, context, { command: "operator failed-drafts", accountId, query }, () => renderOperatorFailedDrafts(payload, context));
 }
 
 async function operatorFailedDraftsRequeue(args, context, { accountOverride } = {}) {
@@ -3381,12 +3389,16 @@ async function operatorNext(args, context, { accountOverride } = {}) {
   if (values.json && values.plan) throw new CommandError("Choose one output format: use either --json or --plan.");
   const outcomeStatus = operatorNextOutcomeStatus(values);
   if (values.plan && outcomeStatus) throw new CommandError("Choose one mode: use either --plan or an outcome flag.");
+  if (outcomeStatus && [values.page, values.offset, values.cursor].some((value) => value !== undefined)) {
+    throw new CommandError("Pagination is only available for reads; omit --page, --offset, and --cursor when recording an outcome.");
+  }
   if (!outcomeStatus && (values.note !== undefined || values["occurred-at"] !== undefined)) {
     throw new CommandError("--note and --occurred-at require an outcome flag: --done, --skip, --fail, or --return.");
   }
 
+  const query = { ...operatorQuery(values), ...operatorPaginationQuery(values) };
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.operatorNext(accountId, operatorQuery(values));
+  const payload = await client.operatorNext(accountId, query);
   if (outcomeStatus) {
     const response = await client.operatorOutcome(accountId, operatorNextOutcomePayload(payload?.next_move, {
       status: outcomeStatus,
@@ -3399,9 +3411,10 @@ async function operatorNext(args, context, { accountOverride } = {}) {
     return renderOperatorOutcome(response, context);
   }
   if (values.json) return writeJson(context.stdout, payload);
-  if (values.plan) return renderOperatorPlan(payload?.next_move, context);
-
-  renderOperatorNext(payload?.next_move, context);
+  renderOperatorRead(payload, context, { command: "operator next", accountId, query, plan: values.plan }, () => {
+    if (values.plan) return renderOperatorPlan(payload?.next_move, context);
+    renderOperatorNext(payload?.next_move, context);
+  });
 }
 
 async function operatorOutcome(args, context, { accountOverride } = {}) {
@@ -3760,6 +3773,7 @@ function operatorFilterOptions(extra = {}) {
 
 function operatorNextOptions() {
   return operatorFilterOptions({
+    ...operatorPaginationOptions(),
     plan: { type: "boolean" },
     done: { type: "boolean" },
     skip: { type: "boolean" },
@@ -3768,6 +3782,28 @@ function operatorNextOptions() {
     note: { type: "string" },
     "occurred-at": { type: "string" }
   });
+}
+
+function operatorPaginationOptions() {
+  return { page: { type: "string" }, offset: { type: "string" }, cursor: { type: "string" } };
+}
+
+function operatorPaginationQuery(values) {
+  const page = normalizeOptionalPositiveInteger(values.page, "--page");
+  if (values.page !== undefined && page === undefined) throw new CommandError("--page must be a positive integer.");
+  if (page !== undefined && !Number.isSafeInteger(page)) throw new CommandError("--page must be a safe positive integer.");
+
+  let offset;
+  if (values.offset !== undefined) {
+    offset = Number(values.offset);
+    if (!Number.isSafeInteger(offset) || offset < 0 || String(offset) !== values.offset.trim()) {
+      throw new CommandError("--offset must be a nonnegative integer.");
+    }
+  }
+  if (values.cursor !== undefined && !values.cursor.trim()) throw new CommandError("--cursor must not be blank.");
+  if (values.cursor !== undefined && offset !== undefined) throw new CommandError("Choose either --cursor or --offset, not both.");
+
+  return compactObject({ operator_page: page, operator_offset: offset, operator_cursor: values.cursor });
 }
 
 function operatorFailedDraftOptions(extra = {}) {
@@ -6332,6 +6368,75 @@ function renderOperatorQueue(payload, context) {
   queue.forEach((row) => renderPlannerQuestion(row, context));
 }
 
+function renderOperatorRead(payload, context, continuation, renderRows) {
+  if (["reset_to_legacy", "cursor_stale"].includes(payload?.metrics?.cursor_status)) {
+    writeLine(context.stdout, "Queue changed; restarted at the first page.");
+  }
+  const hasRows = payload?.next_move || payload?.decision_queue?.length > 0;
+  if (!hasRows && (payload?.has_more === true || payload?.metrics?.scan_ceiling_reached === true)) {
+    writeLine(context.stdout, "No ready rows in this page.");
+  } else {
+    renderRows();
+  }
+  if (payload?.metrics?.scan_ceiling_reached === true) {
+    writeLine(context.stdout, "Queue scan limit reached; more work may remain. Narrow the filters to inspect it.");
+  }
+  // /next exposes one focal move, while next_offset covers the whole scanned page.
+  const focalMoveShown = continuation.command === "operator next" && payload?.next_move;
+  if (payload?.has_more === true && !focalMoveShown) {
+    const command = operatorContinuationCommand(payload, continuation);
+    writeLine(context.stdout, command ? `More rows: ${command}` : "More work may remain; narrow the filters to continue.");
+  }
+}
+
+function operatorContinuationCommand(payload, { command, accountId, query, plan }) {
+  const args = ["audienti", ...command.split(" ")];
+  const cursor = payload?.metrics?.next_cursor;
+  if (payload.next_page) args.push(...operatorCommandOption("page", payload.next_page));
+  if (cursor) {
+    args.push(...operatorCommandOption("cursor", cursor));
+  } else {
+    if (!payload.next_page) return null;
+    if (payload?.metrics?.next_offset !== undefined && payload.metrics.next_offset !== null) {
+      args.push(...operatorCommandOption("offset", payload.metrics.next_offset));
+    }
+  }
+  args.push(...operatorCommandOption("account", accountId));
+  args.push(...operatorContinuationFilters(command, query, payload.filters));
+  if (plan) args.push("--plan");
+  return args.map(operatorCommandArgument).join(" ");
+}
+
+function operatorContinuationFilters(command, query, resolvedFilters = {}) {
+  if (command === "inbox-ops queue") return [];
+
+  const filters = { ...resolvedFilters, ...query };
+  const flags = {
+    principal_account_user_id: "principal", motion_id: "motion", list_id: "list",
+    stage: "stage", opportunity_kind: "opportunity-kind", writing_status: "writing-status"
+  };
+  filters.stage ||= filters.pipeline_stage;
+  if (command === "operator failed-drafts") {
+    delete flags.opportunity_kind;
+    delete flags.writing_status;
+    flags.query = "query";
+  }
+  return Object.entries(flags).flatMap(([key, flag]) => {
+    const value = filters[key];
+    return value === undefined || value === null || value === "" ? [] : operatorCommandOption(flag, Array.isArray(value) ? value.join(",") : value);
+  });
+}
+
+function operatorCommandOption(flag, value) {
+  const text = String(value);
+  return text.startsWith("-") ? [`--${flag}=${text}`] : [`--${flag}`, text];
+}
+
+function operatorCommandArgument(value) {
+  const text = String(value);
+  return /^[a-zA-Z0-9_./:@=-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
+}
+
 function renderInboxOpsQueue(payload, context) {
   const decisionQueue = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
   const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
@@ -6344,10 +6449,6 @@ function renderInboxOpsQueue(payload, context) {
     display(row?.inbox_ops?.subject),
     display(row?.inbox_ops?.connected_account)
   ]));
-  if (payload?.has_more === true && payload?.next_page) {
-    writeLine(context.stdout, "");
-    writeLine(context.stdout, `More rows: audienti inbox-ops queue --page ${payload.next_page}`);
-  }
 }
 
 function renderInboxOpsFilters(payload, context) {
@@ -10663,9 +10764,10 @@ const HELP_TOPICS = new Map([
     "",
     "Status: implemented",
     "",
+    ...OPERATOR_PAGINATION_HELP,
     "Purpose:",
     "  List one page of the authenticated owner's current private Inbox Ops rows with the authoritative sender/domain rule identity, subject, and connected inbox.",
-    "  When more rows exist, the plain output prints the next --page command.",
+    "  When more rows exist, the plain output prints the exact continuation command with the same account.",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox"
@@ -10733,6 +10835,7 @@ const HELP_TOPICS = new Map([
     "",
     "Status: implemented",
     "",
+    ...OPERATOR_PAGINATION_HELP,
     "Options:",
     "  --plan  Render a deterministic static plan from the existing next-action coach payload, CTA, and operator draft state",
     "  --done  Mark the current next prospect move completed through the operator outcome API",
@@ -10763,12 +10866,16 @@ const HELP_TOPICS = new Map([
     "",
     "Status: implemented",
     "",
+    ...OPERATOR_PAGINATION_HELP,
     "Output shape:",
     "  next_move: focal operator row",
     "  decision_queue[]: ordered operator rows",
     "  daily_progress: pacing counters",
     "  outcome_rollups: queue rollups",
     "  options: motions, principals, lists, stages",
+    "  has_more/next_page: continuation state",
+    "  metrics.next_offset/next_cursor: exact continuation position",
+    "  metrics.scan_ceiling_reached: incomplete scan; narrow the filters",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/operator.json"
@@ -10781,6 +10888,7 @@ const HELP_TOPICS = new Map([
     "",
     "Status: implemented",
     "",
+    ...OPERATOR_PAGINATION_HELP,
     "Purpose:",
     "  Lists failed prospect operator drafts and queues selected drafts for rewriting.",
     "",

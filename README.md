@@ -218,12 +218,23 @@ audienti operator next --plan
 audienti operator next --done --note "Connection request sent."
 ```
 
+`operator queue`, `operator failed-drafts`, and `inbox-ops queue` print a
+continuation command when more rows remain. Read-only `operator next` (including
+`--plan`) also prints one when its page has no focal move but more rows remain;
+when a move is present, inspect or act on it and rerun `operator next`.
+Follow the continuation command even when the current page has no ready
+rows. It preserves the account and filters and uses the API's exact `--page` and
+`--offset` (which can be zero), or its opaque `--cursor`. Do not combine a cursor
+with an offset. If the scan limit is reached, narrow the filters; an incomplete
+scan does not mean the queue is empty. JSON output preserves the API response.
+Pagination flags are not accepted when recording outcomes or requeueing drafts.
+
 Inbox Ops has its own owner-scoped CLI surface. Queue rows expose the stable row
 id used by the row-based rule command. Rules can also be set or removed directly
 by sender or domain; the server normalizes and validates every supplied key:
 
 ```bash
-audienti inbox-ops queue [--page <n>]
+audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>]
 audienti inbox-ops filters
 audienti inbox-ops rule <row_id> --scope sender --disposition filter
 audienti inbox-ops rule <row_id> --scope domain --disposition allow

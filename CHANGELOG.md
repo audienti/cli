@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.58] - 2026-09-06
+
+### Fixed
+
+- Continue Operator and Inbox queue reads with the exact returned offset or cursor, preserving account and filters even after an empty page. Report incomplete scans without claiming the queue is empty, and keep pagination separate from outcome and requeue operations.
+
 ## [0.1.57] - 2026-09-05
 
 ### Added
