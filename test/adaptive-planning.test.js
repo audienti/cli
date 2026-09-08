@@ -19,12 +19,12 @@ test("Motion update preserves explicit Approach clearing without a separate plan
     const fetch = createFetch((url, options) => {
       assert.equal(url.pathname, "/api/v1/accounts/acct_one/motions/motn_one.json");
       assert.deepEqual(JSON.parse(options.body), { motion: { approach: "" } });
-      return jsonResponse({ approach: "", post_accept_planning_mode: "legacy", post_accept_actions_enabled: false });
+      return jsonResponse({ approach: "", post_accept_planning_mode: "legacy" });
     });
     assert.equal(await run(["motions", "update", "motn_one", "--approach", ""], { env, fetch, stdout }), 0);
     assert.match(stdout.output, /Approach: not set/);
     assert.doesNotMatch(stdout.output, /Post-accept planning:/);
-    assert.match(stdout.output, /Post-accept actions: disabled/);
+    assert.doesNotMatch(stdout.output, /Post-accept actions/);
   });
 });
 

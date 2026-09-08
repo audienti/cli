@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.60] - 2026-09-08
+
+### Changed
+
+- Motion responses no longer include `post_accept_actions_enabled`; a Motion with an Approach always plans and executes post-accept outreach, so the per-Motion enabled/disabled line is gone from `motions show`.
+
 ## [0.1.59] - 2026-09-06
 
 ### Changed

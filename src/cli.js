@@ -5414,9 +5414,6 @@ function renderMotion(motion, context) {
   writeLine(context.stdout, `Status: ${display(motion?.status)}`);
   writeLine(context.stdout, `Kind: ${display(motion?.kind)}`);
   writeLine(context.stdout, `Approach: ${display(motion?.approach, "not set")}`);
-  if (typeof motion?.post_accept_actions_enabled === "boolean") {
-    writeLine(context.stdout, `Post-accept actions: ${motion.post_accept_actions_enabled ? "enabled" : "disabled"}`);
-  }
   writeLine(context.stdout, `Start date: ${display(motion?.starts_on, "not set")}`);
   writeLine(context.stdout, `End date: ${display(motion?.ends_on, "not set")}`);
   writeLine(context.stdout, `Maximum companies: ${display(motion?.maximum_company_count, "not set")}`);
