@@ -8,7 +8,8 @@ const readCommands = [
   ["operator", "queue"],
   ["operator", "next"],
   ["operator", "failed-drafts"],
-  ["inbox-ops", "queue"]
+  ["inbox-ops", "queue"],
+  ["network-ops", "queue"]
 ];
 
 async function withOperatorConfig(callback) {
@@ -29,6 +30,7 @@ for (const command of readCommands) {
           assert.equal(url.searchParams.get("operator_page"), pagination[1]);
           assert.equal(url.searchParams.get(pagination[2] === "--offset" ? "operator_offset" : "operator_cursor"), pagination[3]);
           if (command[0] === "inbox-ops") assert.equal(url.searchParams.get("opportunity_kind"), "inbox");
+          if (command[0] === "network-ops") assert.equal(url.searchParams.get("opportunity_kind"), "network");
           if (command[1] === "failed-drafts") assert.equal(url.searchParams.get("writing_status"), "draft_failed");
           return jsonResponse(payload);
         });

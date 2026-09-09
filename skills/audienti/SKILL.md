@@ -1,6 +1,6 @@
 ---
 name: audienti
-description: Use when the user wants to operate Audienti through the production CLI or app-hosted MCP endpoint, including account selection, plays, prospect imports, lists and routing rules, message previews, analytics, or supported operator outcomes.
+description: Use when the user wants to operate Audienti through the production CLI or app-hosted MCP endpoint, including account selection, plays, prospect imports, lists and routing rules, message previews, analytics, Inbox Ops, Network Ops, or supported operator outcomes.
 ---
 
 # Audienti CLI and MCP
@@ -136,6 +136,9 @@ audienti motions activate <motn_id> --json
 audienti motions delete <motn_id> --confirm yes --json
 audienti operator next --json
 audienti operator next --plan
+audienti network-ops queue --json
+audienti network-ops accept <row_id> --account <acct_id> --json
+audienti network-ops decline <row_id> --account <acct_id> --json
 audienti inbox-ops queue --json
 audienti inbox-ops filters --json
 audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> --json

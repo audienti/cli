@@ -218,7 +218,8 @@ audienti operator next --plan
 audienti operator next --done --note "Connection request sent."
 ```
 
-`operator queue`, `operator failed-drafts`, and `inbox-ops queue` print a
+`operator queue`, `operator failed-drafts`, `network-ops queue`, and
+`inbox-ops queue` print a
 continuation command when more rows remain. Read-only `operator next` (including
 `--plan`) also prints one when its page has no focal move but more rows remain;
 when a move is present, inspect or act on it and rerun `operator next`.
@@ -228,6 +229,21 @@ rows. It preserves the account and filters and uses the API's exact `--page` and
 with an offset. If the scan limit is reached, narrow the filters; an incomplete
 scan does not mean the queue is empty. JSON output preserves the API response.
 Pagination flags are not accepted when recording outcomes or requeueing drafts.
+
+Network Ops has its own owner-scoped CLI surface for pending inbound LinkedIn
+connection requests. It shows the exact invitation-bound message when one was
+captured and queues the same canonical provider actions as the product UI:
+
+```bash
+audienti network-ops queue [--page <n>] [--offset <n>|--cursor <token>]
+audienti network-ops accept <row_id>
+audienti network-ops decline <row_id>
+```
+
+`reject` is accepted as an alias for `decline`. An accepted API response means
+the provider action was queued; it is not confirmation that LinkedIn completed
+the action. The same queue can be read with
+`audienti operator queue --opportunity-kind network`.
 
 Inbox Ops has its own owner-scoped CLI surface. Queue rows expose the stable row
 id used by the row-based rule command. Rules can also be set or removed directly

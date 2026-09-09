@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.61] - 2026-09-08
+
+### Added
+
+- Add owner-scoped `network-ops queue`, `accept`, and `decline` commands for pending inbound LinkedIn connection requests, with `reject` as a decline alias and explicit queued-versus-provider-confirmed output.
+
+### Fixed
+
+- Preserve exact invitation-to-message binding in Network Ops output instead of assigning unrelated neighboring payload text.
+
 ## [0.1.60] - 2026-09-08
 
 ### Changed

@@ -1088,6 +1088,10 @@ test("help works as the final word at resource and nested command levels", async
       expected: [/audienti inbox-ops rule <row_id>/, /inbox-ops rule set/, /inbox-ops rule remove/, /sender\|domain/, /allow\|filter/, /server/i]
     },
     {
+      args: ["network-ops", "help"],
+      expected: [/audienti network-ops queue/, /audienti network-ops accept <row_id>/, /audienti network-ops decline <row_id>/, /authenticated owner/i]
+    },
+    {
       args: ["operator", "failed-drafts", "help"],
       expected: [/Usage:\n  audienti operator failed-drafts/, /requeue is async/i, /operator\/failed_drafts\/requeue\.json/]
     },
@@ -10080,6 +10084,130 @@ test("inbox ops queue forces the private inbox lane and renders rule source iden
     assert.match(stdout.output, /ROW ID\s+SENDER\s+DOMAIN\s+SUBJECT/);
     assert.match(stdout.output, /inbox_ops_message_123\s+news@alerts\.example\.com\s+alerts\.example\.com\s+Quarterly update/);
     assert.match(stdout.output, /More rows: audienti inbox-ops queue --page 3/);
+  });
+});
+
+test("network ops queue forces the private network lane and renders exact invitation notes", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/operator.json");
+      assert.equal(url.searchParams.get("opportunity_kind"), "network");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        decision_queue: [{
+          id: "network_ops_event_52369",
+          opportunity_kind: "network",
+          profile: { display_name: "Roman Kirsanov", username: "romankirsanov" },
+          network_ops: {
+            request_event_id: "evnt_request",
+            note: "Hi William, thanks for the comment — thought I'd say hi.",
+            state: "unread",
+            received_at: "2026-08-19T12:00:00Z"
+          }
+        }],
+        has_more: false
+      });
+    });
+
+    const exitCode = await run(["network-ops", "queue"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /ROW ID\s+PERSON\s+MESSAGE\s+STATE/);
+    assert.match(stdout.output, /network_ops_event_52369\s+Roman Kirsanov\s+Hi William, thanks for the comment/);
+    assert.match(stdout.output, /Accept: audienti network-ops accept network_ops_event_52369 --account acct_one/);
+    assert.match(stdout.output, /Decline: audienti network-ops decline network_ops_event_52369 --account acct_one/);
+  });
+});
+
+test("network ops queue action commands preserve an explicit account override", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_default"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_selected/operator.json");
+      return jsonResponse({
+        decision_queue: [{
+          id: "network_ops_event_9",
+          profile: { display_name: "Selected Account Request" },
+          network_ops: { note: "Please connect.", state: "unread" }
+        }],
+        has_more: false
+      });
+    });
+
+    const exitCode = await run(["network-ops", "queue", "--account", "acct_selected"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /network-ops accept network_ops_event_9 --account acct_selected/);
+    assert.match(stdout.output, /network-ops decline network_ops_event_9 --account acct_selected/);
+  });
+});
+
+test("network ops accept and decline call exact provider-action endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      requests.push({ pathname: url.pathname, method: options.method });
+      return jsonResponse({
+        status: "queued",
+        row_id: "network_ops_event_52369",
+        action: { prefix_id: "evnt_action", key: `action.profile.connect_request_${url.pathname.endsWith("accept.json") ? "accept" : "decline"}`, state: "pending" },
+        request: { id: "evnt_request", display_name: "Roman Kirsanov" }
+      }, { status: 202 });
+    });
+
+    assert.equal(await run(["network-ops", "accept", "network_ops_event_52369"], { env, fetch, stdout }), 0);
+    assert.equal(await run(["network-ops", "decline", "network_ops_event_52369"], { env, fetch, stdout }), 0);
+    assert.equal(await run(["network-ops", "reject", "network_ops_event_52369"], { env, fetch, stdout }), 0);
+
+    assert.deepEqual(requests, [
+      { pathname: "/api/v1/accounts/acct_one/network_ops/network_ops_event_52369/accept.json", method: "POST" },
+      { pathname: "/api/v1/accounts/acct_one/network_ops/network_ops_event_52369/decline.json", method: "POST" },
+      { pathname: "/api/v1/accounts/acct_one/network_ops/network_ops_event_52369/decline.json", method: "POST" }
+    ]);
+    assert.match(stdout.output, /Acceptance queued for Roman Kirsanov/);
+    assert.match(stdout.output, /Decline queued for Roman Kirsanov/);
+  });
+});
+
+test("network ops rejects malformed rows and acting-as selection before calling the API", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const fetch = createFetch(() => { throw new Error("invalid Network Ops input must not call the API"); });
+
+    const rowError = captureStream();
+    assert.equal(await run(["network-ops", "accept", "evnt_123"], {
+      env, fetch, stdout: captureStream(), stderr: rowError
+    }), 1);
+    assert.match(rowError.output, /must match network_ops_event_<positive integer>/);
+
+    const principalError = captureStream();
+    assert.equal(await run(["network-ops", "queue", "--principal", "42"], {
+      env, fetch, stdout: captureStream(), stderr: principalError
+    }), 1);
+    assert.match(principalError.output, /Unknown option '--principal'/);
+    assert.equal(fetch.calls.length, 0);
   });
 });
 

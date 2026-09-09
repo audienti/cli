@@ -66,6 +66,9 @@ const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --f
 const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
 const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
+const NETWORK_OPS_QUEUE_USAGE = "Usage: audienti network-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
+const NETWORK_OPS_ACCEPT_USAGE = "Usage: audienti network-ops accept <row_id> [--json] [--account <acct_id>]";
+const NETWORK_OPS_DECLINE_USAGE = "Usage: audienti network-ops decline <row_id> [--json] [--account <acct_id>]";
 const OPERATOR_PAGINATION_HELP = [
   "Read pagination:",
   "  --page <n>       Positive page number",
@@ -80,6 +83,7 @@ const INBOX_OPS_RULE_USAGE = "Usage: audienti inbox-ops rule <row_id> --scope <s
 const INBOX_OPS_RULE_SET_USAGE = "Usage: audienti inbox-ops rule set --scope <sender|domain> --key <email|domain> --disposition <allow|filter> [--json] [--account <acct_id>]";
 const INBOX_OPS_RULE_REMOVE_USAGE = "Usage: audienti inbox-ops rule remove --scope <sender|domain> --key <email|domain> [--json] [--account <acct_id>]";
 const INBOX_OPS_ROW_ID_PATTERN = /^inbox_ops_message_[1-9]\d*$/;
+const NETWORK_OPS_ROW_ID_PATTERN = /^network_ops_event_[1-9]\d*$/;
 const DNC_ADD_USAGE = "Usage: audienti dnc add <email|citation_id|profile_url> [--json] [--account <acct_id>]";
 const DNC_IMPORT_USAGE = "Usage: audienti dnc import --file <txt|csv> [--json] [--account <acct_id>]";
 const DNC_REMOVE_USAGE = "Usage: audienti dnc remove <dnc_entry_id> [--json] [--account <acct_id>]";
@@ -346,6 +350,10 @@ async function dispatch(argv, context) {
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "outcome") return operatorOutcome(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "answer") return operatorAnswer(rest, context, { accountOverride });
+  if (normalizedResource === "network-ops" && action === "queue") return networkOpsQueue(rest, context, { accountOverride });
+  if (normalizedResource === "network-ops" && ["accept", "decline", "reject"].includes(action)) {
+    return networkOpsAction(action, rest, context, { accountOverride });
+  }
   if (normalizedResource === "inbox-ops" && action === "queue") return inboxOpsQueue(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "filters") return inboxOpsFilters(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "rule") return inboxOpsRule(rest, context, { accountOverride });
@@ -3273,6 +3281,39 @@ async function inboxOpsQueue(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderOperatorRead(payload, context, { command: "inbox-ops queue", accountId, query }, () => renderInboxOpsQueue(payload, context));
+}
+
+async function networkOpsQueue(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    ...operatorPaginationOptions()
+  });
+  if (positionals.length > 0) throw new CommandError(NETWORK_OPS_QUEUE_USAGE);
+
+  const query = { opportunity_kind: "network", ...operatorPaginationQuery(values) };
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.operatorQueue(accountId, query);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderOperatorRead(payload, context, { command: "network-ops queue", accountId, query }, () => renderNetworkOpsQueue(payload, context, { accountId }));
+}
+
+async function networkOpsAction(action, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  const canonicalAction = action === "reject" ? "decline" : action;
+  const usage = canonicalAction === "accept" ? NETWORK_OPS_ACCEPT_USAGE : NETWORK_OPS_DECLINE_USAGE;
+  if (positionals.length !== 1) throw new CommandError(usage);
+
+  const rowId = positionals[0];
+  if (!NETWORK_OPS_ROW_ID_PATTERN.test(rowId)) {
+    throw new CommandError("<row_id> must match network_ops_event_<positive integer>.");
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.networkOpsAction(accountId, rowId, canonicalAction);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderNetworkOpsAction(payload, context);
 }
 
 async function inboxOpsFilters(args, context, { accountOverride } = {}) {
@@ -6405,7 +6446,7 @@ function operatorContinuationCommand(payload, { command, accountId, query, plan 
 }
 
 function operatorContinuationFilters(command, query, resolvedFilters = {}) {
-  if (command === "inbox-ops queue") return [];
+  if (["inbox-ops queue", "network-ops queue"].includes(command)) return [];
 
   const filters = { ...resolvedFilters, ...query };
   const flags = {
@@ -6446,6 +6487,37 @@ function renderInboxOpsQueue(payload, context) {
     display(row?.inbox_ops?.subject),
     display(row?.inbox_ops?.connected_account)
   ]));
+}
+
+function renderNetworkOpsQueue(payload, context, { accountId }) {
+  const decisionQueue = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
+  const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
+  if (rows.length === 0) return writeLine(context.stdout, "No Network Ops rows found.");
+
+  writeAlignedTable(context, ["ROW ID", "PERSON", "MESSAGE", "STATE"], rows.map((row) => [
+    display(row?.id),
+    operatorSubjectLabel(row),
+    row?.network_ops?.note || "-",
+    display(row?.network_ops?.state)
+  ]));
+
+  for (const row of rows) {
+    const accountOption = ` --account ${operatorCommandArgument(accountId)}`;
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `Accept: audienti network-ops accept ${row.id}${accountOption}`);
+    writeLine(context.stdout, `Decline: audienti network-ops decline ${row.id}${accountOption}`);
+  }
+}
+
+function renderNetworkOpsAction(payload, context) {
+  const actionKey = String(payload?.action?.key || "");
+  const label = actionKey.endsWith("_decline") ? "Decline" : "Acceptance";
+  const person = payload?.request?.display_name || payload?.request?.id || payload?.row_id;
+  writeLine(context.stdout, `${label} queued for ${display(person)} (${display(payload?.row_id)}).`);
+  if (payload?.action?.prefix_id) {
+    writeLine(context.stdout, `Action: ${payload.action.prefix_id} (${display(payload.action.state)})`);
+  }
+  writeLine(context.stdout, "Queued means provider execution was requested; it is not confirmation that LinkedIn completed the action.");
 }
 
 function renderInboxOpsFilters(payload, context) {
@@ -7903,6 +7975,11 @@ const HELP_TOPICS = new Map([
   "    audienti inbox-ops queue",
   "    audienti inbox-ops filters",
   "    audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter>",
+  "",
+  "  Network Ops",
+  "    audienti network-ops queue",
+  "    audienti network-ops accept <row_id>",
+  "    audienti network-ops decline <row_id>",
   "",
     "  Analytics",
     "    audienti analytics motions",
@@ -10806,6 +10883,66 @@ const HELP_TOPICS = new Map([
     "  key: PATCH|DELETE /api/v1/accounts/:account_id/inbox_ops/rules.json"
   ].join("\n")],
 
+  ["network-ops", [
+    "Usage:",
+    `  ${NETWORK_OPS_QUEUE_USAGE.slice("Usage: ".length)}`,
+    `  ${NETWORK_OPS_ACCEPT_USAGE.slice("Usage: ".length)}`,
+    `  ${NETWORK_OPS_DECLINE_USAGE.slice("Usage: ".length)}`,
+    "  audienti network-ops reject <row_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Inspect the authenticated owner's private inbound LinkedIn connection requests and queue accept or decline provider actions.",
+    "  `reject` is accepted as an alias for `decline`.",
+    "",
+    "Safety:",
+    "  Rows always resolve through the current owner-private Network Ops scope. Arbitrary event ids and another user's requests fail closed.",
+    "  A successful response means the provider action was queued, not that LinkedIn has confirmed it.",
+    "",
+    "API:",
+    "  queue: GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=network",
+    "  action: POST /api/v1/accounts/:account_id/network_ops/:row_id/:accept_or_decline.json"
+  ].join("\n")],
+
+  ["network-ops queue", [
+    NETWORK_OPS_QUEUE_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    ...OPERATOR_PAGINATION_HELP,
+    "Purpose:",
+    "  List one page of the authenticated owner's pending inbound LinkedIn connection requests, including the exact invitation-bound message when available.",
+    "  The general equivalent is `audienti operator queue --opportunity-kind network`.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=network"
+  ].join("\n")],
+
+  ["network-ops accept", [
+    NETWORK_OPS_ACCEPT_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queue the canonical LinkedIn accept action for one authorized pending Network Ops row.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/network_ops/:row_id/accept.json"
+  ].join("\n")],
+
+  ["network-ops decline", [
+    NETWORK_OPS_DECLINE_USAGE,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queue the canonical LinkedIn decline action for one authorized pending Network Ops row. `reject` is an alias.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/network_ops/:row_id/decline.json"
+  ].join("\n")],
+
   ["operator", [
     "Usage:",
     "  audienti operator next [--json|--plan|--done|--skip|--fail|--return]",
@@ -10822,7 +10959,7 @@ const HELP_TOPICS = new Map([
     "  --motion <motn_id>",
     "  --list <list_id>",
     "  --stage <stage>",
-    "  --opportunity-kind prospect|visibility|inbox",
+    "  --opportunity-kind prospect|visibility|inbox|network|content",
     "  --writing-status ready|drafting|draft_failed"
   ].join("\n")],
 
@@ -11357,6 +11494,9 @@ const HELP_TOPICS = new Map([
   "  audienti operator failed-drafts",
   "  audienti operator failed-drafts requeue <row_id>",
   "  audienti operator outcome <row_id> --payload <file.json>",
+  "  audienti network-ops queue",
+  "  audienti network-ops accept <row_id>",
+  "  audienti network-ops decline <row_id>",
   "  audienti inbox-ops queue",
   "  audienti inbox-ops filters",
   "  audienti inbox-ops rule <row_id> --scope sender --disposition filter",

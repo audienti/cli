@@ -657,6 +657,12 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["operator"], query));
   }
 
+  networkOpsAction(accountId, rowId, action) {
+    return this.requestJson(accountPath(accountId, ["network_ops", rowId, action]), {
+      method: "POST"
+    });
+  }
+
   inboxOpsFilters(accountId) {
     return this.requestJson(accountPath(accountId, ["inbox_ops", "filters"]));
   }
