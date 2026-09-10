@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.64] - 2026-09-10
+
+### Changed
+
+- List routing-rule create and update resolve `locations` and `company_locations` labels to a known LinkedIn geography at save time. Unknown labels return 422. Read responses include `geo_key` on those entries.
+
 ## [0.1.63] - 2026-09-10
 
 ### Fixed

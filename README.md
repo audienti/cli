@@ -321,7 +321,9 @@ audienti lists routing-rules <list_id> apply
 Use `action_kind: "route_to_list"` with `target_list_id` to route to another
 working list. `apply` queues the existing list-routing background job, just like
 the UI; it reports that work was enqueued, not that every prospect has finished
-routing. Run `audienti lists routing-rules help` for the full condition contract.
+routing. Location and company_location labels must resolve to a known geography
+at save time; unknown labels return 422. Run `audienti lists routing-rules help`
+for the full condition contract.
 
 To inspect activity for prospects that entered the account during a specific
 cohort while keeping a separate activity window:

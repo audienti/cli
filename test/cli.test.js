@@ -1008,6 +1008,7 @@ test("help works as the final word at resource and nested command levels", async
       expected: [
         /Usage:\n  audienti lists routing-rules <list_id> list/,
         /--payload <file\.json>/,
+        /geo_key/,
         /POST \/api\/v1\/accounts\/:account_id\/lists\/:list_id\/routing_rules\/apply\.json/
       ]
     },

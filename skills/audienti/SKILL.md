@@ -246,10 +246,11 @@ Never infer that `ready: true`, paused motions, or prepared queue work authorize
 provider execution.
 
 List routing-rule create and update commands accept the same normalized
-condition and action data as the list UI. Inspect the ordered rules first, use
-`audienti lists routing-rules help` for the payload contract, and treat `apply`
-as an asynchronous relaunch: it queues the existing routing job and does not
-mean every list member has finished routing.
+condition and action data as the list UI. Location and company_location labels
+must resolve to a known geography or the request returns 422. Inspect the
+ordered rules first, use `audienti lists routing-rules help` for the payload
+contract, and treat `apply` as an asynchronous relaunch: it queues the existing
+routing job and does not mean every list member has finished routing.
 
 Motion start and end dates are optional lifecycle controls. A due start can
 activate a configured preparing or paused motion; an end date is the final
