@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.63] - 2026-09-10
+
+### Fixed
+
+- `inbox-ops queue` retries a page read that returns HTTP 502, 503, or 504 up to three times with backoff before failing, since one Inbox Ops page can take the server most of the proxy timeout.
+
 ## [0.1.62] - 2026-09-10
 
 ### Added

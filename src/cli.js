@@ -84,6 +84,9 @@ const INBOX_OPS_BULK_LABELS = {
 const INBOX_OPS_SNAPSHOT_FILENAME = "inbox-ops-snapshot.json";
 const INBOX_OPS_MAX_PAGES = 50;
 const INBOX_OPS_BATCH_SIZE = 50;
+const INBOX_OPS_PAGE_ATTEMPTS = 4;
+const INBOX_OPS_RETRY_STATUSES = [502, 503, 504];
+const INBOX_OPS_RETRY_DELAY_MS = 2000;
 const NETWORK_OPS_QUEUE_USAGE = "Usage: audienti network-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
 const NETWORK_OPS_ACCEPT_USAGE = "Usage: audienti network-ops accept <row_id> [--json] [--account <acct_id>]";
 const NETWORK_OPS_DECLINE_USAGE = "Usage: audienti network-ops decline <row_id> [--json] [--account <acct_id>]";
@@ -3312,7 +3315,7 @@ async function inboxOpsQueue(args, context, { accountOverride } = {}) {
     return;
   }
 
-  const { rows, pages, truncated } = await fetchAllInboxOpsRows(client, accountId, query);
+  const { rows, pages, truncated } = await fetchAllInboxOpsRows(client, accountId, query, context);
   await writeInboxOpsSnapshot(context, { accountId, rows });
   if (values.json) {
     return writeJson(context.stdout, {
@@ -3331,7 +3334,22 @@ async function inboxOpsQueue(args, context, { accountOverride } = {}) {
   }
 }
 
-async function fetchAllInboxOpsRows(client, accountId, baseQuery) {
+// One inbox page read can take the server 15-30s, so a busy proxy sometimes
+// answers 502/503/504. Retry that page a few times before failing the listing.
+async function fetchInboxOpsPageWithRetry(client, accountId, query, context) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await client.operatorQueue(accountId, query);
+    } catch (error) {
+      const retryable = error instanceof ApiError && INBOX_OPS_RETRY_STATUSES.includes(error.status);
+      if (!retryable || attempt >= INBOX_OPS_PAGE_ATTEMPTS) throw error;
+      writeLine(context.stderr, `Page read returned HTTP ${error.status}; retrying (${attempt}/${INBOX_OPS_PAGE_ATTEMPTS - 1})...`);
+      await context.sleep(INBOX_OPS_RETRY_DELAY_MS * attempt);
+    }
+  }
+}
+
+async function fetchAllInboxOpsRows(client, accountId, baseQuery, context) {
   const rows = [];
   const seen = new Set();
   let query = { ...baseQuery };
@@ -3339,7 +3357,7 @@ async function fetchAllInboxOpsRows(client, accountId, baseQuery) {
   let truncated = false;
 
   for (;;) {
-    const payload = await client.operatorQueue(accountId, query);
+    const payload = await fetchInboxOpsPageWithRetry(client, accountId, query, context);
     pages += 1;
     for (const row of inboxOpsPayloadRows(payload)) {
       if (seen.has(row.id)) continue;

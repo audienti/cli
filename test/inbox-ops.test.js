@@ -82,6 +82,40 @@ test("inbox-ops queue follows every page, numbers rows, dedupes, and saves a per
   });
 });
 
+test("inbox-ops queue retries a gateway timeout on one page and then continues", async () => {
+  await withInboxConfig(async ({ env }) => {
+    let pageTwoAttempts = 0;
+    const sleeps = [];
+    const fetch = createFetch((url) => {
+      if (url.searchParams.get("operator_page") === "2") {
+        pageTwoAttempts += 1;
+        if (pageTwoAttempts < 3) return jsonResponse({ error: "gateway" }, { status: 504 });
+        return jsonResponse({ decision_queue: PAGE_TWO, has_more: false });
+      }
+      return jsonResponse({ decision_queue: PAGE_ONE, has_more: true, next_page: 2, metrics: { next_cursor: "cursor-two" } });
+    });
+    const stdout = captureStream();
+    const stderr = captureStream();
+
+    assert.equal(await run(["inbox-ops", "queue"], { env, fetch, stdout, stderr, sleep: async (ms) => { sleeps.push(ms); } }), 0);
+    assert.equal(pageTwoAttempts, 3);
+    assert.deepEqual(sleeps, [2000, 4000]);
+    assert.match(stderr.output, /HTTP 504; retrying \(1\/3\)/);
+    assert.match(stdout.output, /4 rows\./);
+  });
+});
+
+test("inbox-ops queue gives up after repeated gateway timeouts", async () => {
+  await withInboxConfig(async ({ env }) => {
+    const fetch = createFetch(() => jsonResponse({ error: "gateway" }, { status: 504 }));
+    const stderr = captureStream();
+
+    assert.equal(await run(["inbox-ops", "queue"], { env, fetch, stdout: captureStream(), stderr, sleep: async () => {} }), 1);
+    assert.equal(fetch.calls.length, 4);
+    assert.match(stderr.output, /HTTP 504/);
+  });
+});
+
 test("inbox-ops queue --json returns the numbered combined list", async () => {
   await withInboxConfig(async ({ env }) => {
     const stdout = captureStream();
