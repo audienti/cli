@@ -12,6 +12,8 @@ undocumented API endpoints.
 
 Set `approach` in a Motion create/update payload, or use `motions update <id> --approach "..."`. A nonblank Approach automatically guides adaptive planning and writing; blank, nil, or whitespace keeps the existing sequence. The simple `--approach ""` flag explicitly clears the guidance and restores that sequence. There is no separate planning-mode selector, and existing sending controls still apply.
 
+To clear an Inbox Ops backlog, run `inbox-ops queue` first: it follows every page, numbers each row, and saves the numbered list locally for the selected account. Then use `inbox-ops ignore`, `filter-domain`, `filter-sender`, `allow-domain`, or `allow-sender` with numbers, ranges (`1-25,30`), row ids, `--domain`, or `--sender`. Always run `--dry-run` first when acting for a person, read the per-row planned/skipped/rejected results back, and only then re-run with `--yes`. Numbers stay valid until `inbox-ops queue` runs again; ignore hides one thread until a new reply, while filter and allow rules are durable across all of the owner's accounts. Rule verbs given only `--domain` or `--sender` write the keyed rule directly. Through MCP use `inbox_ops.queue`, then `inbox_ops.actions` with `{operation, row_ids, dry_run}`.
+
 When Operator exposes `answer_planner_question`, read its prompt and candidate options with `operator queue` or `operator next`. Use `operator answer <row_id> --choice <id>` or `--answer "..."`, exactly one input. This command refetches the exact row and submits the current row and decision fingerprints. Do not substitute a generic outcome, a reusable steer note, or a guessed send. A 409 means refresh the question; 202 means the answer was recorded and planning continues. Answers apply only to that decision.
 
 ## Setup
@@ -140,6 +142,11 @@ audienti network-ops queue --json
 audienti network-ops accept <row_id> --account <acct_id> --json
 audienti network-ops decline <row_id> --account <acct_id> --json
 audienti inbox-ops queue --json
+audienti inbox-ops queue --group-by domain
+audienti inbox-ops ignore 1-25 --dry-run --json
+audienti inbox-ops ignore 1-25 --yes --json
+audienti inbox-ops filter-domain --domain alerts.example.com --yes --json
+audienti inbox-ops filter-sender 3,7 --yes --json
 audienti inbox-ops filters --json
 audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter> --json
 audienti analytics motions --json

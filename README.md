@@ -245,22 +245,42 @@ the provider action was queued; it is not confirmation that LinkedIn completed
 the action. The same queue can be read with
 `audienti operator queue --opportunity-kind network`.
 
-Inbox Ops has its own owner-scoped CLI surface. Queue rows expose the stable row
-id used by the row-based rule command. Rules can also be set or removed directly
-by sender or domain; the server normalizes and validates every supplied key:
+Inbox Ops has its own owner-scoped CLI surface built for clearing a backlog in
+bulk. `inbox-ops queue` follows every page, numbers each row, and saves the
+numbered list locally for the selected account. The bulk verbs select rows by
+number, range, row id, `--domain`, or `--sender`, print a manifest, and apply
+only with `--yes` (or an interactive confirmation). `--dry-run` validates every
+row on the server and reports planned, skipped, and rejected rows without
+changing anything:
 
 ```bash
-audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>]
+audienti inbox-ops queue
+audienti inbox-ops queue --group-by domain
+audienti inbox-ops ignore 1-25 --dry-run
+audienti inbox-ops ignore 1-25 --yes
+audienti inbox-ops filter-domain 3,7 --yes
+audienti inbox-ops filter-domain --domain alerts.example.com --yes
+audienti inbox-ops filter-sender 12 --yes
+audienti inbox-ops allow-sender 4 --yes
+audienti inbox-ops allow-domain --domain customer.example --yes
 audienti inbox-ops filters
 audienti inbox-ops rule <row_id> --scope sender --disposition filter
-audienti inbox-ops rule <row_id> --scope domain --disposition allow
 audienti inbox-ops rule set --scope sender --key news@example.com --disposition filter
 audienti inbox-ops rule remove --scope domain --key example.com
 ```
 
-The rule commands mirror the Operator card actions. They update only
-the authenticated owner's personal/global Inbox Ops preferences and do not
-archive mail, call the provider, or add a DNC entry.
+Numbers stay valid until `inbox-ops queue` runs again. `ignore` hides one
+thread until a newer reply arrives; `filter-*` and `allow-*` write durable rules
+that apply to every current and future matching message across the owner's
+accounts. Rule verbs given only `--domain` or `--sender` write the keyed rule
+directly, even when the matching rows are no longer listed. Every row is
+authorized individually on the server: rows another owner controls, stale rows,
+and malformed ids are rejected one by one while the rest still apply. Pass
+`--page`, `--offset`, or `--cursor` to read exactly one page instead.
+
+All Inbox Ops commands update only the authenticated owner's personal/global
+Inbox Ops preferences or private ignore receipts. They do not archive mail, call
+the provider, or add a DNC entry.
 
 To manage simple reminders for yourself:
 

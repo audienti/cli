@@ -674,6 +674,13 @@ export class AudientiClient {
     });
   }
 
+  inboxOpsActions(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", "actions"]), {
+      method: "POST",
+      body
+    });
+  }
+
   setInboxOpsRule(accountId, body) {
     return this.requestJson(accountPath(accountId, ["inbox_ops", "rules"]), {
       method: "PATCH",

@@ -2,10 +2,11 @@ import { parseArgs } from "node:util";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
-import { configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
+import { configDirectory, configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
 
 class CommandError extends Error {
   constructor(message, { exitCode = 1 } = {}) {
@@ -65,7 +66,24 @@ const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [f
 const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
-const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
+const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--group-by domain] [--json] [--account <acct_id>]";
+const INBOX_OPS_BULK_VERBS = {
+  ignore: "ignore",
+  "filter-sender": "filter_sender",
+  "filter-domain": "filter_domain",
+  "allow-sender": "allow_sender",
+  "allow-domain": "allow_domain"
+};
+const INBOX_OPS_BULK_LABELS = {
+  ignore: "Ignore",
+  "filter-sender": "Always filter the sender of",
+  "filter-domain": "Always filter the domain of",
+  "allow-sender": "Always show the sender of",
+  "allow-domain": "Always show the domain of"
+};
+const INBOX_OPS_SNAPSHOT_FILENAME = "inbox-ops-snapshot.json";
+const INBOX_OPS_MAX_PAGES = 50;
+const INBOX_OPS_BATCH_SIZE = 50;
 const NETWORK_OPS_QUEUE_USAGE = "Usage: audienti network-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--json] [--account <acct_id>]";
 const NETWORK_OPS_ACCEPT_USAGE = "Usage: audienti network-ops accept <row_id> [--json] [--account <acct_id>]";
 const NETWORK_OPS_DECLINE_USAGE = "Usage: audienti network-ops decline <row_id> [--json] [--account <acct_id>]";
@@ -204,7 +222,8 @@ export async function run(argv = process.argv.slice(2), deps = {}) {
     now: deps.now || (() => new Date()),
     sleep: deps.sleep || sleep,
     stdout: deps.stdout || process.stdout,
-    stderr: deps.stderr || process.stderr
+    stderr: deps.stderr || process.stderr,
+    stdin: deps.stdin || process.stdin
   };
 
   try {
@@ -357,6 +376,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "inbox-ops" && action === "queue") return inboxOpsQueue(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "filters") return inboxOpsFilters(rest, context, { accountOverride });
   if (normalizedResource === "inbox-ops" && action === "rule") return inboxOpsRule(rest, context, { accountOverride });
+  if (normalizedResource === "inbox-ops" && Object.hasOwn(INBOX_OPS_BULK_VERBS, action)) return inboxOpsBulk(action, rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["prospects", "prospect"].includes(action)) return analyticsProspects(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["users", "user"].includes(action)) return analyticsUsers(rest, context, { accountOverride });
   if (normalizedResource === "analytics" && ["visibility", "visops"].includes(action)) return analyticsVisibility(rest, context, { accountOverride });
@@ -3271,16 +3291,343 @@ async function operatorQueue(args, context, { accountOverride } = {}) {
 async function inboxOpsQueue(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    ...operatorPaginationOptions()
+    ...operatorPaginationOptions(),
+    "group-by": { type: "string" }
   });
   if (positionals.length > 0) throw new CommandError(INBOX_OPS_QUEUE_USAGE);
+  const groupBy = values["group-by"];
+  if (groupBy !== undefined && groupBy !== "domain") throw new CommandError("--group-by only supports domain.");
 
   const query = { opportunity_kind: "inbox", ...operatorPaginationQuery(values) };
+  const singlePage = [values.page, values.offset, values.cursor].some((value) => value !== undefined);
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.operatorQueue(accountId, query);
-  if (values.json) return writeJson(context.stdout, payload);
 
-  renderOperatorRead(payload, context, { command: "inbox-ops queue", accountId, query }, () => renderInboxOpsQueue(payload, context));
+  if (singlePage) {
+    const payload = await client.operatorQueue(accountId, query);
+    const rows = numberInboxOpsRows(inboxOpsPayloadRows(payload));
+    await writeInboxOpsSnapshot(context, { accountId, rows });
+    if (values.json) return writeJson(context.stdout, payload);
+
+    renderOperatorRead(payload, context, { command: "inbox-ops queue", accountId, query }, () => renderInboxOpsQueue(rows, context, { groupBy }));
+    return;
+  }
+
+  const { rows, pages, truncated } = await fetchAllInboxOpsRows(client, accountId, query);
+  await writeInboxOpsSnapshot(context, { accountId, rows });
+  if (values.json) {
+    return writeJson(context.stdout, {
+      kind: "inbox_ops_queue",
+      account_id: accountId,
+      row_count: rows.length,
+      pages_fetched: pages,
+      truncated,
+      decision_queue: rows
+    });
+  }
+
+  renderInboxOpsQueue(rows, context, { groupBy });
+  if (truncated) {
+    writeLine(context.stdout, `Stopped after ${pages} pages; clear some rows and re-run to list the rest.`);
+  }
+}
+
+async function fetchAllInboxOpsRows(client, accountId, baseQuery) {
+  const rows = [];
+  const seen = new Set();
+  let query = { ...baseQuery };
+  let pages = 0;
+  let truncated = false;
+
+  for (;;) {
+    const payload = await client.operatorQueue(accountId, query);
+    pages += 1;
+    for (const row of inboxOpsPayloadRows(payload)) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      rows.push(row);
+    }
+    if (payload?.has_more !== true) break;
+    if (pages >= INBOX_OPS_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
+
+    const cursor = payload?.metrics?.next_cursor;
+    const nextOffset = payload?.metrics?.next_offset;
+    if (!cursor && !payload?.next_page) break;
+    query = compactObject({
+      ...baseQuery,
+      operator_page: payload?.next_page,
+      operator_cursor: cursor || undefined,
+      operator_offset: cursor ? undefined : (nextOffset ?? undefined)
+    });
+  }
+
+  return { rows: numberInboxOpsRows(rows), pages, truncated };
+}
+
+function inboxOpsPayloadRows(payload) {
+  const decisionQueue = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
+  const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
+  return rows.filter((row) => row?.id).map((row) => ({
+    id: String(row.id),
+    display_name: row.display_name,
+    sender: row?.inbox_ops?.sender,
+    domain: row?.inbox_ops?.domain,
+    subject: row?.inbox_ops?.subject,
+    channel: row?.inbox_ops?.channel,
+    connected_account: row?.inbox_ops?.connected_account,
+    state: row?.inbox_ops?.state
+  }));
+}
+
+function numberInboxOpsRows(rows) {
+  return rows.map((row, index) => ({ number: index + 1, ...row }));
+}
+
+function inboxOpsSnapshotPath(context) {
+  return join(configDirectory(context.env), INBOX_OPS_SNAPSHOT_FILENAME);
+}
+
+async function writeInboxOpsSnapshot(context, { accountId, rows }) {
+  await mkdir(configDirectory(context.env), { recursive: true });
+  await writeFile(inboxOpsSnapshotPath(context), JSON.stringify({
+    version: 1,
+    account_id: accountId,
+    listed_at: context.now().toISOString(),
+    rows
+  }, null, 2));
+}
+
+async function readInboxOpsSnapshot(context, accountId) {
+  let snapshot;
+  try {
+    snapshot = JSON.parse(await readFile(inboxOpsSnapshotPath(context), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT" || error instanceof SyntaxError) return null;
+    throw error;
+  }
+  if (!Array.isArray(snapshot?.rows)) return null;
+  if (String(snapshot.account_id) !== String(accountId)) {
+    throw new CommandError(`The current Inbox Ops list belongs to account ${snapshot.account_id}. Run \`audienti inbox-ops queue --account ${accountId}\` first.`);
+  }
+  return snapshot;
+}
+
+function parseInboxOpsSelectors(positionals) {
+  const numbers = new Set();
+  const rowIds = [];
+  const tokens = positionals.flatMap((value) => String(value).split(",")).map((token) => token.trim()).filter(Boolean);
+
+  for (const token of tokens) {
+    if (/^\d+$/.test(token)) {
+      numbers.add(Number(token));
+      continue;
+    }
+    const range = /^(\d+)-(\d+)$/.exec(token);
+    if (range) {
+      const [start, end] = [Number(range[1]), Number(range[2])];
+      if (start < 1 || end < start) throw new CommandError(`Invalid range "${token}". Use ascending ranges like 1-25.`);
+      for (let number = start; number <= end; number += 1) numbers.add(number);
+      continue;
+    }
+    if (INBOX_OPS_ROW_ID_PATTERN.test(token)) {
+      rowIds.push(token);
+      continue;
+    }
+    throw new CommandError(`Unrecognized selector "${token}". Use numbers, ranges like 1-25, or row ids like inbox_ops_message_123.`);
+  }
+  if (numbers.has(0)) throw new CommandError("Row numbers start at 1.");
+
+  return { numbers: [...numbers].sort((left, right) => left - right), rowIds };
+}
+
+function inboxOpsDomainMatches(rowDomain, domain) {
+  const candidate = String(rowDomain || "").trim().toLowerCase();
+  const wanted = String(domain || "").trim().toLowerCase().replace(/^@/, "").replace(/\.$/, "");
+  if (!candidate || !wanted) return false;
+  return candidate === wanted || candidate.endsWith(`.${wanted}`);
+}
+
+function inboxOpsSenderMatches(rowSender, sender) {
+  const candidate = String(rowSender || "").trim().toLowerCase();
+  const wanted = String(sender || "").trim().toLowerCase();
+  return Boolean(candidate) && candidate === wanted;
+}
+
+async function resolveInboxOpsSelection(context, accountId, { positionals, domain, sender, usage }) {
+  const { numbers, rowIds } = parseInboxOpsSelectors(positionals);
+  const needsSnapshot = numbers.length > 0 || domain !== undefined || sender !== undefined;
+  const snapshot = needsSnapshot ? await readInboxOpsSnapshot(context, accountId) : null;
+  if (needsSnapshot && !snapshot) {
+    throw new CommandError("No Inbox Ops list for this account yet. Run `audienti inbox-ops queue` first, then select rows by number.");
+  }
+
+  const selected = [];
+  const seen = new Set();
+  const add = (row) => {
+    if (seen.has(row.id)) return;
+    seen.add(row.id);
+    selected.push(row);
+  };
+
+  for (const number of numbers) {
+    const row = snapshot.rows.find((candidate) => candidate.number === number);
+    if (!row) {
+      throw new CommandError(`Row ${number} is not in the current Inbox Ops list (1-${snapshot.rows.length}). Re-run \`audienti inbox-ops queue\` to refresh the numbers.`);
+    }
+    add(row);
+  }
+  if (domain !== undefined) {
+    const matches = snapshot.rows.filter((row) => inboxOpsDomainMatches(row.domain, domain));
+    if (matches.length === 0) throw new CommandError(`No listed rows match domain ${domain}.`);
+    matches.forEach(add);
+  }
+  if (sender !== undefined) {
+    const matches = snapshot.rows.filter((row) => inboxOpsSenderMatches(row.sender, sender));
+    if (matches.length === 0) throw new CommandError(`No listed rows match sender ${sender}.`);
+    matches.forEach(add);
+  }
+  for (const rowId of rowIds) add(snapshot?.rows.find((row) => row.id === rowId) || { id: rowId });
+  if (selected.length === 0) throw new CommandError(usage);
+
+  return selected;
+}
+
+function inboxOpsBulkUsage(verb) {
+  return `Usage: audienti inbox-ops ${verb} <numbers|ranges|row_ids...> [--domain <domain>] [--sender <email>] [--dry-run] [--yes] [--json] [--account <acct_id>]`;
+}
+
+async function inboxOpsBulk(verb, args, context, { accountOverride } = {}) {
+  const operation = INBOX_OPS_BULK_VERBS[verb];
+  const usage = inboxOpsBulkUsage(verb);
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    domain: { type: "string" },
+    sender: { type: "string" },
+    "dry-run": { type: "boolean" },
+    yes: { type: "boolean" }
+  });
+  if (positionals.length === 0 && values.domain === undefined && values.sender === undefined) throw new CommandError(usage);
+  if (values["dry-run"] && values.yes) throw new CommandError("Choose either --dry-run or --yes, not both.");
+  if (values.domain !== undefined && !String(values.domain).trim()) throw new CommandError("--domain must not be blank.");
+  if (values.sender !== undefined && !String(values.sender).trim()) throw new CommandError("--sender must not be blank.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const keyedRule = inboxOpsKeyedRule(operation, values, positionals);
+  if (keyedRule) return inboxOpsBulkKeyedRule(verb, keyedRule, values, context, { client, accountId });
+
+  const selected = await resolveInboxOpsSelection(context, accountId, {
+    positionals, domain: values.domain, sender: values.sender, usage
+  });
+  if (!values.json) renderInboxOpsManifest(context, verb, selected);
+
+  if (values["dry-run"]) {
+    const payload = await inboxOpsActionsInBatches(client, accountId, { operation, rows: selected, dryRun: true });
+    if (values.json) return writeJson(context.stdout, payload);
+    return renderInboxOpsBulkResults(context, { selected, payload });
+  }
+
+  if (!values.yes) {
+    const confirmed = await confirmInboxOpsAction(context);
+    if (!confirmed) {
+      if (values.json) return writeJson(context.stdout, { applied: false, operation, row_ids: selected.map((row) => row.id), message: "Re-run with --yes to apply." });
+      writeLine(context.stdout, "");
+      writeLine(context.stdout, "Nothing applied. Re-run with --yes to apply, or --dry-run to validate on the server.");
+      return;
+    }
+  }
+
+  const payload = await inboxOpsActionsInBatches(client, accountId, { operation, rows: selected, dryRun: false });
+  if (values.json) return writeJson(context.stdout, payload);
+  renderInboxOpsBulkResults(context, { selected, payload });
+}
+
+function inboxOpsKeyedRule(operation, values, positionals) {
+  if (operation === "ignore" || positionals.length > 0) return null;
+  const [disposition, scope] = operation.split("_");
+  const key = scope === "domain" ? values.domain : values.sender;
+  const otherKey = scope === "domain" ? values.sender : values.domain;
+  if (key === undefined || otherKey !== undefined) return null;
+  return { scope, disposition, key: String(key).trim() };
+}
+
+async function inboxOpsBulkKeyedRule(verb, { scope, disposition, key }, values, context, { client, accountId }) {
+  const snapshot = await readInboxOpsSnapshot(context, accountId).catch(() => null);
+  const matches = (snapshot?.rows || []).filter((row) => (scope === "domain" ? inboxOpsDomainMatches(row.domain, key) : inboxOpsSenderMatches(row.sender, key)));
+  const action = disposition === "allow" ? "Always show" : "Always filter";
+  if (!values.json) {
+    const listed = matches.length > 0 ? ` Listed rows affected: ${compressNumbers(matches.map((row) => row.number))}.` : "";
+    writeLine(context.stdout, `${action} ${scope} ${key}.${listed}`);
+    writeLine(context.stdout, "This rule is durable and applies to every current and future matching message across your accounts.");
+  }
+  if (values["dry-run"]) {
+    if (values.json) return writeJson(context.stdout, { dry_run: true, rule: { scope, disposition, key }, listed_row_ids: matches.map((row) => row.id) });
+    return writeLine(context.stdout, "Dry run: no rule was written.");
+  }
+  if (!values.yes) {
+    const confirmed = await confirmInboxOpsAction(context);
+    if (!confirmed) {
+      if (values.json) return writeJson(context.stdout, { applied: false, rule: { scope, disposition, key }, message: "Re-run with --yes to apply." });
+      writeLine(context.stdout, "Nothing applied. Re-run with --yes to apply.");
+      return;
+    }
+  }
+
+  const payload = await client.setInboxOpsRule(accountId, { scope, key, disposition });
+  if (values.json) return writeJson(context.stdout, payload);
+  renderInboxOpsRule(payload, context);
+}
+
+async function inboxOpsActionsInBatches(client, accountId, { operation, rows, dryRun }) {
+  const results = [];
+  let last = null;
+  for (let index = 0; index < rows.length; index += INBOX_OPS_BATCH_SIZE) {
+    const batch = rows.slice(index, index + INBOX_OPS_BATCH_SIZE);
+    last = await client.inboxOpsActions(accountId, compactObject({
+      operation,
+      row_ids: batch.map((row) => row.id),
+      dry_run: dryRun || undefined
+    }));
+    results.push(...(Array.isArray(last?.results) ? last.results : []));
+  }
+
+  const counts = {};
+  for (const result of results) counts[result.status] = (counts[result.status] || 0) + 1;
+  return { ...(last || {}), operation, dry_run: dryRun, counts, results };
+}
+
+async function confirmInboxOpsAction(context) {
+  const input = context.stdin;
+  if (!input || !input.isTTY) return false;
+  const prompt = createInterface({ input, output: context.stdout });
+  try {
+    const answer = await prompt.question("Apply? [y/N] ");
+    return /^y(es)?$/i.test(String(answer).trim());
+  } finally {
+    prompt.close();
+  }
+}
+
+function compressNumbers(numbers) {
+  const sorted = [...new Set(numbers.filter((value) => Number.isInteger(value)))].sort((left, right) => left - right);
+  const parts = [];
+  let start = null;
+  let previous = null;
+  for (const number of sorted) {
+    if (start === null) {
+      start = previous = number;
+      continue;
+    }
+    if (number === previous + 1) {
+      previous = number;
+      continue;
+    }
+    parts.push(start === previous ? String(start) : `${start}-${previous}`);
+    start = previous = number;
+  }
+  if (start !== null) parts.push(start === previous ? String(start) : `${start}-${previous}`);
+  return parts.join(",");
 }
 
 async function networkOpsQueue(args, context, { accountOverride } = {}) {
@@ -6475,18 +6822,78 @@ function operatorCommandArgument(value) {
   return /^[a-zA-Z0-9_./:@=-]+$/.test(text) ? text : `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-function renderInboxOpsQueue(payload, context) {
-  const decisionQueue = Array.isArray(payload?.decision_queue) ? payload.decision_queue : [];
-  const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
+function renderInboxOpsQueue(rows, context, { groupBy } = {}) {
   if (rows.length === 0) return writeLine(context.stdout, "No Inbox Ops rows found.");
 
-  writeAlignedTable(context, ["ROW ID", "SENDER", "DOMAIN", "SUBJECT", "CONNECTED INBOX"], rows.map((row) => [
-    display(row?.id),
-    display(row?.inbox_ops?.sender),
-    display(row?.inbox_ops?.domain),
-    display(row?.inbox_ops?.subject),
-    display(row?.inbox_ops?.connected_account)
+  if (groupBy === "domain") {
+    const groups = new Map();
+    for (const row of rows) {
+      const domain = row.domain || "-";
+      if (!groups.has(domain)) groups.set(domain, []);
+      groups.get(domain).push(row.number);
+    }
+    const sorted = [...groups.entries()].sort(([leftDomain, left], [rightDomain, right]) => right.length - left.length || leftDomain.localeCompare(rightDomain));
+    writeAlignedTable(context, ["DOMAIN", "COUNT", "ROWS"], sorted.map(([domain, numbers]) => [domain, numbers.length, compressNumbers(numbers)]));
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, `${rows.length} rows across ${groups.size} domains.`);
+    writeLine(context.stdout, "Filter a whole domain: audienti inbox-ops filter-domain --domain <domain> --yes");
+    writeLine(context.stdout, "Ignore listed rows: audienti inbox-ops ignore 1-25 --yes");
+    return;
+  }
+
+  writeAlignedTable(context, ["#", "ROW ID", "SENDER", "DOMAIN", "SUBJECT", "CONNECTED INBOX"], rows.map((row) => [
+    row.number,
+    display(row.id),
+    display(row.sender),
+    display(row.domain),
+    display(row.subject),
+    display(row.connected_account)
   ]));
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, `${rows.length} rows. Numbers stay valid until you re-run this command.`);
+  writeLine(context.stdout, "Act by number: audienti inbox-ops ignore 1-25 | filter-domain 3,7 | filter-sender 12 | allow-sender 4 (add --yes to apply, --dry-run to validate)");
+  writeLine(context.stdout, "Group first: audienti inbox-ops queue --group-by domain");
+}
+
+function renderInboxOpsManifest(context, verb, selected) {
+  writeLine(context.stdout, `${INBOX_OPS_BULK_LABELS[verb]} ${selected.length} message${selected.length === 1 ? "" : "s"}:`);
+  writeAlignedTable(context, ["#", "ROW ID", "SENDER", "DOMAIN", "SUBJECT"], selected.map((row) => [
+    row.number ?? "-",
+    display(row.id),
+    display(row.sender),
+    display(row.domain),
+    display(row.subject)
+  ]));
+}
+
+function renderInboxOpsBulkResults(context, { selected, payload }) {
+  const numbers = new Map(selected.map((row) => [row.id, row.number]));
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  writeLine(context.stdout, "");
+  writeAlignedTable(context, ["#", "ROW ID", "RESULT", "DETAIL"], results.map((result) => [
+    numbers.get(result.row_id) ?? "-",
+    display(result.row_id),
+    humanize(result.status),
+    inboxOpsResultDetail(result)
+  ]));
+  const counts = payload?.counts || {};
+  const summary = ["applied", "planned", "skipped", "rejected"]
+    .filter((status) => counts[status])
+    .map((status) => `${humanize(status)} ${counts[status]}`)
+    .join(", ");
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, payload?.dry_run ? `Dry run: ${summary || "nothing to do"}. No changes were made.` : `${summary || "Nothing changed"}.`);
+  if (!payload?.dry_run && counts.applied) {
+    writeLine(context.stdout, "Row numbers stay valid until you re-run `audienti inbox-ops queue`.");
+  }
+}
+
+function inboxOpsResultDetail(result) {
+  const parts = [];
+  if (result.reason) parts.push(humanize(result.reason));
+  if (result.scope && result.key) parts.push(`${result.disposition || ""} ${result.scope} ${result.key}`.trim());
+  if (result.message) parts.push(result.message);
+  return parts.join(" | ") || "-";
 }
 
 function renderNetworkOpsQueue(payload, context, { accountId }) {
@@ -7972,7 +8379,10 @@ const HELP_TOPICS = new Map([
   "    audienti operator failed-drafts requeue <row_id>",
   "",
   "  Inbox Ops",
-  "    audienti inbox-ops queue",
+  "    audienti inbox-ops queue [--group-by domain]",
+  "    audienti inbox-ops ignore <numbers|ranges> --yes",
+  "    audienti inbox-ops filter-domain <numbers|ranges> | --domain <domain> --yes",
+  "    audienti inbox-ops filter-sender|allow-sender|allow-domain <numbers|ranges> --yes",
   "    audienti inbox-ops filters",
   "    audienti inbox-ops rule <row_id> --scope <sender|domain> --disposition <allow|filter>",
   "",
@@ -10809,6 +11219,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     `  ${INBOX_OPS_QUEUE_USAGE.slice("Usage: ".length)}`,
     `  ${INBOX_OPS_FILTERS_USAGE.slice("Usage: ".length)}`,
+    ...Object.keys(INBOX_OPS_BULK_VERBS).map((verb) => `  ${inboxOpsBulkUsage(verb).slice("Usage: ".length)}`),
     `  ${INBOX_OPS_RULE_USAGE.slice("Usage: ".length)}`,
     `  ${INBOX_OPS_RULE_SET_USAGE.slice("Usage: ".length)}`,
     `  ${INBOX_OPS_RULE_REMOVE_USAGE.slice("Usage: ".length)}`,
@@ -10816,10 +11227,16 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Inspect the authenticated owner's private Inbox Ops queue and personal/global email rules, then set or remove sender and domain rules.",
+    "  Inspect the authenticated owner's private Inbox Ops queue and personal/global email rules, then clear rows in bulk by number or set and remove sender and domain rules.",
+    "",
+    "Workflow:",
+    "  1. audienti inbox-ops queue                      (numbers every row and saves the list locally)",
+    "  2. audienti inbox-ops queue --group-by domain    (see which domains dominate)",
+    "  3. audienti inbox-ops ignore 1-25 --yes          (or filter-domain / filter-sender / allow-sender / allow-domain)",
     "",
     "Safety:",
     "  Rules always apply to the token owner. Row-based updates derive identity from an authorized current Inbox Ops row.",
+    "  Bulk verbs print a manifest and apply only with --yes or an interactive confirmation; --dry-run validates every row on the server without changing anything.",
     "  Key-based set/remove commands normalize and validate the supplied sender or domain on the server.",
     "",
     "Rule values:",
@@ -10829,6 +11246,7 @@ const HELP_TOPICS = new Map([
     "API:",
     "  queue: GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox",
     "  filters: GET /api/v1/accounts/:account_id/inbox_ops/filters.json",
+    "  bulk: POST /api/v1/accounts/:account_id/inbox_ops/actions.json",
     "  rule: PATCH /api/v1/accounts/:account_id/inbox_ops/:row_id/rule.json",
     "  keyed rules: PATCH|DELETE /api/v1/accounts/:account_id/inbox_ops/rules.json"
   ].join("\n")],
@@ -10838,14 +11256,46 @@ const HELP_TOPICS = new Map([
     "",
     "Status: implemented",
     "",
-    ...OPERATOR_PAGINATION_HELP,
     "Purpose:",
-    "  List one page of the authenticated owner's current private Inbox Ops rows with the authoritative sender/domain rule identity, subject, and connected inbox.",
-    "  When more rows exist, the plain output prints the exact continuation command with the same account.",
+    "  List every current private Inbox Ops row for the authenticated owner with a short number, the authoritative sender/domain rule identity, subject, and connected inbox.",
+    "  The numbered list is saved locally per account so the bulk verbs can select rows by number until you re-run this command.",
+    "  --group-by domain summarizes the same list by sender domain with the row numbers in each group.",
+    "",
+    "Paging:",
+    "  Without paging flags the command follows every page itself. Pass --page, --offset, or --cursor to read exactly one page instead;",
+    "  that page is numbered and saved the same way and prints the exact continuation command when more rows remain.",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/operator.json?opportunity_kind=inbox"
   ].join("\n")],
+
+  ...Object.keys(INBOX_OPS_BULK_VERBS).map((verb) => [`inbox-ops ${verb}`, [
+    inboxOpsBulkUsage(verb),
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    verb === "ignore"
+      ? "  Hide the selected private inbound threads from Inbox Ops. A newer reply in the same thread reopens it."
+      : `  ${INBOX_OPS_BULK_LABELS[verb]} the selected rows by writing one durable ${verb.endsWith("domain") ? "domain" : "sender"} rule per distinct key. Matching current and future messages ${verb.startsWith("allow") ? "always stay visible" : "leave the queue"}.`,
+    "",
+    "Selectors:",
+    "  Numbers and ranges from the last `audienti inbox-ops queue` list: 1 4 7-12 or 1-25,30",
+    "  Row ids: inbox_ops_message_<id>",
+    "  --domain <domain> selects every listed row whose sender domain matches (subdomains included)",
+    "  --sender <email> selects every listed row from that sender",
+    ...(verb === "ignore" ? [] : [
+      `  With only --${verb.endsWith("domain") ? "domain" : "sender"} and no row selectors, the rule is written directly by key even when the rows are no longer listed.`
+    ]),
+    "",
+    "Safety:",
+    "  Prints the manifest first. Applies only with --yes or an interactive confirmation.",
+    "  --dry-run sends the batch to the server with dry_run and reports planned/skipped/rejected per row without changing anything.",
+    "  Rows another owner controls, stale rows, and malformed ids are rejected individually; the rest still apply.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/inbox_ops/actions.json {operation, row_ids, dry_run}"
+  ].join("\n")]),
 
   ["inbox-ops filters", [
     INBOX_OPS_FILTERS_USAGE,
@@ -11498,6 +11948,10 @@ const HELP_TOPICS = new Map([
   "  audienti network-ops accept <row_id>",
   "  audienti network-ops decline <row_id>",
   "  audienti inbox-ops queue",
+  "  audienti inbox-ops queue --group-by domain",
+  "  audienti inbox-ops ignore 1-25 --dry-run",
+  "  audienti inbox-ops ignore 1-25 --yes",
+  "  audienti inbox-ops filter-domain --domain alerts.example.com --yes",
   "  audienti inbox-ops filters",
   "  audienti inbox-ops rule <row_id> --scope sender --disposition filter",
   "  audienti inbox-ops rule set --scope sender --key news@example.com --disposition filter",

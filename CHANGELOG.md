@@ -4,6 +4,14 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.62] - 2026-09-10
+
+### Added
+
+- `inbox-ops queue` now follows every page, numbers each row, saves the numbered list locally per account, and offers `--group-by domain`.
+- Add bulk `inbox-ops ignore`, `filter-sender`, `filter-domain`, `allow-sender`, and `allow-domain` verbs that select rows by number, range, row id, `--domain`, or `--sender`, print a manifest, validate with `--dry-run`, and apply with `--yes` through the new `POST inbox_ops/actions` API with per-row results.
+- Add `inbox_ops.queue`, `inbox_ops.filters`, `inbox_ops.actions`, `inbox_ops.rules.set`, and `inbox_ops.rules.remove` MCP tools.
+
 ## [0.1.61] - 2026-09-08
 
 ### Added

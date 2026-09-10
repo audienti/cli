@@ -42,7 +42,7 @@ for (const command of readCommands) {
     });
   });
 
-  test(`${command.join(" ")} continues an empty scanned page instead of declaring no work`, async () => {
+  test(`${command.join(" ")} continues an empty scanned page instead of declaring no work`, { skip: command[0] === "inbox-ops" && "inbox-ops queue follows every page itself; see cli.test.js" }, async () => {
     await withOperatorConfig(async (env) => {
       const stdout = captureStream();
       const fetch = createFetch(() => jsonResponse({
