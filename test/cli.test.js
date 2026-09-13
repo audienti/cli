@@ -10109,6 +10109,7 @@ test("network ops queue forces the private network lane and renders exact invita
           profile: { display_name: "Roman Kirsanov", username: "romankirsanov" },
           network_ops: {
             request_event_id: "evnt_request",
+            headline: "CEO & Founder at Northstar | Managed IT & Cybersecurity",
             note: "Hi William, thanks for the comment — thought I'd say hi.",
             state: "unread",
             received_at: "2026-08-19T12:00:00Z"
@@ -10121,10 +10122,37 @@ test("network ops queue forces the private network lane and renders exact invita
     const exitCode = await run(["network-ops", "queue"], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /ROW ID\s+PERSON\s+MESSAGE\s+STATE/);
-    assert.match(stdout.output, /network_ops_event_52369\s+Roman Kirsanov\s+Hi William, thanks for the comment/);
+    assert.match(stdout.output, /ROW ID\s+PERSON\s+HEADLINE\s+MESSAGE\s+STATE/);
+    assert.match(stdout.output, /network_ops_event_52369\s+Roman Kirsanov\s+CEO & Founder at Northstar \| Managed IT & Cybersecurity\s+Hi William, thanks for the comment/);
     assert.match(stdout.output, /Accept: audienti network-ops accept network_ops_event_52369 --account acct_one/);
     assert.match(stdout.output, /Decline: audienti network-ops decline network_ops_event_52369 --account acct_one/);
+  });
+});
+
+test("network ops queue omits a blank headline without changing the invitation note", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      decision_queue: [{
+        id: "network_ops_event_9",
+        profile: { display_name: "Owen Blankline" },
+        network_ops: { note: "Please connect.", state: "unread" }
+      }],
+      has_more: false
+    }));
+
+    const exitCode = await run(["network-ops", "queue"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /ROW ID\s+PERSON\s+HEADLINE\s+MESSAGE\s+STATE/);
+    assert.match(stdout.output, /network_ops_event_9\s+Owen Blankline\s+-\s+Please connect\.\s+unread/);
+    assert.doesNotMatch(stdout.output, /CEO & Founder/);
   });
 });
 

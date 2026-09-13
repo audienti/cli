@@ -231,8 +231,9 @@ scan does not mean the queue is empty. JSON output preserves the API response.
 Pagination flags are not accepted when recording outcomes or requeueing drafts.
 
 Network Ops has its own owner-scoped CLI surface for pending inbound LinkedIn
-connection requests. It shows the exact invitation-bound message when one was
-captured and queues the same canonical provider actions as the product UI:
+connection requests. It shows the already-synced LinkedIn profile headline when
+one is present, keeps the exact invitation-bound message when one was captured,
+and queues the same canonical provider actions as the product UI:
 
 ```bash
 audienti network-ops queue [--page <n>] [--offset <n>|--cursor <token>]

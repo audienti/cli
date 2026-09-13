@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.66] - 2026-09-13
+
+### Added
+
+- `network-ops queue` now shows the already-synced LinkedIn profile headline as a distinct column, leaving job title, company, and the invitation message unchanged and omitting a blank headline as `-`.
+
 ## [0.1.65] - 2026-09-13
 
 ### Changed

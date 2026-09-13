@@ -6919,9 +6919,10 @@ function renderNetworkOpsQueue(payload, context, { accountId }) {
   const rows = decisionQueue.length > 0 ? decisionQueue : [payload?.next_move].filter(Boolean);
   if (rows.length === 0) return writeLine(context.stdout, "No Network Ops rows found.");
 
-  writeAlignedTable(context, ["ROW ID", "PERSON", "MESSAGE", "STATE"], rows.map((row) => [
+  writeAlignedTable(context, ["ROW ID", "PERSON", "HEADLINE", "MESSAGE", "STATE"], rows.map((row) => [
     display(row?.id),
     operatorSubjectLabel(row),
+    row?.network_ops?.headline || "-",
     row?.network_ops?.note || "-",
     display(row?.network_ops?.state)
   ]));
@@ -11389,7 +11390,7 @@ const HELP_TOPICS = new Map([
     "",
     ...OPERATOR_PAGINATION_HELP,
     "Purpose:",
-    "  List one page of the authenticated owner's pending inbound LinkedIn connection requests, including the exact invitation-bound message when available.",
+    "  List one page of the authenticated owner's pending inbound LinkedIn connection requests, including the already-synced LinkedIn headline and the exact invitation-bound message when available.",
     "  The general equivalent is `audienti operator queue --opportunity-kind network`.",
     "",
     "API:",
