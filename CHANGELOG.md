@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.65] - 2026-09-13
+
+### Changed
+
+- Prospect profile reporting through the account API now resolves citation identifiers through canonical identity evidence while preserving prospect ownership and malformed-email rejection.
+
 ## [0.1.64] - 2026-09-10
 
 ### Changed
