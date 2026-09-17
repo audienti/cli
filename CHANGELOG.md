@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.69] - 2026-09-17
+
+### Added
+
+- Prospect profile payloads now include a `plan` block for planner-controlled prospects, reporting plan versions, refresh status and reason, not-before/next-recheck timestamps, evaluated-at time, and the current plan payload; plus an `effective_action` block carrying the next action and its assigned account user. Both are omitted when the prospect is not planner-controlled.
+
 ## [0.1.68] - 2026-09-17
 
 ### Changed
