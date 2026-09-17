@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.67] - 2026-09-17
+
+### Added
+
+- List routing-rules API response now reports whether rules were force re-applied.
+
 ## [0.1.66] - 2026-09-13
 
 ### Added
