@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.68] - 2026-09-17
+
+### Changed
+
+- Prospect `company_certification` now returns `status: "missing"` with `reason: "reported_company_mismatch"` when the reported company disagrees with the cited company profile, and never certifies generic LinkedIn company pages such as Stealth Startup.
+
 ## [0.1.67] - 2026-09-17
 
 ### Added
