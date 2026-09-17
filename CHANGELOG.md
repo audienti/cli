@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.70] - 2026-09-18
+
+### Added
+
+- Automation-controls payloads now report `follow_autopilot_enabled` and `withdraw_connection_autopilot_enabled`, and `network-ops automation-controls` renders both as `follow` and `withdraw invitations` rows. Both default to enabled; set either to `false` to disable that action.
+
 ## [0.1.69] - 2026-09-17
 
 ### Added

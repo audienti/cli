@@ -1906,6 +1906,29 @@ test("users automation show resolves me and renders a concise safety summary", a
   });
 });
 
+test("users automation show renders follow and withdrawal controls without inventing sparse flags", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    for (const enabled of [false, true, undefined]) {
+      const payload = automationPayload();
+      if (enabled !== undefined) {
+        payload.current.controls.follow_autopilot_enabled = enabled;
+        payload.current.controls.withdraw_connection_autopilot_enabled = enabled;
+      }
+      const stdout = captureStream();
+      const fetch = createFetch(() => jsonResponse(payload));
+      const exitCode = await run(["users", "automation", "show", "136"], { env, fetch, stdout });
+      assert.equal(exitCode, 0);
+      if (enabled === undefined) {
+        assert.doesNotMatch(stdout.output, /follow (?:on|off)|withdraw invitations (?:on|off)/);
+      } else {
+        const state = enabled ? "on" : "off";
+        assert.ok(stdout.output.includes(`follow ${state} | withdraw invitations ${state}`));
+      }
+    }
+  });
+});
+
 test("users automation update previews by default and overrides payload control flags", async () => {
   await withTempConfigHome(async ({ env, root }) => {
     await writeConfig({

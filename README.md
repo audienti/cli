@@ -435,6 +435,11 @@ omitted controls, returns the before and proposed/actual after states, and
 records an audit event only for an applied update. `--json` prints the server
 payload unchanged.
 
+Follow (including unfollow) and invitation withdrawal are enabled by default. Set
+`follow_autopilot_enabled` or `withdraw_connection_autopilot_enabled` to `false`
+to disable that action. These preferences still respect automatic sending and
+other execution limits; follows also require visibility automation.
+
 An `automation-controls.json` warm-up payload can use every automation gate,
 independent action limits, an aggregate visibility limit, and a weekly ramp:
 
@@ -443,6 +448,8 @@ independent action limits, an aggregate visibility limit, and a weekly ramp:
   "automation_controls": {
     "automatic_sending_enabled": false,
     "visibility_operations_autopilot_enabled": true,
+    "follow_autopilot_enabled": true,
+    "withdraw_connection_autopilot_enabled": true,
     "post_comment_autopilot_enabled": false,
     "connection_request_autopilot_enabled": false,
     "inmail_autopilot_enabled": false,

@@ -5366,6 +5366,8 @@ function renderUserAutomationControls(snapshot, context) {
   const entries = [
     ["automatic sending", controls.automatic_sending_enabled],
     ["visibility operations", controls.visibility_operations_autopilot_enabled],
+    ["follow", controls.follow_autopilot_enabled],
+    ["withdraw invitations", controls.withdraw_connection_autopilot_enabled],
     ["risk cooldown", snapshot?.risk_cooldown_enabled]
   ].filter(([, enabled]) => enabled !== undefined);
   if (entries.length === 0) return;
