@@ -6444,6 +6444,78 @@ test("prospects replan shows coach errors as not persisted", async () => {
   });
 });
 
+test("prospects replan renders canonical non-applied statuses and refresh reasons", async () => {
+  const cases = [
+    {
+      status: "pending",
+      label: "pending",
+      reason: "execution_busy",
+      guidance: /not applied yet/
+    },
+    {
+      status: "busy",
+      label: "busy",
+      reason: "execution_busy",
+      guidance: /No replan was applied/
+    },
+    {
+      status: "failed",
+      label: "failed",
+      reason: "refresh_failed",
+      guidance: /could not apply it/
+    },
+    {
+      status: "evaluation_error",
+      label: "evaluation error",
+      reason_code: "evaluation_error",
+      guidance: /evaluation failed/
+    },
+    {
+      status: "unsupported_plan_version",
+      label: "unsupported plan version",
+      reason: "unsupported_plan_version",
+      guidance: /unsupported Planner version/
+    },
+    {
+      status: "not_applied",
+      label: "not applied",
+      reason: "legacy",
+      guidance: /was not persisted/
+    }
+  ];
+
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    for (const scenario of cases) {
+      const stdout = captureStream();
+      const fetch = createFetch(() => jsonResponse({
+        status: scenario.status,
+        applied: false,
+        changed: false,
+        ...(scenario.reason_code ? { reason_code: scenario.reason_code } : {}),
+        ...(scenario.reason ? { refresh: { status: scenario.status, reason: scenario.reason } } : {}),
+        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+        current: { next_action: { type: "wait" } },
+        replanned: { next_action: { type: "wait" } }
+      }));
+
+      const exitCode = await run(["prospects", "replan", "prsp_one", "--apply"], { env, fetch, stdout });
+
+      assert.equal(exitCode, 0, scenario.status);
+      assert.match(stdout.output, new RegExp(`Replan ${scenario.label} for Pat Prospect`));
+      assert.match(stdout.output, new RegExp(`Reason: ${scenario.reason_code || scenario.reason}`));
+      assert.match(stdout.output, scenario.guidance);
+      assert.doesNotMatch(stdout.output, /Replan dry run/);
+    }
+  });
+});
+
 test("prospects reenrich dry-runs profile enrichment details", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({

@@ -6054,16 +6054,32 @@ function renderProspectReplan(payload, context) {
   const current = payload?.current || {};
   const replanned = payload?.replanned || {};
   const status = replanStatusLabel(payload);
+  const reason = payload?.reason_code || payload?.refresh?.reason;
 
   writeLine(context.stdout, `Replan ${status} for ${display(prospect.display_name || prospect.name)} (${display(prospect.prefix_id)}).`);
   writeLine(context.stdout, `Changed: ${payload?.changed ? "yes" : "no"}`);
-  if (payload?.reason_code) writeLine(context.stdout, `Reason: ${payload.reason_code}`);
+  if (reason) writeLine(context.stdout, `Reason: ${reason}`);
   writeLine(context.stdout, `Current: ${formatCoachAction(current.next_action)}`);
   writeLine(context.stdout, `Replanned: ${formatCoachAction(replanned.next_action)}`);
   if (replanned.rationale) writeLine(context.stdout, `Rationale: ${replanned.rationale}`);
   if (replanned.guidance) writeLine(context.stdout, `Guidance: ${replanned.guidance}`);
-  if (payload?.status === "dry_run") writeLine(context.stdout, "Run again with --apply to persist this plan.");
-  if (payload?.status === "coach_error") writeLine(context.stdout, "The plan was not persisted. Fix the coach error and rerun with --apply.");
+  if (payload?.status === "dry_run") {
+    writeLine(context.stdout, "Run again with --apply to persist this plan.");
+  } else if (payload?.status === "coach_error") {
+    writeLine(context.stdout, "The plan was not persisted. Fix the coach error and rerun with --apply.");
+  } else if (payload?.status === "pending") {
+    writeLine(context.stdout, "The replan request was recorded but is not applied yet. Retry after the refresh reason clears.");
+  } else if (payload?.status === "busy") {
+    writeLine(context.stdout, "Planner execution is busy. No replan was applied; retry later.");
+  } else if (payload?.status === "failed") {
+    writeLine(context.stdout, "The request was recorded, but the Planner could not apply it. Review the reason before retrying.");
+  } else if (payload?.status === "evaluation_error") {
+    writeLine(context.stdout, "Planner evaluation failed. Fix the evaluation error and rerun with --apply.");
+  } else if (payload?.status === "unsupported_plan_version") {
+    writeLine(context.stdout, "This membership uses an unsupported Planner version. Migrate it before retrying.");
+  } else if (payload?.status === "not_applied") {
+    writeLine(context.stdout, "The plan was not persisted. Review the reason before retrying.");
+  }
 }
 
 function renderProspectReenrich(payload, context) {
@@ -6121,12 +6137,24 @@ function formatObjectCounts(value) {
     .join(", ");
 }
 
-function replanStatusLabel(payload) {
-  if (payload?.status === "dry_run") return "dry run";
-  if (payload?.status === "coach_error") return "coach error";
-  if (payload?.status === "not_applied") return "not applied";
+const REPLAN_STATUS_LABELS = Object.freeze({
+  dry_run: "dry run",
+  coach_error: "coach error",
+  not_applied: "not applied",
+  pending: "pending",
+  busy: "busy",
+  failed: "failed",
+  evaluation_error: "evaluation error",
+  unsupported_plan_version: "unsupported plan version"
+});
 
-  return payload?.applied ? "applied" : "dry run";
+function replanStatusLabel(payload) {
+  const rawStatus = payload?.status;
+  if (Object.prototype.hasOwnProperty.call(REPLAN_STATUS_LABELS, rawStatus)) {
+    return REPLAN_STATUS_LABELS[rawStatus];
+  }
+
+  return payload?.applied ? "applied" : "not applied";
 }
 
 function formatCoachAction(nextAction = {}) {

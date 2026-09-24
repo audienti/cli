@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-09-24
+
+### Changed
+
+- Prospect replan API responses now use the canonical Planner contract for admitted memberships.
+
 ## [0.1.70] - 2026-09-18
 
 ### Added
