@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.71] - 2026-09-24
+
+### Changed
+
+- Motion updates now honor the server's durable first-discovery Approach lock: edits remain available before the first accepted discovery launch and are rejected after the lock is set.
+
 ## [0.1.70] - 2026-09-18
 
 ### Added
