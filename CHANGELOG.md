@@ -10,6 +10,8 @@ All notable changes to the Audienti CLI are documented here.
 
 - Motion updates now honor the server's durable first-discovery Approach lock: edits remain available before the first accepted discovery launch and are rejected after the lock is set.
 
+- Prospect replan API responses now use the canonical Planner contract for admitted memberships.
+
 ## [0.1.70] - 2026-09-18
 
 ### Added
