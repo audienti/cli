@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- Add Motion-owned discovery signal tracking to `motions show` and the `motions signals` command, including attribution holds, source counts, and retained Agent provenance.
+
+## [0.1.73] - 2026-09-26
+
+### Added
+
+- Add the account-scoped `motions signals` command for inspecting Motion-owned Topic and profile signals.
+
 ## [0.1.72] - 2026-09-26
 
 ### Added

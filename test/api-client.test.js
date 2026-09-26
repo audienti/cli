@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
 import { ApiError, AudientiClient } from "../src/api-client.js";
 import { createFetch, jsonResponse } from "./helpers.js";
@@ -47,4 +48,42 @@ test("syncSocialCookieMessages preserves API status and error body", async () =>
       return true;
     }
   );
+});
+
+test("motionSignals uses the local account-scoped API route", async (t) => {
+  const responseBody = {
+    motion_id: 42,
+    prefix_id: "motn_local",
+    counts: { total: 1, actionable: 0, pending: 0, held: 1 },
+    signals: [{ type: "topic", label: "Held topic", status: "held" }]
+  };
+  let request;
+  const server = createServer((incoming, response) => {
+    request = {
+      method: incoming.method,
+      path: incoming.url,
+      authorization: incoming.headers.authorization
+    };
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify(responseBody));
+  });
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(() => server.close());
+
+  const { port } = server.address();
+  const client = new AudientiClient({
+    host: `http://127.0.0.1:${port}`,
+    token: "local-motion-token"
+  });
+
+  assert.deepEqual(await client.motionSignals("acct_local", "motn_local"), responseBody);
+  assert.deepEqual(request, {
+    method: "GET",
+    path: "/api/v1/accounts/acct_local/motions/motn_local/signals.json",
+    authorization: "Bearer local-motion-token"
+  });
 });

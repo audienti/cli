@@ -313,6 +313,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "lists" && ["routing-rules", "rules"].includes(action)) return listsRoutingRules(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "list") return motionsList(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "show") return motionsShow(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "signals") return motionsSignals(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
   if (normalizedResource === "motions" && ["abm-companies", "company-filters"].includes(action)) return motionsAbmCompanies(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "analytics") return motionsAnalytics(rest, context, { accountOverride });
@@ -1795,6 +1796,17 @@ async function motionsShow(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, motion);
 
   renderMotion(motion, context);
+}
+
+async function motionsSignals(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError("Usage: audienti motions signals <motn_id> [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.motionSignals(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderMotionDiscoverySignals(payload, context);
 }
 
 async function motionsStatus(args, context, { accountOverride } = {}) {
@@ -5880,6 +5892,7 @@ function renderMotion(motion, context) {
   if (Array.isArray(motion?.inbound_channels)) writeLine(context.stdout, `Inbound channels: ${display(motion.inbound_channels.join(", "), "-")}`);
   renderMotionLopaProfiles(motion?.lopa_profiles, context);
   renderMotionSignalRows(motion?.signal_rows, context);
+  renderMotionDiscoverySignals(motion?.discovery_signals, context);
   renderMotionAbmCompanies(motion, context, { showEmpty: false });
   if (Array.isArray(motion?.play_tags)) writeLine(context.stdout, `Tags: ${display(motion.play_tags.join(", "), "-")}`);
   if (motion?.principal_account_user?.id) {
@@ -5911,6 +5924,32 @@ function renderMotionSignalRows(rows, context) {
       row.topics ? `topics=${singleLine(row.topics)}` : null
     ].filter(Boolean).join("; ");
     writeLine(context.stdout, `- ${display(row.scope)}: ${display(row.question)}${filters ? ` [${filters}]` : ""}`);
+  }
+}
+
+function renderMotionDiscoverySignals(payload, context) {
+  if (!payload || typeof payload !== "object") return;
+
+  const rows = Array.isArray(payload?.signals) ? payload.signals : [];
+  const counts = payload?.counts || {};
+  const motionId = payload?.prefix_id ? ` (${display(payload.prefix_id)})` : "";
+
+  writeLine(context.stdout, `Motion-owned discovery signals${motionId}: ${display(counts.total, "0")} total, ${display(counts.actionable, "0")} actionable, ${display(counts.pending, "0")} pending, ${display(counts.held, "0")} held`);
+  if (rows.length === 0) return;
+
+  for (const row of rows) {
+    const provenance = Array.isArray(row.agent_provenance)
+      ? row.agent_provenance.map((entry) => [entry.agent_name, entry.agent_id].filter(Boolean).join(" · ")).filter(Boolean).join(", ")
+      : "";
+    const status = row.actionable ? "actionable" : display(row.status, "pending");
+    const sourceCounts = row.source_counts || {};
+    const detail = [
+      row.canonical_url || row.topic?.slug || row.source_key,
+      `sources=${display(sourceCounts.total, "0")}/${display(sourceCounts.accepted, "0")}/${display(sourceCounts.rejected, "0")}`,
+      provenance ? `agents=${provenance}` : null,
+      !row.actionable && row.motion_attribution_reason ? `reason=${singleLine(row.motion_attribution_reason)}` : null
+    ].filter(Boolean).join("; ");
+    writeLine(context.stdout, `- [${status}] ${display(row.type, "signal")}: ${display(row.label, "unnamed")} (${detail})`);
   }
 }
 
@@ -9887,6 +9926,7 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti motions list [--tag <tag>] [--json]",
     "  audienti motions show <motn_id> [--json]",
+    "  audienti motions signals <motn_id> [--json]",
     "  audienti motions status <motn_id> [--json]",
     "  audienti motions run-discovery <motn_id> [--target-count <n>] [--json]",
     "  audienti motions quick-start --url <company_url> [--confirm] [--wait] [--json]",
@@ -9982,10 +10022,28 @@ const HELP_TOPICS = new Map([
     "  inbound_channels: enabled inbound collectors for inbound motions",
     "  lopa_profiles[]: tracked LinkedIn profile rows for LOPA motions",
     "  signal_rows[]: outbound signal configuration rows",
+    "  discovery_signals: Motion-owned Topic/profile signals with attribution state and Agent provenance",
     "  abm_companies[]: motion-scoped positive company filter rows",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/motions/:id.json"
+  ].join("\n")],
+
+  ["motions signals", [
+    "Usage:",
+    "  audienti motions signals <motn_id> [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Read the Topic and tracked-profile signals owned by one Motion.",
+    "  Actionable rows have exact Motion attribution; pending and held rows remain inspectable with their reason and evidence.",
+    "",
+    "Output:",
+    "  Shows attribution state, canonical source URL or Topic, accepted/rejected source counts, and retained Agent provenance.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/motions/:id/signals.json"
   ].join("\n")],
 
   ["motions abm-companies", [

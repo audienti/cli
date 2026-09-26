@@ -3625,6 +3625,22 @@ test("motions show renders signal rows and motion configuration details", async 
             posting_language: "QBR"
           }
         ],
+        discovery_signals: {
+          prefix_id: "motn_lopa",
+          counts: { total: 1, actionable: 1, pending: 0, held: 0 },
+          signals: [
+            {
+              type: "topic",
+              label: "AML vendor governance",
+              source_key: "topic:12",
+              topic: { slug: "aml-vendor-governance" },
+              actionable: true,
+              status: "attributed",
+              source_counts: { total: 4, accepted: 3, rejected: 1 },
+              agent_provenance: [{ agent_name: "Finder One", agent_id: 21 }]
+            }
+          ]
+        },
         abm_companies: [
           { id: 7, kind: "linkedin_company_url", normalized_value: "https://www.linkedin.com/company/acme", status: "pending" }
         ]
@@ -3642,8 +3658,52 @@ test("motions show renders signal rows and motion configuration details", async 
     assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/in\/source-profile \(creator\)/);
     assert.match(stdout.output, /Signal rows:/);
     assert.match(stdout.output, /posting_language=QBR/);
+    assert.match(stdout.output, /Motion-owned discovery signals \(motn_lopa\): 1 total, 1 actionable, 0 pending, 0 held/);
+    assert.match(stdout.output, /\[actionable\] topic: AML vendor governance/);
     assert.match(stdout.output, /ROW ID\s+KIND\s+VALUE\s+STATUS/);
     assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/company\/acme/);
+  });
+});
+
+test("motions signals reads Motion-owned attribution and renders held reasons", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/motions/motn_signals/signals.json");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse({
+        prefix_id: "motn_signals",
+        counts: { total: 1, actionable: 0, pending: 0, held: 1 },
+        signals: [
+          {
+            type: "profile_signal",
+            label: "@held-profile",
+            source_key: "profile_signal:https://www.linkedin.com/in/held-profile",
+            canonical_url: "https://www.linkedin.com/in/held-profile",
+            actionable: false,
+            status: "held",
+            motion_attribution_reason: "ambiguous_motion_owner",
+            source_counts: { total: 2, accepted: 1, rejected: 1 },
+            agent_provenance: [{ agent_name: "Legacy Finder", agent_id: 34 }]
+          }
+        ]
+      });
+    });
+
+    const exitCode = await run(["motions", "signals", "motn_signals"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Motion-owned discovery signals \(motn_signals\): 1 total, 0 actionable, 0 pending, 1 held/);
+    assert.match(stdout.output, /\[held\] profile_signal: @held-profile/);
+    assert.match(stdout.output, /reason=ambiguous_motion_owner/);
+    assert.match(stdout.output, /agents=Legacy Finder · 34/);
   });
 });
 

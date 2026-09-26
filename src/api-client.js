@@ -346,6 +346,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["motions", motionId]));
   }
 
+  motionSignals(accountId, motionId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "signals"]));
+  }
+
   createMotion(accountId, body) {
     return this.requestJson(accountPath(accountId, ["motions"]), {
       method: "POST",
