@@ -161,6 +161,7 @@ audienti content programs
 audienti content plan <cprg_id>
 audienti content approve <cpwi_id>
 audienti content comments
+audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] --json
 audienti prospects show <prsp_id> --json
 audienti prospects list --profiles
 audienti prospects list --assigned-user unassigned
@@ -417,6 +418,12 @@ quotas, daily targets, motion active days, the outstanding-invitation cap, ramp
 configuration, current outstanding inventory, any inventory blocker, and current
 invitation capacity calculated by the server. A `null` weekly quota means
 unlimited.
+
+For an email social cookie, `social-cookies sync-messages` requests the shared
+account-scoped cookie/folder sync slot and prints the server's durable status.
+Pass `--folder` to select a provider folder and `--retry` only when an explicit
+retry is intended. The command does not call a provider directly; `--json`
+returns the accepted request and `sync_states` payload unchanged.
 
 Use `users automation` to inspect or change one account user's LinkedIn safety
 policy without changing the saved account selection:

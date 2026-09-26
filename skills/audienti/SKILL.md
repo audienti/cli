@@ -122,6 +122,7 @@ audienti users activity me --window 7d --json
 audienti users automation show <account_user_id|me> --platform linkedin --json --account <acct_id>
 audienti users automation update <account_user_id|me> --payload automation-controls.json --json --account <acct_id>
 audienti users automation update <account_user_id|me> --payload automation-controls.json --apply --json --account <acct_id>
+audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] --json
 audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me --json
 audienti lists create --name "Target list" --json
 audienti lists routing-rules <list_id> list --json

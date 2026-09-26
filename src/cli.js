@@ -176,6 +176,7 @@ const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_STATUS_USAGE = "Usage: audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]";
+const SOCIAL_COOKIES_SYNC_MESSAGES_USAGE = "Usage: audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] [--json] [--account <acct_id>]";
 const COHORT_STAGE_ORDER = [
   "identified",
   "pre_connect",
@@ -269,6 +270,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "automation") return usersAutomation(rest, context, { accountOverride });
   if (normalizedResource === "setup" && action === "play" && rest[0] === "preflight") return setupPlayPreflight(rest.slice(1), context, { accountOverride });
+  if (normalizedResource === "social-cookies" && action === "sync-messages") return socialCookiesSyncMessages(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "show") return offersShow(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
@@ -479,6 +481,7 @@ function normalizeResource(resource) {
   if (resource === "principals") return "users";
   if (resource === "writers") return "writer";
   if (resource === "company_rules" || resource === "company-rules") return "company-rules";
+  if (resource === "social_cookie" || resource === "social_cookies") return "social-cookies";
   return resource === "plays" ? "motions" : resource;
 }
 
@@ -1031,6 +1034,26 @@ async function setupPlayPreflight(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderSetupPlayPreflight(payload, context);
+}
+
+async function socialCookiesSyncMessages(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    folder: { type: "string" },
+    retry: { type: "boolean" }
+  });
+  if (positionals.length !== 1 || (values.folder !== undefined && !String(values.folder).trim())) {
+    throw new CommandError(SOCIAL_COOKIES_SYNC_MESSAGES_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.syncSocialCookieMessages(accountId, positionals[0], compactObject({
+    folder: values.folder,
+    retry: values.retry ? true : undefined
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderSocialCookieSync(payload, context);
 }
 
 async function offersList(args, context, { accountOverride } = {}) {
@@ -5441,6 +5464,30 @@ function renderSetupPlayPreflight(payload, context) {
   }
 }
 
+function renderSocialCookieSync(payload, context) {
+  const requestStatus = payload?.requested ? "accepted" : "not requested";
+  const coalesced = payload?.coalesced ? " (coalesced)" : "";
+  writeLine(context.stdout, `Email sync: ${requestStatus}${coalesced} for ${display(payload?.social_cookie_id)}`);
+  if (payload?.reason) writeLine(context.stdout, `Reason: ${payload.reason}`);
+
+  const states = Array.isArray(payload?.sync_states) ? payload.sync_states : [];
+  if (states.length === 0) return writeLine(context.stdout, "No durable sync state returned.");
+
+  writeLine(context.stdout, "FOLDER\tSTATUS\tGENERATION\tATTEMPTS\tDUE\tLAST SUCCESS\tLAST ERROR\tSYNCED THROUGH");
+  for (const state of states) {
+    writeLine(context.stdout, [
+      display(state?.canonical_folder),
+      display(state?.status),
+      display(state?.generation, "0"),
+      display(state?.attempts, "0"),
+      display(state?.due_at),
+      display(state?.last_success_at),
+      display(state?.last_error_code),
+      display(state?.last_synced_through_at)
+    ].join("\t"));
+  }
+}
+
 function renderSetupLinkedInCapabilities(capabilities, context) {
   const storedBoolean = (value) => value === true ? "yes" : value === false ? "no" : "unknown";
   writeLine(
@@ -8333,6 +8380,9 @@ const HELP_TOPICS = new Map([
     "    audienti users automation show <account_user_id|me>",
     "    audienti users automation update <account_user_id|me> --payload <file.json> [--apply]",
     "",
+    "  Email sync",
+    "    audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry]",
+    "",
     "  Motions / plays",
     "    audienti motions list",
     "    audienti motions show <motn_id>",
@@ -8642,6 +8692,41 @@ const HELP_TOPICS = new Map([
     "",
     "Input shape:",
     "  acct_id: string  Account prefix id, for example acct_abc123"
+  ].join("\n")],
+
+  ["social-cookies", [
+    "Usage:",
+    "  audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Commands:",
+    "  audienti social-cookies sync-messages  Request the shared durable email sync slot",
+    "",
+    "Run `audienti social-cookies sync-messages help` for the request and output contract."
+  ].join("\n")],
+
+  ["social-cookies sync-messages", [
+    "Usage:",
+    "  audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] [--json] [--account <acct_id>]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Request one account-scoped email sync through the server's durable cookie/folder slot.",
+    "",
+    "Input shape:",
+    "  scok_id: string  Social cookie prefix id or numeric id",
+    "  folder: string   Provider folder; omitted means the server's INBOX default",
+    "  retry: flag       Explicitly reopen an exhausted or credential-held slot",
+    "",
+    "Output shape:",
+    "  requested, coalesced, reason, sync_states  Server response and durable slot status",
+    "  sync_states      Includes status, generation, attempts, due, last error, and watermark",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/social_cookies/:id/sync_messages.json",
+    "  The CLI only requests work; provider traversal remains owned by the server worker."
   ].join("\n")],
 
   ["accounts list", [

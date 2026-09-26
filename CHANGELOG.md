@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.72] - 2026-09-26
+
+### Added
+
+- Add `social-cookies sync-messages` to request account-scoped email syncs with folder and explicit-retry controls, while printing the server's durable sync-slot status.
+
 ## [0.1.71] - 2026-09-24
 
 ### Changed
