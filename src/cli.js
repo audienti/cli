@@ -116,13 +116,13 @@ const COMPANY_RULES_SHOW_USAGE = "Usage: audienti company-rules show <rule_id> [
 const ACCOUNTS_SHOW_USAGE = "Usage: audienti accounts show [<acct_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUPS_USAGE = "Usage: audienti linkedin-lookups <company-sizes|company-types|functions|industries|job-titles|locations|seniorities> [--query <text>] [--icp <icp_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUP_KINDS = new Map([
-  ["company-sizes", { path: "company_sizes", query: "none", icp: false }],
-  ["company-types", { path: "company_types", query: "none", icp: false }],
+  ["company-sizes", { path: "company_sizes", query: "none", icp: true }],
+  ["company-types", { path: "company_types", query: "none", icp: true }],
   ["functions", { path: "functions", query: "required", icp: true }],
   ["industries", { path: "industries", query: "required", icp: false }],
   ["job-titles", { path: "job_titles", query: "required", icp: true }],
   ["locations", { path: "locations", query: "required", icp: true }],
-  ["seniorities", { path: "seniorities", query: "optional", icp: false }]
+  ["seniorities", { path: "seniorities", query: "optional", icp: true }]
 ]);
 const TASKS_LIST_USAGE = "Usage: audienti tasks list [--status <open|completed>] [--limit <n>] [--json] [--account <acct_id>]";
 const TASKS_ADD_USAGE = "Usage: audienti tasks add --title <text> --due <time> [--prospect <prsp_id>] [--list <list_id>] [--assigned-user <id|me>] [--notes <text>] [--json] [--account <acct_id>]";
@@ -8903,10 +8903,14 @@ const HELP_TOPICS = new Map([
     "  Look up LinkedIn targeting values (the ids used in ICP filters).",
     "",
     "Kinds:",
-    "  job-titles, functions, locations  --query required; --icp prefers values saved on that ICP",
-    "  industries                        --query required",
+    "  job-titles, functions, locations  --query required",
+    "  industries                        --query required; --icp not supported",
     "  seniorities                       --query optional filter",
-    "  company-sizes, company-types      no options; returns the full list",
+    "  company-sizes, company-types      no --query; returns the full list",
+    "",
+    "ICP option:",
+    "  --icp <icp_id> uses values saved on that ICP of the active account (or --account).",
+    "  For company-sizes, company-types and seniorities it also saves the list onto that ICP.",
     "",
     "API:",
     "  GET /api/v1/linkedin_lookups/<kind>.json?q=<text>&icp_id=<icp_id>",

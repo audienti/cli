@@ -12654,10 +12654,24 @@ test("linkedin-lookups call lookup endpoints with query, icp and account params"
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /B\t1-10\t-/);
 
+    for (const args of [
+      ["linkedin-lookups", "company-sizes", "--icp", "icpp_one", "--json"],
+      ["linkedin-lookups", "company-types", "--icp", "icpp_one", "--account", "acct_two", "--json"],
+      ["linkedin-lookups", "seniorities", "--query", "chief", "--icp", "icpp_one", "--json"]
+    ]) {
+      stdout = captureStream();
+      exitCode = await run(args, { env, fetch, stdout });
+      assert.equal(exitCode, 0, args.join(" "));
+      assert.deepEqual(JSON.parse(stdout.output), [{ id: "B", name: "1-10" }]);
+    }
+
     assert.deepEqual(requestedUrls, [
       "https://app.audienti.com/api/v1/linkedin_lookups/job_titles.json?q=head+of+sales&icp_id=icpp_one&account_id=acct_one",
       "https://app.audienti.com/api/v1/linkedin_lookups/locations.json?q=United",
-      "https://app.audienti.com/api/v1/linkedin_lookups/company_sizes.json"
+      "https://app.audienti.com/api/v1/linkedin_lookups/company_sizes.json",
+      "https://app.audienti.com/api/v1/linkedin_lookups/company_sizes.json?icp_id=icpp_one&account_id=acct_one",
+      "https://app.audienti.com/api/v1/linkedin_lookups/company_types.json?icp_id=icpp_one&account_id=acct_two",
+      "https://app.audienti.com/api/v1/linkedin_lookups/seniorities.json?q=chief&icp_id=icpp_one&account_id=acct_one"
     ]);
   });
 });
