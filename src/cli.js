@@ -113,6 +113,24 @@ const COMPANY_RULES_UPDATE_USAGE = "Usage: audienti company-rules update <rule_i
 const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_id> [--json] [--account <acct_id>]";
 const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
 const COMPANY_RULES_SHOW_USAGE = "Usage: audienti company-rules show <rule_id> [--json] [--account <acct_id>]";
+const HUBSPOT_SHOW_USAGE = "Usage: audienti hubspot show [--errors] [--limit <n>] [--json] [--account <acct_id>]";
+const HUBSPOT_CONNECT_USAGE = "Usage: audienti hubspot connect --token <private_app_token> [--json] [--account <acct_id>]";
+const HUBSPOT_DISCONNECT_USAGE = "Usage: audienti hubspot disconnect [--json] [--account <acct_id>]";
+const HUBSPOT_SYNC_USAGE = "Usage: audienti hubspot sync [--json] [--account <acct_id>]";
+const HUBSPOT_RETRY_USAGE = "Usage: audienti hubspot retry <event_id> [--json] [--account <acct_id>]";
+const HUBSPOT_LIST_SYNCS_CREATE_USAGE = "Usage: audienti hubspot list-syncs create --hubspot-list <hubspot_list_id> --signal <signal_id> --source-agent <agent_id> [--json] [--account <acct_id>]";
+const HUBSPOT_LIST_SYNCS_UPDATE_USAGE = "Usage: audienti hubspot list-syncs update <list_sync_id> --signal <signal_id> --source-agent <agent_id> [--json] [--account <acct_id>]";
+const HUBSPOT_LIST_SYNCS_REMOVE_USAGE = "Usage: audienti hubspot list-syncs remove <list_sync_id> [--json] [--account <acct_id>]";
+const HUBSPOT_LIST_SYNCS_SYNC_USAGE = "Usage: audienti hubspot list-syncs sync <list_sync_id> [--json] [--account <acct_id>]";
+const WEBHOOKS_LIST_USAGE = "Usage: audienti webhooks list [--json] [--account <acct_id>]";
+const WEBHOOKS_CREATE_USAGE = "Usage: audienti webhooks create [--label <text>] [--signal <signal_id>] [--list <list_id>] [--json] [--account <acct_id>]";
+const WEBHOOKS_UPDATE_USAGE = "Usage: audienti webhooks update <endpoint_id> [--label <text>] [--status <active|paused>] [--signal <signal_id|none>] [--json] [--account <acct_id>]";
+const WEBHOOKS_ROTATE_USAGE = "Usage: audienti webhooks rotate <endpoint_id> [--json] [--account <acct_id>]";
+const WEBHOOKS_REMOVE_USAGE = "Usage: audienti webhooks remove <endpoint_id> [--json] [--account <acct_id>]";
+const REPLY_ALERTS_SHOW_USAGE = "Usage: audienti reply-alerts show [--json]";
+const REPLY_ALERTS_UPDATE_USAGE = "Usage: audienti reply-alerts update [--phone <number|none>] [--sms <true|false>] [--slack <true|false>] [--json]";
+const BRAND_PROFILE_SHOW_USAGE = "Usage: audienti brand-profile show [--json] [--account <acct_id>]";
+const BRAND_PROFILE_UPDATE_USAGE = "Usage: audienti brand-profile update [--voice <text>] [--style <text>] [--do-not-use <text>] [--json] [--account <acct_id>]";
 const ACCOUNTS_SHOW_USAGE = "Usage: audienti accounts show [<acct_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUPS_USAGE = "Usage: audienti linkedin-lookups <company-sizes|company-types|functions|industries|job-titles|locations|seniorities> [--query <text>] [--icp <icp_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUP_KINDS = new Map([
@@ -310,6 +328,11 @@ async function dispatch(argv, context) {
   if (normalizedResource === "company-rules" && action === "update") return companyRulesUpdate(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && ["remove", "delete"].includes(action)) return companyRulesRemove(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && action === "apply") return companyRulesApply(rest, context, { accountOverride });
+  if (normalizedResource === "hubspot" && action === "list-syncs") return hubspotListSyncs(rest[0], rest.slice(1), context, { accountOverride });
+  if (normalizedResource === "hubspot") return hubspotCommand(action, rest, context, { accountOverride });
+  if (normalizedResource === "webhooks") return webhooksCommand(action, rest, context, { accountOverride });
+  if (normalizedResource === "reply-alerts") return replyAlertsCommand(action, rest, context);
+  if (normalizedResource === "brand-profile") return brandProfileCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
   if (normalizedResource === "tasks" && ["list", "manage"].includes(action)) return tasksList(rest, context, { accountOverride });
@@ -497,6 +520,10 @@ function normalizeResource(resource) {
   if (resource === "principals") return "users";
   if (resource === "writers") return "writer";
   if (resource === "company_rules" || resource === "company-rules") return "company-rules";
+  if (resource === "hubspot_integration" || resource === "hubspot-integration") return "hubspot";
+  if (resource === "prospect_webhook_endpoints" || resource === "prospect-webhook-endpoints") return "webhooks";
+  if (resource === "reply_alerts") return "reply-alerts";
+  if (resource === "brand_profile") return "brand-profile";
   if (resource === "linkedin_lookups" || resource === "linkedin-lookups") return "linkedin-lookups";
   if (resource === "social_cookie" || resource === "social_cookies") return "social-cookies";
   return resource === "plays" ? "motions" : resource;
@@ -1489,6 +1516,360 @@ async function companyRulesApply(args, context, { accountOverride } = {}) {
   } else {
     writeLine(context.stdout, `Applied company rule. Matched ${display(payload?.matched_count, 0)}, changed ${display(payload?.applied_count, 0)}.`);
   }
+}
+
+async function hubspotCommand(action, args, context, { accountOverride } = {}) {
+  if (action === "show") return hubspotShow(args, context, { accountOverride });
+  if (action === "connect") return hubspotConnect(args, context, { accountOverride });
+  if (action === "disconnect") return hubspotDisconnect(args, context, { accountOverride });
+  if (action === "sync") return hubspotSync(args, context, { accountOverride });
+  if (action === "retry") return hubspotRetry(args, context, { accountOverride });
+
+  throw new CommandError(`Unknown hubspot command "${display(action, "")}". Run \`audienti hubspot --help\`.`);
+}
+
+async function hubspotShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    errors: { type: "boolean" },
+    limit: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(HUBSPOT_SHOW_USAGE);
+  const limit = normalizeOptionalPositiveInteger(values.limit, "--limit");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.hubspotIntegration(accountId, {
+    log_status: values.errors ? "error" : undefined,
+    limit
+  });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const integration = payload?.hubspot_integration;
+  if (!integration) {
+    writeLine(context.stdout, "HubSpot: not connected.");
+    return;
+  }
+
+  writeLine(context.stdout, `HubSpot: ${display(integration.status)} | Auto sync: ${integration.auto_sync_enabled ? "on" : "off"}`);
+  writeLine(context.stdout, `Portal: ${display(integration.external_account_name, "-")} (${display(integration.external_account_id, "-")})`);
+  writeLine(context.stdout, `Last synced: ${display(integration.last_synced_at, "never")}`);
+  if (integration.last_error_message) writeLine(context.stdout, `Last error: ${integration.last_error_message}`);
+
+  const listSyncs = payload?.list_syncs || [];
+  writeLine(context.stdout, `List syncs: ${listSyncs.length}`);
+  for (const listSync of listSyncs) {
+    writeLine(context.stdout, `  ${display(listSync.id)}  ${display(listSync.source_list_name || listSync.source_list_id)}  ${display(listSync.display_status || listSync.status)}  signal: ${display(listSync.custom_signal?.name, "-")}`);
+  }
+
+  const events = payload?.recent_events || [];
+  writeLine(context.stdout, `Recent events: ${events.length}`);
+  for (const event of events) {
+    const retry = event.retryable ? "  (retryable)" : "";
+    writeLine(context.stdout, `  ${display(event.id)}  ${display(event.status)}  ${display(event.event_type)}  ${display(event.message, "")}${retry}`);
+  }
+}
+
+async function hubspotConnect(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    token: { type: "string" }
+  });
+  if (positionals.length > 0 || !String(values.token || "").trim()) throw new CommandError(HUBSPOT_CONNECT_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.connectHubspot(accountId, { personal_access_token: String(values.token).trim() });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const integration = payload?.hubspot_integration;
+  writeLine(context.stdout, `Connected HubSpot portal ${display(integration?.external_account_name || integration?.external_account_id)}.`);
+  if (payload?.warning) writeLine(context.stdout, `Warning: ${payload.warning}`);
+}
+
+async function hubspotDisconnect(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(HUBSPOT_DISCONNECT_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.disconnectHubspot(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, "Disconnected HubSpot.");
+}
+
+async function hubspotSync(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(HUBSPOT_SYNC_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.syncHubspot(accountId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, display(payload?.message, "HubSpot sync all queued."));
+}
+
+async function hubspotRetry(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(HUBSPOT_RETRY_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.retryHubspotEvent(accountId, { event_id: positionals[0] });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, display(payload?.message, "HubSpot retry queued."));
+}
+
+async function hubspotListSyncs(action, args, context, { accountOverride } = {}) {
+  const options = {
+    ...jsonOptions(),
+    "hubspot-list": { type: "string" },
+    signal: { type: "string" },
+    "source-agent": { type: "string" }
+  };
+
+  if (action === "create") {
+    const { values, positionals } = parseCommandArgs(args, options);
+    if (positionals.length > 0 || !values["hubspot-list"] || !values.signal || !values["source-agent"]) {
+      throw new CommandError(HUBSPOT_LIST_SYNCS_CREATE_USAGE);
+    }
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.createHubspotListSync(accountId, {
+      source_list_id: values["hubspot-list"],
+      custom_signal_id: values.signal,
+      source_agent_id: values["source-agent"]
+    });
+    if (values.json) return writeJson(context.stdout, payload);
+
+    const listSync = payload?.list_sync;
+    writeLine(context.stdout, `Created HubSpot list sync ${display(listSync?.id)} for ${display(listSync?.source_list_name || listSync?.source_list_id)}.`);
+    return;
+  }
+
+  if (action === "update") {
+    const { values, positionals } = parseCommandArgs(args, options);
+    if (positionals.length !== 1 || !values.signal || !values["source-agent"]) throw new CommandError(HUBSPOT_LIST_SYNCS_UPDATE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.updateHubspotListSync(accountId, positionals[0], {
+      custom_signal_id: values.signal,
+      source_agent_id: values["source-agent"]
+    });
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, `Updated HubSpot list sync ${display(payload?.list_sync?.id || positionals[0])}. Updated prospects: ${display(payload?.updated_count, 0)}.`);
+    return;
+  }
+
+  if (action === "remove" || action === "delete") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length !== 1) throw new CommandError(HUBSPOT_LIST_SYNCS_REMOVE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.deleteHubspotListSync(accountId, positionals[0]);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, `Removed HubSpot list sync ${display(payload?.id || positionals[0])}.`);
+    return;
+  }
+
+  if (action === "sync") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length !== 1) throw new CommandError(HUBSPOT_LIST_SYNCS_SYNC_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.syncHubspotListSync(accountId, positionals[0]);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, display(payload?.message, "HubSpot list sync queued."));
+    return;
+  }
+
+  throw new CommandError(`Unknown hubspot list-syncs command "${display(action, "")}". Run \`audienti hubspot list-syncs --help\`.`);
+}
+
+async function webhooksCommand(action, args, context, { accountOverride } = {}) {
+  const options = {
+    ...jsonOptions(),
+    label: { type: "string" },
+    signal: { type: "string" },
+    list: { type: "string" },
+    status: { type: "string" }
+  };
+
+  if (action === "list") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length > 0) throw new CommandError(WEBHOOKS_LIST_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.prospectWebhookEndpoints(accountId);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    const endpoints = payload?.prospect_webhook_endpoints || [];
+    if (endpoints.length === 0) {
+      writeLine(context.stdout, "No prospect webhook endpoints.");
+      return;
+    }
+    for (const endpoint of endpoints) {
+      writeLine(context.stdout, `${display(endpoint.id)}  ${display(endpoint.display_label || endpoint.label)}  ${display(endpoint.status)}  ${display(endpoint.url)}`);
+    }
+    return;
+  }
+
+  if (action === "create") {
+    const { values, positionals } = parseCommandArgs(args, options);
+    if (positionals.length > 0 || values.status !== undefined) throw new CommandError(WEBHOOKS_CREATE_USAGE);
+
+    const body = {};
+    if (values.label !== undefined) body.label = values.label;
+    if (values.signal !== undefined) body.custom_signal_id = values.signal;
+    if (values.list !== undefined) body.list_id = values.list;
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.createProspectWebhookEndpoint(accountId, body);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeWebhookEndpoint("Created", payload?.prospect_webhook_endpoint, context);
+    return;
+  }
+
+  if (action === "update") {
+    const { values, positionals } = parseCommandArgs(args, options);
+    const body = {};
+    if (values.label !== undefined) body.label = values.label;
+    if (values.status !== undefined) body.status = values.status;
+    if (values.signal !== undefined) body.custom_signal_id = values.signal === "none" ? "" : values.signal;
+    if (positionals.length !== 1 || values.list !== undefined || Object.keys(body).length === 0) {
+      throw new CommandError(WEBHOOKS_UPDATE_USAGE);
+    }
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.updateProspectWebhookEndpoint(accountId, positionals[0], body);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeWebhookEndpoint("Updated", payload?.prospect_webhook_endpoint, context);
+    return;
+  }
+
+  if (action === "rotate") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length !== 1) throw new CommandError(WEBHOOKS_ROTATE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.rotateProspectWebhookEndpoint(accountId, positionals[0]);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeWebhookEndpoint("Rotated", payload?.prospect_webhook_endpoint, context);
+    return;
+  }
+
+  if (action === "remove" || action === "delete") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length !== 1) throw new CommandError(WEBHOOKS_REMOVE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.deleteProspectWebhookEndpoint(accountId, positionals[0]);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, `Removed prospect webhook endpoint ${display(payload?.id || positionals[0])}.`);
+    return;
+  }
+
+  throw new CommandError(`Unknown webhooks command "${display(action, "")}". Run \`audienti webhooks --help\`.`);
+}
+
+function writeWebhookEndpoint(verb, endpoint, context) {
+  writeLine(context.stdout, `${verb} prospect webhook endpoint ${display(endpoint?.display_label || endpoint?.label)} (${display(endpoint?.id)}).`);
+  writeLine(context.stdout, `Status: ${display(endpoint?.status)} | Signal: ${display(endpoint?.custom_signal?.name, "-")} | List: ${display(endpoint?.list?.name, "-")}`);
+  writeLine(context.stdout, `URL: ${display(endpoint?.url)}`);
+}
+
+async function replyAlertsCommand(action, args, context) {
+  if (action === "show") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length > 0) throw new CommandError(REPLY_ALERTS_SHOW_USAGE);
+
+    const config = await requireAuthenticatedConfig(context);
+    const client = clientFromConfig(config, context);
+    const payload = await client.replyAlerts();
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeReplyAlerts(payload?.reply_alerts, context);
+    return;
+  }
+
+  if (action === "update") {
+    const { values, positionals } = parseCommandArgs(args, {
+      ...jsonOptions(),
+      phone: { type: "string" },
+      sms: { type: "string" },
+      slack: { type: "string" }
+    });
+    const body = {};
+    if (values.phone !== undefined) body.phone_number = values.phone === "none" ? "" : values.phone;
+    if (values.sms !== undefined) body.sms_enabled = parseBooleanString(values.sms, "--sms");
+    if (values.slack !== undefined) body.slack_enabled = parseBooleanString(values.slack, "--slack");
+    if (positionals.length > 0 || Object.keys(body).length === 0) throw new CommandError(REPLY_ALERTS_UPDATE_USAGE);
+
+    const config = await requireAuthenticatedConfig(context);
+    const client = clientFromConfig(config, context);
+    const payload = await client.updateReplyAlerts(body);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, "Updated reply alerts.");
+    writeReplyAlerts(payload?.reply_alerts, context);
+    return;
+  }
+
+  throw new CommandError(`Unknown reply-alerts command "${display(action, "")}". Run \`audienti reply-alerts --help\`.`);
+}
+
+function writeReplyAlerts(alerts, context) {
+  writeLine(context.stdout, `SMS: ${alerts?.sms_enabled ? "on" : "off"} | Phone: ${display(alerts?.phone_number, "-")} | Active: ${alerts?.sms_active ? "yes" : "no"}`);
+  writeLine(context.stdout, `Slack: ${alerts?.slack_enabled ? "on" : "off"} | Connected: ${alerts?.slack_connected ? "yes" : "no"} | Channel: ${display(alerts?.slack_channel, "-")}`);
+}
+
+async function brandProfileCommand(action, args, context, { accountOverride } = {}) {
+  if (action === "show") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length > 0) throw new CommandError(BRAND_PROFILE_SHOW_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.brandProfile(accountId);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeBrandProfile(payload?.brand_profile, context);
+    return;
+  }
+
+  if (action === "update") {
+    const { values, positionals } = parseCommandArgs(args, {
+      ...jsonOptions(),
+      voice: { type: "string" },
+      style: { type: "string" },
+      "do-not-use": { type: "string" }
+    });
+    const body = {};
+    if (values.voice !== undefined) body.voice = values.voice;
+    if (values.style !== undefined) body.style = values.style;
+    if (values["do-not-use"] !== undefined) body.do_not_use = values["do-not-use"];
+    if (positionals.length > 0 || Object.keys(body).length === 0) throw new CommandError(BRAND_PROFILE_UPDATE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.updateBrandProfile(accountId, body);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, "Updated brand profile.");
+    writeBrandProfile(payload?.brand_profile, context);
+    return;
+  }
+
+  throw new CommandError(`Unknown brand-profile command "${display(action, "")}". Run \`audienti brand-profile --help\`.`);
+}
+
+function writeBrandProfile(profile, context) {
+  writeLine(context.stdout, `Voice: ${display(profile?.voice, "-")}`);
+  writeLine(context.stdout, `Style: ${display(profile?.style, "-")}`);
+  writeLine(context.stdout, `Do not use: ${display(profile?.do_not_use, "-")}`);
 }
 
 async function tagsList(args, context, { accountOverride } = {}) {
@@ -8595,6 +8976,10 @@ const HELP_TOPICS = new Map([
     "    audienti company-rules list",
     "    audienti company-rules show <rule_id>",
     "    audienti company-rules create (--linkedin-url <url> | --domain <domain>) --disposition <state>",
+    "    audienti hubspot show",
+    "    audienti webhooks list",
+    "    audienti brand-profile show",
+    "    audienti reply-alerts show",
     "",
     "  Writer",
     "    audienti writer test-run <prsp_id>",
@@ -9547,6 +9932,238 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  DELETE /api/v1/accounts/:account_id/dnc/:id.json"
+  ].join("\n")],
+
+  ["hubspot", [
+    "Usage:",
+    `  ${HUBSPOT_SHOW_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_CONNECT_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_DISCONNECT_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_SYNC_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_RETRY_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_CREATE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_REMOVE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_SYNC_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Connect HubSpot, queue syncs, retry failed sync events, and manage HubSpot list syncs. The token is never returned.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/hubspot_integration.json",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration.json",
+    "  DELETE /api/v1/accounts/:account_id/hubspot_integration.json",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/sync_all.json",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/retry_event.json"
+  ].join("\n")],
+
+  ["hubspot show", [
+    "Usage:",
+    `  ${HUBSPOT_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/hubspot_integration.json"
+  ].join("\n")],
+
+  ["hubspot connect", [
+    "Usage:",
+    `  ${HUBSPOT_CONNECT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration.json"
+  ].join("\n")],
+
+  ["hubspot disconnect", [
+    "Usage:",
+    `  ${HUBSPOT_DISCONNECT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/hubspot_integration.json"
+  ].join("\n")],
+
+  ["hubspot sync", [
+    "Usage:",
+    `  ${HUBSPOT_SYNC_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/sync_all.json"
+  ].join("\n")],
+
+  ["hubspot retry", [
+    "Usage:",
+    `  ${HUBSPOT_RETRY_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/retry_event.json"
+  ].join("\n")],
+
+  ["hubspot list-syncs", [
+    "Usage:",
+    `  ${HUBSPOT_LIST_SYNCS_CREATE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_REMOVE_USAGE.slice("Usage: ".length)}`,
+    `  ${HUBSPOT_LIST_SYNCS_SYNC_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/list_syncs.json",
+    "  PATCH /api/v1/accounts/:account_id/hubspot_integration/list_syncs/:id.json",
+    "  DELETE /api/v1/accounts/:account_id/hubspot_integration/list_syncs/:id.json",
+    "  POST /api/v1/accounts/:account_id/hubspot_integration/list_syncs/:id/sync_now.json"
+  ].join("\n")],
+
+  ["webhooks", [
+    "Usage:",
+    `  ${WEBHOOKS_LIST_USAGE.slice("Usage: ".length)}`,
+    `  ${WEBHOOKS_CREATE_USAGE.slice("Usage: ".length)}`,
+    `  ${WEBHOOKS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    `  ${WEBHOOKS_ROTATE_USAGE.slice("Usage: ".length)}`,
+    `  ${WEBHOOKS_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Manage prospect intake webhook endpoints. Create and rotate return the endpoint URL.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/prospect_webhook_endpoints.json",
+    "  POST /api/v1/accounts/:account_id/prospect_webhook_endpoints.json",
+    "  PATCH /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id.json",
+    "  POST /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id/rotate.json",
+    "  DELETE /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id.json"
+  ].join("\n")],
+
+  ["webhooks list", [
+    "Usage:",
+    `  ${WEBHOOKS_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/prospect_webhook_endpoints.json"
+  ].join("\n")],
+
+  ["webhooks create", [
+    "Usage:",
+    `  ${WEBHOOKS_CREATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospect_webhook_endpoints.json"
+  ].join("\n")],
+
+  ["webhooks update", [
+    "Usage:",
+    `  ${WEBHOOKS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id.json"
+  ].join("\n")],
+
+  ["webhooks rotate", [
+    "Usage:",
+    `  ${WEBHOOKS_ROTATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id/rotate.json"
+  ].join("\n")],
+
+  ["webhooks remove", [
+    "Usage:",
+    `  ${WEBHOOKS_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/prospect_webhook_endpoints/:id.json"
+  ].join("\n")],
+
+  ["reply-alerts", [
+    "Usage:",
+    `  ${REPLY_ALERTS_SHOW_USAGE.slice("Usage: ".length)}`,
+    `  ${REPLY_ALERTS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show or change your own SMS and Slack reply alerts. Connect Slack in the web app.",
+    "",
+    "API:",
+    "  GET /api/v1/me/reply_alerts.json",
+    "  PATCH /api/v1/me/reply_alerts.json"
+  ].join("\n")],
+
+  ["reply-alerts show", [
+    "Usage:",
+    `  ${REPLY_ALERTS_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/me/reply_alerts.json"
+  ].join("\n")],
+
+  ["reply-alerts update", [
+    "Usage:",
+    `  ${REPLY_ALERTS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  PATCH /api/v1/me/reply_alerts.json"
+  ].join("\n")],
+
+  ["brand-profile", [
+    "Usage:",
+    `  ${BRAND_PROFILE_SHOW_USAGE.slice("Usage: ".length)}`,
+    `  ${BRAND_PROFILE_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show or change the account brand voice, style, and banned phrases. Account admins only.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/brand_profile.json",
+    "  PATCH /api/v1/accounts/:account_id/brand_profile.json"
+  ].join("\n")],
+
+  ["brand-profile show", [
+    "Usage:",
+    `  ${BRAND_PROFILE_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/brand_profile.json"
+  ].join("\n")],
+
+  ["brand-profile update", [
+    "Usage:",
+    `  ${BRAND_PROFILE_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/brand_profile.json"
   ].join("\n")],
 
   ["company-rules", [

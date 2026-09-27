@@ -231,6 +231,114 @@ export class AudientiClient {
     });
   }
 
+  hubspotIntegration(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration"], query));
+  }
+
+  connectHubspot(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  disconnectHubspot(accountId) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration"]), {
+      method: "DELETE"
+    });
+  }
+
+  retryHubspotEvent(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "retry_event"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  syncHubspot(accountId) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "sync_all"]), {
+      method: "POST"
+    });
+  }
+
+  createHubspotListSync(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "list_syncs"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateHubspotListSync(accountId, listSyncId, body) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "list_syncs", listSyncId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  deleteHubspotListSync(accountId, listSyncId) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "list_syncs", listSyncId]), {
+      method: "DELETE"
+    });
+  }
+
+  syncHubspotListSync(accountId, listSyncId) {
+    return this.requestJson(accountPath(accountId, ["hubspot_integration", "list_syncs", listSyncId, "sync_now"]), {
+      method: "POST"
+    });
+  }
+
+  prospectWebhookEndpoints(accountId) {
+    return this.requestJson(accountPath(accountId, ["prospect_webhook_endpoints"]));
+  }
+
+  createProspectWebhookEndpoint(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["prospect_webhook_endpoints"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateProspectWebhookEndpoint(accountId, endpointId, body) {
+    return this.requestJson(accountPath(accountId, ["prospect_webhook_endpoints", endpointId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  rotateProspectWebhookEndpoint(accountId, endpointId) {
+    return this.requestJson(accountPath(accountId, ["prospect_webhook_endpoints", endpointId, "rotate"]), {
+      method: "POST"
+    });
+  }
+
+  deleteProspectWebhookEndpoint(accountId, endpointId) {
+    return this.requestJson(accountPath(accountId, ["prospect_webhook_endpoints", endpointId]), {
+      method: "DELETE"
+    });
+  }
+
+  brandProfile(accountId) {
+    return this.requestJson(accountPath(accountId, ["brand_profile"]));
+  }
+
+  updateBrandProfile(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["brand_profile"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  replyAlerts() {
+    return this.requestJson(apiPath(["me", "reply_alerts"]));
+  }
+
+  updateReplyAlerts(body) {
+    return this.requestJson(apiPath(["me", "reply_alerts"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
   tags(accountId) {
     return this.requestJson(accountPath(accountId, ["tags"]));
   }

@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.75] - 2026-09-27
+
+### Added
+
+- Add `hubspot show|connect|disconnect|sync|retry`, `hubspot list-syncs create|update|remove|sync`, `webhooks list|create|update|rotate|remove`, `reply-alerts show|update`, and `brand-profile show|update` so HubSpot, prospect webhook, reply alert, and brand profile settings are reachable from the CLI.
+
 ## [0.1.74] - 2026-09-27
 
 ### Added

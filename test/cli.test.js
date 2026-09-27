@@ -12696,3 +12696,312 @@ test("linkedin-lookups rejects unknown kinds and missing or unsupported options 
     }
   });
 });
+
+test("hubspot commands call the integration endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const integration = {
+      provider: "hubspot",
+      connected: true,
+      status: "Connected",
+      auto_sync_enabled: true,
+      external_account_id: "123",
+      external_account_name: "Acme Portal",
+      last_synced_at: null,
+      last_error_message: null
+    };
+    const showPayload = {
+      hubspot_integration: integration,
+      list_syncs: [{ id: 5, source_list_id: "77", source_list_name: "Inbound", display_status: "Active", custom_signal: { id: 3, name: "Demo" } }],
+      recent_events: [{ id: 9, status: "error", event_type: "sync_contact", message: "Boom", retryable: true }]
+    };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      if (url.pathname.endsWith("/sync_all.json")) return jsonResponse({ queued: true, message: "HubSpot sync all queued." }, { status: 202 });
+      if (url.pathname.endsWith("/retry_event.json")) return jsonResponse({ queued: true, message: "HubSpot contact sync retry queued." }, { status: 202 });
+      if (options.method === "POST") return jsonResponse({ hubspot_integration: integration, warning: "Some scopes missing." }, { status: 201 });
+      if (options.method === "DELETE") return jsonResponse({ disconnected: true, hubspot_integration: { ...integration, connected: false } });
+      return jsonResponse(showPayload);
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["hubspot", "show", "--errors", "--limit", "10", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), showPayload);
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "show"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /HubSpot: Connected \| Auto sync: on/);
+    assert.match(stdout.output, /Portal: Acme Portal \(123\)/);
+    assert.match(stdout.output, /5  Inbound  Active  signal: Demo/);
+    assert.match(stdout.output, /9  error  sync_contact  Boom  \(retryable\)/);
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "connect", "--token", "pat-secret"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Connected HubSpot portal Acme Portal\./);
+    assert.match(stdout.output, /Warning: Some scopes missing\./);
+    assert.doesNotMatch(stdout.output, /pat-secret/);
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "sync"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "HubSpot sync all queued.\n");
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "retry", "9", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), { queued: true, message: "HubSpot contact sync retry queued." });
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "disconnect"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Disconnected HubSpot.\n");
+
+    const base = "https://app.audienti.com/api/v1/accounts/acct_one/hubspot_integration";
+    assert.deepEqual(requests, [
+      ["GET", `${base}.json?log_status=error&limit=10`, undefined],
+      ["GET", `${base}.json`, undefined],
+      ["POST", `${base}.json`, { personal_access_token: "pat-secret" }],
+      ["POST", `${base}/sync_all.json`, undefined],
+      ["POST", `${base}/retry_event.json`, { event_id: "9" }],
+      ["DELETE", `${base}.json`, undefined]
+    ]);
+  });
+});
+
+test("hubspot list-syncs commands call the list sync endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const listSync = { id: 5, source_list_id: "77", source_list_name: "Inbound", custom_signal: { id: 3, name: "Demo" } };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      if (url.pathname.endsWith("/sync_now.json")) return jsonResponse({ queued: true, message: "HubSpot list sync queued.", list_sync: listSync }, { status: 202 });
+      if (options.method === "POST") return jsonResponse({ list_sync: listSync }, { status: 201 });
+      if (options.method === "PATCH") return jsonResponse({ list_sync: listSync, updated_count: 4 });
+      return jsonResponse({ deleted: true, id: 5 });
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["hubspot", "list-syncs", "create", "--hubspot-list", "77", "--signal", "3", "--source-agent", "agent_1"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Created HubSpot list sync 5 for Inbound.\n");
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "list-syncs", "update", "5", "--signal", "4", "--source-agent", "agent_2"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Updated HubSpot list sync 5. Updated prospects: 4.\n");
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "list-syncs", "sync", "5"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "HubSpot list sync queued.\n");
+
+    stdout = captureStream();
+    exitCode = await run(["hubspot", "list-syncs", "remove", "5", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), { deleted: true, id: 5 });
+
+    const base = "https://app.audienti.com/api/v1/accounts/acct_one/hubspot_integration/list_syncs";
+    assert.deepEqual(requests, [
+      ["POST", `${base}.json`, { source_list_id: "77", custom_signal_id: "3", source_agent_id: "agent_1" }],
+      ["PATCH", `${base}/5.json`, { custom_signal_id: "4", source_agent_id: "agent_2" }],
+      ["POST", `${base}/5/sync_now.json`, undefined],
+      ["DELETE", `${base}/5.json`, undefined]
+    ]);
+  });
+});
+
+test("webhooks commands call the prospect webhook endpoint routes", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const endpoint = {
+      id: 12,
+      label: "Forms",
+      display_label: "Forms",
+      status: "active",
+      url: "https://app.audienti.com/webhooks/prospect_intake/key123",
+      list: { id: "list_1", name: "Inbound" },
+      custom_signal: { id: 3, name: "Demo" }
+    };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      if (options.method === "GET") return jsonResponse({ prospect_webhook_endpoints: [endpoint] });
+      if (options.method === "DELETE") return jsonResponse({ deleted: true, id: 12 });
+      if (url.pathname.endsWith("/prospect_webhook_endpoints.json")) return jsonResponse({ prospect_webhook_endpoint: endpoint }, { status: 201 });
+      return jsonResponse({ prospect_webhook_endpoint: endpoint });
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["webhooks", "list"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "12  Forms  active  https://app.audienti.com/webhooks/prospect_intake/key123\n");
+
+    stdout = captureStream();
+    exitCode = await run(["webhooks", "create", "--label", "Forms", "--signal", "3", "--list", "list_1"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Created prospect webhook endpoint Forms \(12\)\./);
+    assert.match(stdout.output, /Status: active \| Signal: Demo \| List: Inbound/);
+    assert.match(stdout.output, /URL: https:\/\/app\.audienti\.com\/webhooks\/prospect_intake\/key123/);
+
+    stdout = captureStream();
+    exitCode = await run(["webhooks", "update", "12", "--status", "paused", "--signal", "none", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), { prospect_webhook_endpoint: endpoint });
+
+    stdout = captureStream();
+    exitCode = await run(["webhooks", "rotate", "12"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Rotated prospect webhook endpoint Forms \(12\)\./);
+
+    stdout = captureStream();
+    exitCode = await run(["webhooks", "remove", "12"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Removed prospect webhook endpoint 12.\n");
+
+    const base = "https://app.audienti.com/api/v1/accounts/acct_one/prospect_webhook_endpoints";
+    assert.deepEqual(requests, [
+      ["GET", `${base}.json`, undefined],
+      ["POST", `${base}.json`, { label: "Forms", custom_signal_id: "3", list_id: "list_1" }],
+      ["PATCH", `${base}/12.json`, { status: "paused", custom_signal_id: "" }],
+      ["POST", `${base}/12/rotate.json`, undefined],
+      ["DELETE", `${base}/12.json`, undefined]
+    ]);
+  });
+});
+
+test("reply-alerts commands read and update the current user's settings", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const alerts = { phone_number: "+15551234567", sms_enabled: true, sms_active: true, slack_enabled: false, slack_connected: false, slack_channel: null };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      return jsonResponse({ reply_alerts: alerts });
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["reply-alerts", "show", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), { reply_alerts: alerts });
+
+    stdout = captureStream();
+    exitCode = await run(["reply_alerts", "update", "--phone", "+15551234567", "--sms", "true", "--slack", "no"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Updated reply alerts\./);
+    assert.match(stdout.output, /SMS: on \| Phone: \+15551234567 \| Active: yes/);
+    assert.match(stdout.output, /Slack: off \| Connected: no \| Channel: -/);
+
+    assert.deepEqual(requests, [
+      ["GET", "https://app.audienti.com/api/v1/me/reply_alerts.json", undefined],
+      ["PATCH", "https://app.audienti.com/api/v1/me/reply_alerts.json", { phone_number: "+15551234567", sms_enabled: true, slack_enabled: false }]
+    ]);
+  });
+});
+
+test("brand-profile commands call the account brand profile endpoint", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const profile = { voice: "Warm", style: "Short", do_not_use: "synergy", updated_at: null };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      return jsonResponse({ brand_profile: profile });
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["brand-profile", "show"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Voice: Warm\nStyle: Short\nDo not use: synergy\n");
+
+    stdout = captureStream();
+    exitCode = await run(["brand-profile", "update", "--voice", "Warm", "--do-not-use", "synergy", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), { brand_profile: profile });
+
+    assert.deepEqual(requests, [
+      ["GET", "https://app.audienti.com/api/v1/accounts/acct_one/brand_profile.json", undefined],
+      ["PATCH", "https://app.audienti.com/api/v1/accounts/acct_one/brand_profile.json", { voice: "Warm", do_not_use: "synergy" }]
+    ]);
+  });
+});
+
+test("settings commands surface API errors", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    let fetch = createFetch(() => jsonResponse({ error: "Only account admins can do that." }, { status: 403 }));
+    let stderr = captureStream();
+    let exitCode = await run(["brand-profile", "update", "--voice", "Warm"], { env, fetch, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Error: The API token is not allowed to access that Audienti resource\./);
+
+    fetch = createFetch(() => jsonResponse({ error: "Signal not found." }, { status: 422 }));
+    stderr = captureStream();
+    exitCode = await run(["webhooks", "create", "--signal", "999"], { env, fetch, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Signal not found\./);
+  });
+});
+
+test("settings commands reject invalid usage without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const fetch = createFetch(() => {
+      throw new Error("invalid commands must not call the API");
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["hubspot", "connect"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /Usage:\n  audienti hubspot connect --token <private_app_token>/);
+
+    for (const [args, pattern] of [
+      [["hubspot", "connect", "--json"], /Usage: audienti hubspot connect --token/],
+      [["hubspot", "retry", "--json"], /Usage: audienti hubspot retry <event_id>/],
+      [["hubspot", "show", "--limit", "zero"], /--limit must be a positive integer\./],
+      [["hubspot", "list-syncs", "create", "--hubspot-list", "77"], /Usage: audienti hubspot list-syncs create/],
+      [["hubspot", "list-syncs", "update", "5", "--signal", "3"], /Usage: audienti hubspot list-syncs update/],
+      [["hubspot", "list-syncs", "sync", "--json"], /Usage: audienti hubspot list-syncs sync <list_sync_id>/],
+      [["webhooks", "update", "12", "--json"], /Usage: audienti webhooks update <endpoint_id>/],
+      [["webhooks", "rotate", "--json"], /Usage: audienti webhooks rotate <endpoint_id>/],
+      [["webhooks", "create", "--status", "paused"], /Usage: audienti webhooks create/],
+      [["reply-alerts", "update", "--json"], /Usage: audienti reply-alerts update/],
+      [["reply-alerts", "update", "--sms", "maybe"], /--sms must be true or false\./],
+      [["brand-profile", "update", "--json"], /Usage: audienti brand-profile update/]
+    ]) {
+      const stderr = captureStream();
+      const exitCode = await run(args, { env, fetch, stderr });
+      assert.equal(exitCode, 1, args.join(" "));
+      assert.match(stderr.output, pattern, args.join(" "));
+    }
+  });
+});
+
+test("settings command help topics describe the API routes", async () => {
+  for (const [args, pattern] of [
+    [["hubspot", "help"], /POST \/api\/v1\/accounts\/:account_id\/hubspot_integration\/sync_all\.json/],
+    [["hubspot", "list-syncs", "help"], /POST \/api\/v1\/accounts\/:account_id\/hubspot_integration\/list_syncs\/:id\/sync_now\.json/],
+    [["webhooks", "rotate", "help"], /POST \/api\/v1\/accounts\/:account_id\/prospect_webhook_endpoints\/:id\/rotate\.json/],
+    [["reply-alerts", "help"], /PATCH \/api\/v1\/me\/reply_alerts\.json/],
+    [["brand-profile", "update", "help"], /PATCH \/api\/v1\/accounts\/:account_id\/brand_profile\.json/]
+  ]) {
+    const stdout = captureStream();
+    const exitCode = await run(args, { stdout });
+    assert.equal(exitCode, 0, args.join(" "));
+    assert.match(stdout.output, pattern, args.join(" "));
+  }
+});
