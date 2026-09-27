@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import test from "node:test";
 import { readConfig, writeConfig } from "../src/config.js";
 import { run } from "../src/cli.js";
@@ -12855,7 +12856,7 @@ test("webhooks commands call the prospect webhook endpoint routes", async () => 
     assert.match(stdout.output, /URL: https:\/\/app\.audienti\.com\/webhooks\/prospect_intake\/key123/);
 
     stdout = captureStream();
-    exitCode = await run(["webhooks", "update", "12", "--status", "paused", "--signal", "none", "--json"], { env, fetch, stdout });
+    exitCode = await run(["webhooks", "update", "12", "--status", "disabled", "--signal", "none", "--json"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
     assert.deepEqual(JSON.parse(stdout.output), { prospect_webhook_endpoint: endpoint });
 
@@ -12873,7 +12874,7 @@ test("webhooks commands call the prospect webhook endpoint routes", async () => 
     assert.deepEqual(requests, [
       ["GET", `${base}.json`, undefined],
       ["POST", `${base}.json`, { label: "Forms", custom_signal_id: "3", list_id: "list_1" }],
-      ["PATCH", `${base}/12.json`, { status: "paused", custom_signal_id: "" }],
+      ["PATCH", `${base}/12.json`, { status: "disabled", custom_signal_id: "" }],
       ["POST", `${base}/12/rotate.json`, undefined],
       ["DELETE", `${base}/12.json`, undefined]
     ]);
@@ -12967,10 +12968,10 @@ test("settings commands reject invalid usage without calling the api", async () 
 
     let stdout = captureStream();
     assert.equal(await run(["hubspot", "connect"], { env, fetch, stdout }), 0);
-    assert.match(stdout.output, /Usage:\n  audienti hubspot connect --token <private_app_token>/);
+    assert.match(stdout.output, /Usage:\n  audienti hubspot connect \(--token <private_app_token> \| --token-stdin\)/);
 
     for (const [args, pattern] of [
-      [["hubspot", "connect", "--json"], /Usage: audienti hubspot connect --token/],
+      [["hubspot", "connect", "--json"], /Usage: audienti hubspot connect \(--token/],
       [["hubspot", "retry", "--json"], /Usage: audienti hubspot retry <event_id>/],
       [["hubspot", "show", "--limit", "zero"], /--limit must be a positive integer\./],
       [["hubspot", "list-syncs", "create", "--hubspot-list", "77"], /Usage: audienti hubspot list-syncs create/],
@@ -12978,7 +12979,9 @@ test("settings commands reject invalid usage without calling the api", async () 
       [["hubspot", "list-syncs", "sync", "--json"], /Usage: audienti hubspot list-syncs sync <list_sync_id>/],
       [["webhooks", "update", "12", "--json"], /Usage: audienti webhooks update <endpoint_id>/],
       [["webhooks", "rotate", "--json"], /Usage: audienti webhooks rotate <endpoint_id>/],
-      [["webhooks", "create", "--status", "paused"], /Usage: audienti webhooks create/],
+      [["webhooks", "create", "--status", "disabled"], /Usage: audienti webhooks create/],
+      [["webhooks", "update", "12", "--status", "paused"], /--status must be enabled or disabled\./],
+      [["hubspot", "connect", "--token", "pat-secret", "--token-stdin"], /Usage: audienti hubspot connect \(--token/],
       [["reply-alerts", "update", "--json"], /Usage: audienti reply-alerts update/],
       [["reply-alerts", "update", "--sms", "maybe"], /--sms must be true or false\./],
       [["brand-profile", "update", "--json"], /Usage: audienti brand-profile update/]
@@ -13004,4 +13007,59 @@ test("settings command help topics describe the API routes", async () => {
     assert.equal(exitCode, 0, args.join(" "));
     assert.match(stdout.output, pattern, args.join(" "));
   }
+});
+
+test("webhooks update sends enabled or disabled status", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const bodies = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_webhook_endpoints/12.json");
+      assert.equal(options.method, "PATCH");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      bodies.push(JSON.parse(options.body));
+      return jsonResponse({ prospect_webhook_endpoint: { id: 12, status: bodies.at(-1).status } });
+    });
+
+    for (const status of ["disabled", "enabled"]) {
+      const stdout = captureStream();
+      const exitCode = await run(["webhooks", "update", "12", "--status", status], { env, fetch, stdout });
+      assert.equal(exitCode, 0);
+      assert.match(stdout.output, new RegExp(`Status: ${status}`));
+    }
+
+    assert.deepEqual(bodies, [{ status: "disabled" }, { status: "enabled" }]);
+  });
+});
+
+test("hubspot connect --token-stdin reads and trims the token from stdin", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const bodies = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/hubspot_integration.json");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      bodies.push(JSON.parse(options.body));
+      return jsonResponse({ hubspot_integration: { external_account_name: "Acme Portal" } }, { status: 201 });
+    });
+
+    const stdout = captureStream();
+    const exitCode = await run(["hubspot", "connect", "--token-stdin"], { env, fetch, stdout, stdin: Readable.from(["  pat-from-stdin\n"]) });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Connected HubSpot portal Acme Portal.\n");
+    assert.deepEqual(bodies, [{ personal_access_token: "pat-from-stdin" }]);
+
+    const stderr = captureStream();
+    const emptyExit = await run(["hubspot", "connect", "--token-stdin"], { env, fetch, stderr, stdin: Readable.from(["   \n"]) });
+    assert.equal(emptyExit, 1);
+    assert.match(stderr.output, /Usage: audienti hubspot connect/);
+    assert.equal(bodies.length, 1);
+
+    const helpOut = captureStream();
+    assert.equal(await run(["hubspot", "connect", "help"], { stdout: helpOut }), 0);
+    assert.match(helpOut.output, /--token-stdin reads the token from stdin, keeping it out of shell history and the process list\./);
+  });
 });

@@ -114,7 +114,8 @@ const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_i
 const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
 const COMPANY_RULES_SHOW_USAGE = "Usage: audienti company-rules show <rule_id> [--json] [--account <acct_id>]";
 const HUBSPOT_SHOW_USAGE = "Usage: audienti hubspot show [--errors] [--limit <n>] [--json] [--account <acct_id>]";
-const HUBSPOT_CONNECT_USAGE = "Usage: audienti hubspot connect --token <private_app_token> [--json] [--account <acct_id>]";
+const HUBSPOT_CONNECT_USAGE = "Usage: audienti hubspot connect (--token <private_app_token> | --token-stdin) [--json] [--account <acct_id>]";
+const WEBHOOK_STATUS_VALUES = new Set(["enabled", "disabled"]);
 const HUBSPOT_DISCONNECT_USAGE = "Usage: audienti hubspot disconnect [--json] [--account <acct_id>]";
 const HUBSPOT_SYNC_USAGE = "Usage: audienti hubspot sync [--json] [--account <acct_id>]";
 const HUBSPOT_RETRY_USAGE = "Usage: audienti hubspot retry <event_id> [--json] [--account <acct_id>]";
@@ -124,7 +125,7 @@ const HUBSPOT_LIST_SYNCS_REMOVE_USAGE = "Usage: audienti hubspot list-syncs remo
 const HUBSPOT_LIST_SYNCS_SYNC_USAGE = "Usage: audienti hubspot list-syncs sync <list_sync_id> [--json] [--account <acct_id>]";
 const WEBHOOKS_LIST_USAGE = "Usage: audienti webhooks list [--json] [--account <acct_id>]";
 const WEBHOOKS_CREATE_USAGE = "Usage: audienti webhooks create [--label <text>] [--signal <signal_id>] [--list <list_id>] [--json] [--account <acct_id>]";
-const WEBHOOKS_UPDATE_USAGE = "Usage: audienti webhooks update <endpoint_id> [--label <text>] [--status <active|paused>] [--signal <signal_id|none>] [--json] [--account <acct_id>]";
+const WEBHOOKS_UPDATE_USAGE = "Usage: audienti webhooks update <endpoint_id> [--label <text>] [--status <enabled|disabled>] [--signal <signal_id|none>] [--json] [--account <acct_id>]";
 const WEBHOOKS_ROTATE_USAGE = "Usage: audienti webhooks rotate <endpoint_id> [--json] [--account <acct_id>]";
 const WEBHOOKS_REMOVE_USAGE = "Usage: audienti webhooks remove <endpoint_id> [--json] [--account <acct_id>]";
 const REPLY_ALERTS_SHOW_USAGE = "Usage: audienti reply-alerts show [--json]";
@@ -1572,12 +1573,17 @@ async function hubspotShow(args, context, { accountOverride } = {}) {
 async function hubspotConnect(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    token: { type: "string" }
+    token: { type: "string" },
+    "token-stdin": { type: "boolean" }
   });
-  if (positionals.length > 0 || !String(values.token || "").trim()) throw new CommandError(HUBSPOT_CONNECT_USAGE);
+  const useStdin = Boolean(values["token-stdin"]);
+  if (positionals.length > 0 || useStdin === (values.token !== undefined)) throw new CommandError(HUBSPOT_CONNECT_USAGE);
+
+  const token = (useStdin ? await readStdinText(context) : String(values.token)).trim();
+  if (!token) throw new CommandError(HUBSPOT_CONNECT_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.connectHubspot(accountId, { personal_access_token: String(values.token).trim() });
+  const payload = await client.connectHubspot(accountId, { personal_access_token: token });
   if (values.json) return writeJson(context.stdout, payload);
 
   const integration = payload?.hubspot_integration;
@@ -1736,7 +1742,10 @@ async function webhooksCommand(action, args, context, { accountOverride } = {}) 
     const { values, positionals } = parseCommandArgs(args, options);
     const body = {};
     if (values.label !== undefined) body.label = values.label;
-    if (values.status !== undefined) body.status = values.status;
+    if (values.status !== undefined) {
+      if (!WEBHOOK_STATUS_VALUES.has(values.status)) throw new CommandError("--status must be enabled or disabled.");
+      body.status = values.status;
+    }
     if (values.signal !== undefined) body.custom_signal_id = values.signal === "none" ? "" : values.signal;
     if (positionals.length !== 1 || values.list !== undefined || Object.keys(body).length === 0) {
       throw new CommandError(WEBHOOKS_UPDATE_USAGE);
@@ -1775,6 +1784,15 @@ async function webhooksCommand(action, args, context, { accountOverride } = {}) 
   }
 
   throw new CommandError(`Unknown webhooks command "${display(action, "")}". Run \`audienti webhooks --help\`.`);
+}
+
+async function readStdinText(context) {
+  const input = context.stdin;
+  if (!input) return "";
+
+  let text = "";
+  for await (const chunk of input) text += String(chunk);
+  return text;
 }
 
 function writeWebhookEndpoint(verb, endpoint, context) {
@@ -9974,6 +9992,9 @@ const HELP_TOPICS = new Map([
     `  ${HUBSPOT_CONNECT_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
+    "",
+    "Notes:",
+    "  --token-stdin reads the token from stdin, keeping it out of shell history and the process list.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/hubspot_integration.json"
