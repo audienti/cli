@@ -13063,3 +13063,276 @@ test("hubspot connect --token-stdin reads and trims the token from stdin", async
     assert.match(helpOut.output, /--token-stdin reads the token from stdin, keeping it out of shell history and the process list\./);
   });
 });
+
+function catalogFetch(requests, responder) {
+  return createFetch((url, options) => {
+    assert.equal(options.headers.Authorization, "Bearer saved-token");
+    requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+    return responder(url, options);
+  });
+}
+
+const CATALOG_BASE = "https://app.audienti.com/api/v1/accounts/acct_one";
+
+test("lists catalog commands call the bulk tag, merge, export, and toggle endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const csv = "prospect_id,name\n12,Ada\n";
+    const fetch = catalogFetch(requests, (url) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/lists/bulk_add_tag.json")) return jsonResponse([{ prefix_id: "list_a" }, { prefix_id: "list_b" }]);
+      if (path.endsWith("/lists/merge_selected.json")) return jsonResponse({ prefix_id: "list_a", name: "Older", prospect_count: 7 });
+      if (path.endsWith("/export.json")) return { ok: true, status: 200, async text() { return csv; } };
+      return jsonResponse({ list_id: "list_a", routing_rule: { id: 5, name: "Route me", enabled: false } });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["lists", "bulk-add-tag", "--tag", "launch", "list_a", "list_b"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Added tag launch to 2 lists.\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["lists", "merge", "list_a", "list_b"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Merged into list Older (list_a); the newer list was deleted.\nProspects: 7\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["lists", "merge", "list_a", "list_b", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).prospect_count, 7);
+
+    stdout = captureStream();
+    assert.equal(await run(["lists", "export", "list_a", "--inactive-reason", "bounced"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, csv);
+
+    const output = join(root, "list.csv");
+    stdout = captureStream();
+    assert.equal(await run(["lists", "export", "list_a", "--output", output], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, `Wrote list list_a CSV to ${output}.\n`);
+    assert.equal(await readFile(output, "utf8"), csv);
+
+    stdout = captureStream();
+    assert.equal(await run(["lists", "export", "list_a", "--json"], { env, fetch, stdout }), 0);
+    assert.deepEqual(JSON.parse(stdout.output), { list_id: "list_a", csv });
+
+    stdout = captureStream();
+    assert.equal(await run(["lists", "routing-rules", "list_a", "toggle", "5"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Disabled routing rule Route me (5) on list list_a.\n");
+
+    assert.deepEqual(requests, [
+      ["POST", `${CATALOG_BASE}/lists/bulk_add_tag.json`, { list_ids: ["list_a", "list_b"], tag: "launch" }],
+      ["POST", `${CATALOG_BASE}/lists/merge_selected.json`, { list_ids: ["list_a", "list_b"] }],
+      ["POST", `${CATALOG_BASE}/lists/merge_selected.json`, { list_ids: ["list_a", "list_b"] }],
+      ["GET", `${CATALOG_BASE}/lists/list_a/export.json?inactive_reason=bounced`, undefined],
+      ["GET", `${CATALOG_BASE}/lists/list_a/export.json`, undefined],
+      ["GET", `${CATALOG_BASE}/lists/list_a/export.json`, undefined],
+      ["PATCH", `${CATALOG_BASE}/lists/list_a/routing_rules/5/toggle.json`, undefined]
+    ]);
+  });
+});
+
+test("icps catalog commands call the bulk tag, clone, delete, and prospects endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const fetch = catalogFetch(requests, (url, options) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/icps/bulk_add_tag.json")) return jsonResponse([{ prefix_id: "icpp_a" }]);
+      if (path.endsWith("/clone.json")) return jsonResponse({ prefix_id: "icpp_c", name: "Founders (Copy)" }, { status: 201 });
+      if (options.method === "DELETE") return jsonResponse({ prefix_id: "icpp_a", name: "Founders", deleted: true });
+      return jsonResponse({
+        prospects: [{ prefix_id: "prsp_1", name: "Ada Lovelace", stage: "new" }],
+        meta: { total_count: 3, limit: 1, offset: 1, returned_count: 1, has_more: true }
+      });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["icps", "bulk-add-tag", "--tag", "priority", "icpp_a"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Added tag priority to 1 ICP.\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["icps", "clone", "icpp_a"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Cloned ICP as Founders (Copy) (icpp_c).\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["icps", "delete", "icpp_a", "--confirm", "yes"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Deleted ICP Founders (icpp_a).\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["icps", "prospects", "icpp_a", "--query", "Ada", "--limit", "1", "--offset", "1"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /prsp_1/);
+    assert.match(stdout.output, /Showing 1 of 3 matched prospects\.\n$/);
+
+    stdout = captureStream();
+    assert.equal(await run(["icps", "prospects", "icpp_a", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).meta.total_count, 3);
+
+    assert.deepEqual(requests, [
+      ["POST", `${CATALOG_BASE}/icps/bulk_add_tag.json`, { icp_ids: ["icpp_a"], tag: "priority" }],
+      ["POST", `${CATALOG_BASE}/icps/icpp_a/clone.json`, {}],
+      ["DELETE", `${CATALOG_BASE}/icps/icpp_a.json`, undefined],
+      ["GET", `${CATALOG_BASE}/icps/icpp_a/prospects.json?query=Ada&limit=1&offset=1`, undefined],
+      ["GET", `${CATALOG_BASE}/icps/icpp_a/prospects.json`, undefined]
+    ]);
+  });
+});
+
+test("offers catalog commands call the research, write-up, and artifact endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const artifacts = [{ id: 9, filename: "brief.txt", content_type: "text/plain", byte_size: 5 }];
+    const fetch = catalogFetch(requests, (url, options) => {
+      const path = new URL(url).pathname;
+      if (path.endsWith("/regenerate_research.json")) return jsonResponse({ prefix_id: "offr_a", name: "Audit", research_queued: true }, { status: 202 });
+      if (path.endsWith("/writeup.json")) return jsonResponse({ prefix_id: "offr_a", name: "Audit", description: "New" });
+      if (options.method === "DELETE") return jsonResponse({ offer_id: "offr_a", artifacts: [], deleted: true, artifact_id: "9" });
+      return jsonResponse({ offer_id: "offr_a", artifacts, attached_count: 1 }, { status: 201 });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["offers", "regenerate-research", "offr_a", "--guidance", "Focus on agencies"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Queued a new research write-up for offer Audit (offr_a).\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "regenerate-research", "offr_a", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).research_queued, true);
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "update-writeup", "offr_a", "--description", "New"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Updated the write-up for offer Audit (offr_a).\n");
+
+    const file = join(root, "brief.txt");
+    await writeFile(file, "hello");
+    stdout = captureStream();
+    assert.equal(await run(["offers", "add-artifacts", "offr_a", file], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Attached 1 artifact to offer offr_a.\nARTIFACT ID\tFILENAME\tTYPE\tBYTES\n9\tbrief.txt\ttext/plain\t5\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "remove-artifact", "offr_a", "9"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Removed artifact 9 from offer offr_a.\n");
+
+    assert.deepEqual(requests, [
+      ["POST", `${CATALOG_BASE}/offers/offr_a/regenerate_research.json`, { guidance: "Focus on agencies" }],
+      ["POST", `${CATALOG_BASE}/offers/offr_a/regenerate_research.json`, {}],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/writeup.json`, { offer: { description: "New" } }],
+      ["POST", `${CATALOG_BASE}/offers/offr_a/artifacts.json`, { artifacts: [{ filename: "brief.txt", data: Buffer.from("hello").toString("base64") }] }],
+      ["DELETE", `${CATALOG_BASE}/offers/offr_a/artifacts/9.json`, undefined]
+    ]);
+  });
+});
+
+test("tasks update and bulk-update send only given fields and resolve me", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one", accountUserId: "42" }, { env });
+    const requests = [];
+    const fetch = catalogFetch(requests, (url, options) => {
+      const body = options.body ? JSON.parse(options.body) : {};
+      if (new URL(url).pathname.endsWith("/tasks/bulk_update.json")) {
+        return jsonResponse({ action: body.bulk_action, count: 2, queued: body.bulk_action === "reassign" }, { status: body.bulk_action === "reassign" ? 202 : 200 });
+      }
+      return jsonResponse({ prefix_id: "ptsk_a", title: "Renamed", due_at: null, association: { type: "none" } });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["tasks", "update", "ptsk_a", "--title", "Renamed", "--list", "", "--assigned-user", "me"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /^Updated task ptsk_a\.\nTitle: Renamed\n/);
+
+    stdout = captureStream();
+    assert.equal(await run(["tasks", "update", "ptsk_a", "--notes", "Hi", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).prefix_id, "ptsk_a");
+
+    stdout = captureStream();
+    assert.equal(await run(["tasks", "bulk-update", "--action", "complete", "ptsk_a", "ptsk_b"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Completed 2 tasks.\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["tasks", "bulk-update", "--action", "reassign", "--assigned-user", "me", "ptsk_a", "ptsk_b"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Queued reassignment of 2 tasks.\n");
+
+    assert.deepEqual(requests, [
+      ["PATCH", `${CATALOG_BASE}/tasks/ptsk_a.json`, { task: { title: "Renamed", list_id: "", assignee_account_user_id: "42" } }],
+      ["PATCH", `${CATALOG_BASE}/tasks/ptsk_a.json`, { task: { notes: "Hi" } }],
+      ["PATCH", `${CATALOG_BASE}/tasks/bulk_update.json`, { task_ids: ["ptsk_a", "ptsk_b"], bulk_action: "complete" }],
+      ["PATCH", `${CATALOG_BASE}/tasks/bulk_update.json`, { task_ids: ["ptsk_a", "ptsk_b"], bulk_action: "reassign", assignee_account_user_id: "42" }]
+    ]);
+  });
+});
+
+test("tools linkedin-strategy-review delete calls the report endpoint", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const fetch = catalogFetch(requests, () => jsonResponse({ id: "rprt_a", deleted: true }));
+
+    let stdout = captureStream();
+    assert.equal(await run(["tools", "linkedin-strategy-review", "delete", "rprt_a", "--confirm", "yes"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Deleted LinkedIn strategy review report rprt_a.\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["tools", "linkedin-strategy-review", "delete", "rprt_a", "--confirm", "y", "--json"], { env, fetch, stdout }), 0);
+    assert.deepEqual(JSON.parse(stdout.output), { id: "rprt_a", deleted: true });
+
+    assert.deepEqual(requests, [
+      ["DELETE", `${CATALOG_BASE}/tools/linkedin-strategy-review/reports/rprt_a.json`, undefined],
+      ["DELETE", `${CATALOG_BASE}/tools/linkedin-strategy-review/reports/rprt_a.json`, undefined]
+    ]);
+  });
+});
+
+test("catalog commands reject invalid usage without calling the API", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const fetch = createFetch(() => {
+      throw new Error("invalid commands must not call the API");
+    });
+
+    const cases = [
+      [["lists", "bulk-add-tag", "list_a"], /Usage: audienti lists bulk-add-tag/],
+      [["lists", "bulk-add-tag", "--tag", "x"], /Usage: audienti lists bulk-add-tag/],
+      [["lists", "merge", "list_a"], /Usage: audienti lists merge/],
+      [["lists", "export", "list_a", "list_b"], /Usage: audienti lists export/],
+      [["lists", "routing-rules", "list_a", "toggle"], /Usage: audienti lists routing-rules <list_id> toggle/],
+      [["icps", "bulk-add-tag", "--tag", " ", "icpp_a"], /Usage: audienti icps bulk-add-tag/],
+      [["icps", "clone", "icpp_a", "icpp_b"], /Usage: audienti icps clone/],
+      [["icps", "delete", "icpp_a"], /Usage: audienti icps delete/],
+      [["icps", "prospects", "icpp_a", "--page", "2", "--offset", "5"], /Choose one pagination mode/],
+      [["offers", "regenerate-research", "offr_a", "offr_b"], /Usage: audienti offers regenerate-research/],
+      [["offers", "update-writeup", "offr_a"], /Usage: audienti offers update-writeup/],
+      [["offers", "add-artifacts", "offr_a"], /Usage: audienti offers add-artifacts/],
+      [["offers", "add-artifacts", "offr_a", join(root, "missing.pdf")], /Cannot read .*missing\.pdf/],
+      [["offers", "remove-artifact", "offr_a"], /Usage: audienti offers remove-artifact/],
+      [["tasks", "update", "ptsk_a"], /Usage: audienti tasks update/],
+      [["tasks", "update", "ptsk_a", "--prospect", "prsp_a", "--list", "list_a"], /Use either --prospect or --list, not both\./],
+      [["tasks", "bulk-update", "--action", "explode", "ptsk_a"], /Usage: audienti tasks bulk-update/],
+      [["tasks", "bulk-update", "--action", "complete"], /Usage: audienti tasks bulk-update/],
+      [["tasks", "bulk-update", "--action", "reassign", "ptsk_a"], /--assigned-user is required with --action reassign\./],
+      [["tools", "linkedin-strategy-review", "delete", "rprt_a"], /Usage: audienti tools linkedin-strategy-review delete/],
+      [["tools", "linkedin-strategy-review", "list"], /Usage: audienti tools linkedin-strategy-review delete/]
+    ];
+
+    for (const [args, pattern] of cases) {
+      const stderr = captureStream();
+      const exitCode = await run(args, { env, fetch, stdout: captureStream(), stderr });
+      assert.equal(exitCode, 1, args.join(" "));
+      assert.match(stderr.output, pattern, args.join(" "));
+    }
+    assert.equal(fetch.calls.length, 0);
+  });
+});
+
+test("catalog help topics describe the API routes", async () => {
+  const topics = [
+    [["lists", "bulk-add-tag"], /POST \/api\/v1\/accounts\/:account_id\/lists\/bulk_add_tag/],
+    [["lists", "merge"], /POST \/api\/v1\/accounts\/:account_id\/lists\/merge_selected/],
+    [["lists", "export"], /GET \/api\/v1\/accounts\/:account_id\/lists\/:id\/export/],
+    [["icps", "prospects"], /GET \/api\/v1\/accounts\/:account_id\/icps\/:id\/prospects/],
+    [["offers", "add-artifacts"], /POST \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/artifacts/],
+    [["tasks", "bulk-update"], /PATCH \/api\/v1\/accounts\/:account_id\/tasks\/bulk_update/],
+    [["tools", "linkedin-strategy-review", "delete"], /DELETE \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\/:id/]
+  ];
+
+  for (const [args, pattern] of topics) {
+    const stdout = captureStream();
+    assert.equal(await run([...args, "help"], { stdout }), 0, args.join(" "));
+    assert.match(stdout.output, pattern, args.join(" "));
+  }
+});

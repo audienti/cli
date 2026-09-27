@@ -207,6 +207,21 @@ const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_STATUS_USAGE = "Usage: audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE = "Usage: audienti tools linkedin-strategy-review delete <rprt_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
+const LISTS_BULK_ADD_TAG_USAGE = "Usage: audienti lists bulk-add-tag --tag <tag> <list_id> [list_id...] [--json] [--account <acct_id>]";
+const LISTS_MERGE_USAGE = "Usage: audienti lists merge <list_id> <list_id> [--json] [--account <acct_id>]";
+const LISTS_EXPORT_USAGE = "Usage: audienti lists export <list_id> [--output <file.csv>] [--inactive-reason <reason>] [--json] [--account <acct_id>]";
+const LIST_ROUTING_RULES_TOGGLE_USAGE = "Usage: audienti lists routing-rules <list_id> toggle <rule_id> [--json] [--account <acct_id>]";
+const ICPS_BULK_ADD_TAG_USAGE = "Usage: audienti icps bulk-add-tag --tag <tag> <icp_id> [icp_id...] [--json] [--account <acct_id>]";
+const ICPS_CLONE_USAGE = "Usage: audienti icps clone <icp_id> [--json] [--account <acct_id>]";
+const ICPS_DELETE_USAGE = "Usage: audienti icps delete <icp_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
+const ICPS_PROSPECTS_USAGE = "Usage: audienti icps prospects <icp_id> [--query <text>] [--limit <n>] [--offset <n> | --page <n>] [--profiles] [--json] [--account <acct_id>]";
+const OFFERS_REGENERATE_RESEARCH_USAGE = "Usage: audienti offers regenerate-research <offr_id> [--guidance <text>] [--json] [--account <acct_id>]";
+const OFFERS_UPDATE_WRITEUP_USAGE = "Usage: audienti offers update-writeup <offr_id> --description <text> [--json] [--account <acct_id>]";
+const OFFERS_ADD_ARTIFACTS_USAGE = "Usage: audienti offers add-artifacts <offr_id> <file> [file...] [--json] [--account <acct_id>]";
+const OFFERS_REMOVE_ARTIFACT_USAGE = "Usage: audienti offers remove-artifact <offr_id> <artifact_id> [--json] [--account <acct_id>]";
+const TASKS_UPDATE_USAGE = "Usage: audienti tasks update <ptsk_id> [--title <text>] [--due <time>] [--notes <text>] [--prospect <prsp_id|\"\">] [--list <list_id|\"\">] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
+const TASKS_BULK_UPDATE_USAGE = "Usage: audienti tasks bulk-update --action <complete|reassign> [--assigned-user <id|me>] <ptsk_id> [ptsk_id...] [--json] [--account <acct_id>]";
 const SOCIAL_COOKIES_SYNC_MESSAGES_USAGE = "Usage: audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] [--json] [--account <acct_id>]";
 const COHORT_STAGE_ORDER = [
   "identified",
@@ -309,6 +324,10 @@ async function dispatch(argv, context) {
   if (normalizedResource === "offers" && action === "create") return offersCreate(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "update") return offersUpdate(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "delete") return offersDelete(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "regenerate-research") return offersRegenerateResearch(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "update-writeup") return offersUpdateWriteup(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "add-artifacts") return offersAddArtifacts(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "remove-artifact") return offersRemoveArtifact(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "list") return icpsList(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "show") return icpsShow(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "analytics") return analyticsIcps(rest, context, { accountOverride });
@@ -318,6 +337,10 @@ async function dispatch(argv, context) {
   if (normalizedResource === "icps" && action === "restore") return icpsLifecycleMutation("restore", rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "add-tag") return icpsTagMutation("add", rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "remove-tag") return icpsTagMutation("remove", rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "bulk-add-tag") return icpsBulkAddTag(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "clone") return icpsClone(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "delete") return icpsDelete(rest, context, { accountOverride });
+  if (normalizedResource === "icps" && action === "prospects") return icpsProspects(rest, context, { accountOverride });
   if (normalizedResource === "companies" && action === "search") return companiesSearch(rest, context, { accountOverride });
   if (normalizedResource === "dnc" && action === "list") return dncList(rest, context, { accountOverride });
   if (normalizedResource === "dnc" && action === "add") return dncAdd(rest, context, { accountOverride });
@@ -339,6 +362,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "tasks" && ["list", "manage"].includes(action)) return tasksList(rest, context, { accountOverride });
   if (normalizedResource === "tasks" && action === "add") return tasksAdd(rest, context, { accountOverride });
   if (normalizedResource === "tasks" && action === "complete") return tasksComplete(rest, context, { accountOverride });
+  if (normalizedResource === "tasks" && action === "update") return tasksUpdate(rest, context, { accountOverride });
+  if (normalizedResource === "tasks" && action === "bulk-update") return tasksBulkUpdate(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "list") return listsList(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "create") return listsCreate(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "show") return listsShow(rest, context, { accountOverride });
@@ -346,6 +371,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "lists" && action === "add-tag") return listsTagMutation("add", rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "remove-tag") return listsTagMutation("remove", rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "delete") return listsDelete(rest, context, { accountOverride });
+  if (normalizedResource === "lists" && action === "bulk-add-tag") return listsBulkAddTag(rest, context, { accountOverride });
+  if (normalizedResource === "lists" && action === "merge") return listsMerge(rest, context, { accountOverride });
+  if (normalizedResource === "lists" && action === "export") return listsExport(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "prospects") return listProspects(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "add-prospects") return listsAddProspects(rest, context, { accountOverride });
   if (normalizedResource === "lists" && action === "remove-prospects") return listsRemoveProspects(rest, context, { accountOverride });
@@ -409,6 +437,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "humanize") return toolsHumanize(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "linkedin-review") return toolsLinkedinReview(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "linkedin-strategy-review") return toolsLinkedinStrategyReview(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "failed-drafts") return operatorFailedDrafts(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "queue") return operatorQueue(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "next") return operatorNext(rest, context, { accountOverride });
@@ -1250,6 +1279,65 @@ async function offersDelete(args, context, { accountOverride } = {}) {
   writeLine(context.stdout, `Deleted offer ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
 }
 
+async function offersRegenerateResearch(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), guidance: { type: "string" } });
+  if (positionals.length !== 1) throw new CommandError(OFFERS_REGENERATE_RESEARCH_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const offer = await client.regenerateOfferResearch(accountId, positionals[0], compactObject({ guidance: values.guidance }));
+  if (values.json) return writeJson(context.stdout, offer);
+
+  writeLine(context.stdout, `Queued a new research write-up for offer ${display(offer?.name)} (${display(offer?.prefix_id)}).`);
+}
+
+async function offersUpdateWriteup(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), description: { type: "string" } });
+  if (positionals.length !== 1 || values.description === undefined) throw new CommandError(OFFERS_UPDATE_WRITEUP_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const offer = await client.updateOfferWriteup(accountId, positionals[0], { offer: { description: values.description } });
+  if (values.json) return writeJson(context.stdout, offer);
+
+  writeLine(context.stdout, `Updated the write-up for offer ${display(offer?.name)} (${display(offer?.prefix_id)}).`);
+}
+
+async function offersAddArtifacts(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length < 2) throw new CommandError(OFFERS_ADD_ARTIFACTS_USAGE);
+
+  const [offerId, ...paths] = positionals;
+  const artifacts = [];
+  for (const path of paths) {
+    let data;
+    try {
+      data = await readFile(path);
+    } catch (error) {
+      throw new CommandError(`Cannot read ${path}: ${error.message}`);
+    }
+    artifacts.push({ filename: basename(path), data: data.toString("base64") });
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.addOfferArtifacts(accountId, offerId, { artifacts });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const count = payload?.attached_count ?? artifacts.length;
+  writeLine(context.stdout, `Attached ${count} ${count === 1 ? "artifact" : "artifacts"} to offer ${display(payload?.offer_id || offerId)}.`);
+  renderOfferArtifacts(payload?.artifacts, context);
+}
+
+async function offersRemoveArtifact(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(OFFERS_REMOVE_ARTIFACT_USAGE);
+
+  const [offerId, artifactId] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.removeOfferArtifact(accountId, offerId, artifactId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Removed artifact ${display(artifactId)} from offer ${display(payload?.offer_id || offerId)}.`);
+}
+
 async function icpsList(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -1357,6 +1445,68 @@ async function icpsTagMutation(action, args, context, { accountOverride } = {}) 
   const preposition = action === "add" ? "to" : "from";
   writeLine(context.stdout, `${verb} tag ${display(tag)} ${preposition} ICP ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
   if (Array.isArray(icp?.tags)) writeLine(context.stdout, `Tags: ${display(icp.tags.join(", "), "-")}`);
+}
+
+async function icpsBulkAddTag(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), tag: { type: "string" } });
+  if (positionals.length === 0 || !String(values.tag || "").trim()) throw new CommandError(ICPS_BULK_ADD_TAG_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icps = await client.bulkAddIcpTag(accountId, { icp_ids: positionals, tag: values.tag });
+  if (values.json) return writeJson(context.stdout, icps);
+
+  const count = Array.isArray(icps) ? icps.length : 0;
+  writeLine(context.stdout, `Added tag ${display(values.tag)} to ${count} ${count === 1 ? "ICP" : "ICPs"}.`);
+}
+
+async function icpsClone(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(ICPS_CLONE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const icp = await client.cloneIcp(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, icp);
+
+  writeLine(context.stdout, `Cloned ICP as ${display(icp?.name)} (${display(icp?.prefix_id)}).`);
+}
+
+async function icpsDelete(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), confirm: { type: "string" } });
+  const normalizedConfirm = String(values.confirm || "").trim().toLowerCase();
+  if (positionals.length !== 1 || !DELETE_CONFIRMATION_VALUES.has(normalizedConfirm)) throw new CommandError(ICPS_DELETE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteIcp(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Deleted ICP ${display(payload?.name)} (${display(payload?.prefix_id)}).`);
+}
+
+async function icpsProspects(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    query: { type: "string" },
+    limit: { type: "string" },
+    offset: { type: "string" },
+    page: { type: "string" },
+    profiles: { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError(ICPS_PROSPECTS_USAGE);
+  if (values.page && values.offset) throw new CommandError("Choose one pagination mode: use either --page or --offset.");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.icpProspects(accountId, positionals[0], compactObject({
+    query: values.query,
+    limit: values.limit,
+    offset: values.offset,
+    page: values.page,
+    include_profiles: values.profiles
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderProspects(payload, context, { profiles: values.profiles });
+  const meta = payload?.meta || {};
+  writeLine(context.stdout, `Showing ${display(meta.returned_count, 0)} of ${display(meta.total_count, 0)} matched prospects.`);
 }
 
 async function companiesSearch(args, context, { accountOverride } = {}) {
@@ -1969,6 +2119,56 @@ async function tasksComplete(args, context, { accountOverride } = {}) {
   writeLine(context.stdout, `Completed task ${display(payload?.prefix_id || payload?.id || positionals[0])}.`);
 }
 
+async function tasksUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, taskAddOptions());
+  const fields = {
+    title: values.title,
+    due_at: values.due,
+    notes: values.notes,
+    prospect_id: values.prospect,
+    list_id: values.list,
+    assignee_account_user_id: values["assigned-user"]
+  };
+  const sentFields = Object.entries(fields).filter(([, value]) => value !== undefined);
+  if (positionals.length !== 1 || sentFields.length === 0) throw new CommandError(TASKS_UPDATE_USAGE);
+  if (values.prospect && values.list) throw new CommandError("Use either --prospect or --list, not both.");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const task = Object.fromEntries(sentFields);
+  if (task.assignee_account_user_id !== undefined) {
+    task.assignee_account_user_id = resolveAccountUserId(task.assignee_account_user_id, config, { accountOverride }) ?? "";
+  }
+  const payload = await client.updateTask(accountId, positionals[0], { task });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Updated task ${display(payload?.prefix_id || payload?.id || positionals[0])}.`);
+  writeLine(context.stdout, `Title: ${display(payload?.title)}`);
+  writeLine(context.stdout, `Due: ${display(payload?.due_at, "-")} | Association: ${taskAssociationLabel(payload)}`);
+}
+
+async function tasksBulkUpdate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    action: { type: "string" },
+    "assigned-user": { type: "string" }
+  });
+  const bulkAction = String(values.action || "").trim();
+  if (positionals.length === 0 || !["complete", "reassign"].includes(bulkAction)) throw new CommandError(TASKS_BULK_UPDATE_USAGE);
+  if (bulkAction === "reassign" && !values["assigned-user"]) throw new CommandError("--assigned-user is required with --action reassign.");
+
+  const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.bulkUpdateTasks(accountId, compactObject({
+    task_ids: positionals,
+    bulk_action: bulkAction,
+    assignee_account_user_id: bulkAction === "reassign" ? resolveAccountUserId(values["assigned-user"], config, { accountOverride }) : undefined
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const count = payload?.count ?? 0;
+  const noun = count === 1 ? "task" : "tasks";
+  writeLine(context.stdout, bulkAction === "complete" ? `Completed ${count} ${noun}.` : `Queued reassignment of ${count} ${noun}.`);
+}
+
 async function listsCreate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -2086,6 +2286,52 @@ async function listsDelete(args, context, { accountOverride } = {}) {
   }
 }
 
+async function listsBulkAddTag(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), tag: { type: "string" } });
+  if (positionals.length === 0 || !String(values.tag || "").trim()) throw new CommandError(LISTS_BULK_ADD_TAG_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const lists = await client.bulkAddListTag(accountId, { list_ids: positionals, tag: values.tag });
+  if (values.json) return writeJson(context.stdout, lists);
+
+  const count = Array.isArray(lists) ? lists.length : 0;
+  writeLine(context.stdout, `Added tag ${display(values.tag)} to ${count} ${count === 1 ? "list" : "lists"}.`);
+}
+
+async function listsMerge(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(LISTS_MERGE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const list = await client.mergeLists(accountId, { list_ids: positionals });
+  if (values.json) return writeJson(context.stdout, list);
+
+  writeLine(context.stdout, `Merged into list ${display(list?.name)} (${display(list?.prefix_id)}); the newer list was deleted.`);
+  writeLine(context.stdout, `Prospects: ${display(list?.prospect_count, 0)}`);
+}
+
+async function listsExport(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    output: { type: "string" },
+    "inactive-reason": { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(LISTS_EXPORT_USAGE);
+
+  const listId = positionals[0];
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const csv = String(await client.exportList(accountId, listId, compactObject({ inactive_reason: values["inactive-reason"] })) ?? "");
+
+  if (values.output) {
+    await writeFile(values.output, csv);
+    if (values.json) return writeJson(context.stdout, { list_id: listId, output: values.output, bytes: Buffer.byteLength(csv) });
+    return writeLine(context.stdout, `Wrote list ${display(listId)} CSV to ${values.output}.`);
+  }
+  if (values.json) return writeJson(context.stdout, { list_id: listId, csv });
+
+  context.stdout.write(csv);
+}
+
 async function listProspects(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -2167,7 +2413,7 @@ async function listsRemoveProspects(args, context, { accountOverride } = {}) {
 async function listsRoutingRules(args, context, { accountOverride } = {}) {
   const [listId, subaction, ...rest] = args;
   if (!listId || !subaction) {
-    throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|toggle|apply> [args] [--json] [--account <acct_id>]");
   }
 
   if (subaction === "list") return listRoutingRulesList(listId, rest, context, { accountOverride });
@@ -2175,9 +2421,10 @@ async function listsRoutingRules(args, context, { accountOverride } = {}) {
   if (subaction === "update") return listRoutingRulesUpdate(listId, rest, context, { accountOverride });
   if (["remove", "delete"].includes(subaction)) return listRoutingRulesRemove(listId, rest, context, { accountOverride });
   if (subaction === "move") return listRoutingRulesMove(listId, rest, context, { accountOverride });
+  if (subaction === "toggle") return listRoutingRulesToggle(listId, rest, context, { accountOverride });
   if (subaction === "apply") return listRoutingRulesApply(listId, rest, context, { accountOverride });
 
-  throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json] [--account <acct_id>]");
+  throw new CommandError("Usage: audienti lists routing-rules <list_id> <list|create|update|remove|move|toggle|apply> [args] [--json] [--account <acct_id>]");
 }
 
 async function listRoutingRulesList(listId, args, context, { accountOverride } = {}) {
@@ -2249,6 +2496,19 @@ async function listRoutingRulesMove(listId, args, context, { accountOverride } =
   const verb = payload?.moved ? "Moved" : "Could not move";
   writeLine(context.stdout, `${verb} routing rule ${display(ruleId)} ${direction} on list ${display(payload?.list_id || listId)}.`);
   renderListRoutingRules(payload, context);
+}
+
+async function listRoutingRulesToggle(listId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(LIST_ROUTING_RULES_TOGGLE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.toggleListRoutingRule(accountId, listId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.routing_rule;
+  const state = rule?.enabled ? "Enabled" : "Disabled";
+  writeLine(context.stdout, `${state} routing rule ${display(rule?.name)} (${display(rule?.id || positionals[0])}) on list ${display(payload?.list_id || listId)}.`);
 }
 
 async function listRoutingRulesApply(listId, args, context, { accountOverride } = {}) {
@@ -3801,6 +4061,23 @@ async function toolsLinkedinReviewStatus(args, context, { accountOverride } = {}
   if (values.json) return writeJson(context.stdout, payload);
 
   renderLinkedinReviewStatus(payload, context);
+}
+
+async function toolsLinkedinStrategyReview(args, context, { accountOverride } = {}) {
+  const [subaction, ...rest] = args;
+  if (subaction !== "delete") throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE);
+
+  const { values, positionals } = parseCommandArgs(rest, { ...jsonOptions(), confirm: { type: "string" } });
+  const normalizedConfirm = String(values.confirm || "").trim().toLowerCase();
+  if (positionals.length !== 1 || !DELETE_CONFIRMATION_VALUES.has(normalizedConfirm)) {
+    throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE);
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.deleteLinkedinStrategyReview(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Deleted LinkedIn strategy review report ${display(payload?.id || positionals[0])}.`);
 }
 
 async function operatorQueue(args, context, { accountOverride } = {}) {
@@ -6128,6 +6405,16 @@ function renderOffer(offer, context) {
   writeLine(context.stdout, `Offer: ${display(offer?.name)} (${display(offer?.prefix_id)})`);
   if (offer?.description) writeLine(context.stdout, `Description: ${offer.description}`);
   if (offer?.url) writeLine(context.stdout, `URL: ${offer.url}`);
+  if (Array.isArray(offer?.artifacts) && offer.artifacts.length > 0) renderOfferArtifacts(offer.artifacts, context);
+}
+
+function renderOfferArtifacts(artifacts, context) {
+  if (!Array.isArray(artifacts) || artifacts.length === 0) return writeLine(context.stdout, "No artifacts attached.");
+
+  writeLine(context.stdout, "ARTIFACT ID\tFILENAME\tTYPE\tBYTES");
+  for (const artifact of artifacts) {
+    writeLine(context.stdout, [display(artifact.id), display(artifact.filename), display(artifact.content_type, "-"), display(artifact.byte_size, 0)].join("\t"));
+  }
 }
 
 function renderIcps(icps, context) {
@@ -8971,15 +9258,23 @@ const HELP_TOPICS = new Map([
     "    audienti lists routing-rules <list_id> list",
     "    audienti lists routing-rules <list_id> create --payload <file.json>",
     "    audienti lists routing-rules <list_id> apply",
+    "    audienti lists bulk-add-tag --tag <tag> <list_id> [list_id...]",
+    "    audienti lists merge <list_id> <list_id>",
+    "    audienti lists export <list_id> [--output <file.csv>]",
     "    audienti tags list",
     "    audienti tags show <tag>",
     "    audienti tasks list [--status open]",
     "    audienti tasks add --title <text> --due <time>",
     "    audienti tasks complete <ptsk_id>",
+    "    audienti tasks update <ptsk_id> [--title <text>]",
+    "    audienti tasks bulk-update --action <complete|reassign> <ptsk_id> [ptsk_id...]",
     "    audienti offers list",
     "    audienti offers show <offr_id>",
     "    audienti offers update <offr_id> [--name <text>]",
     "    audienti offers delete <offr_id> --confirm <yes|true|Y|y>",
+    "    audienti offers regenerate-research <offr_id> [--guidance <text>]",
+    "    audienti offers update-writeup <offr_id> --description <text>",
+    "    audienti offers add-artifacts <offr_id> <file> [file...]",
     "    audienti icps list [--status <active|archived|all>] [--tag <tag>]",
     "    audienti icps show <icp_id>",
     "    audienti icps update <icp_id> [--tags <tag[,tag...]> | --payload <file.json>]",
@@ -8987,6 +9282,10 @@ const HELP_TOPICS = new Map([
     "    audienti icps restore <icp_id>",
     "    audienti icps add-tag <icp_id> <tag>",
     "    audienti icps remove-tag <icp_id> <tag>",
+    "    audienti icps bulk-add-tag --tag <tag> <icp_id> [icp_id...]",
+    "    audienti icps clone <icp_id>",
+    "    audienti icps delete <icp_id> --confirm <yes|true|Y|y>",
+    "    audienti icps prospects <icp_id> [--query <text>]",
     "    audienti companies search --query <text>",
     "    audienti linkedin-lookups <kind> [--query <text>]",
     "    audienti dnc list",
@@ -9528,6 +9827,10 @@ const HELP_TOPICS = new Map([
     "  audienti offers create --name <text> [--json]",
     "  audienti offers update <offr_id> [--name <text>] [--json]",
     "  audienti offers delete <offr_id> --confirm <yes|true|Y|y> [--json]",
+    "  audienti offers regenerate-research <offr_id> [--guidance <text>] [--json]",
+    "  audienti offers update-writeup <offr_id> --description <text> [--json]",
+    "  audienti offers add-artifacts <offr_id> <file> [file...] [--json]",
+    "  audienti offers remove-artifact <offr_id> <artifact_id> [--json]",
     "",
     "Status: implemented",
     "",
@@ -9639,6 +9942,10 @@ const HELP_TOPICS = new Map([
     "  audienti icps remove-tag <icp_id> <tag> [--json]",
     "  audienti icps archive <icp_id> [--json]",
     "  audienti icps restore <icp_id> [--json]",
+    "  audienti icps bulk-add-tag --tag <tag> <icp_id> [icp_id...] [--json]",
+    "  audienti icps clone <icp_id> [--json]",
+    "  audienti icps delete <icp_id> --confirm <yes|true|Y|y> [--json]",
+    "  audienti icps prospects <icp_id> [--query <text>] [--json]",
     "",
     "Status: implemented",
     "",
@@ -10337,6 +10644,8 @@ const HELP_TOPICS = new Map([
     `  ${TASKS_LIST_USAGE.slice("Usage: ".length)}`,
     `  ${TASKS_ADD_USAGE.slice("Usage: ".length)}`,
     `  ${TASKS_COMPLETE_USAGE.slice("Usage: ".length)}`,
+    `  ${TASKS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    `  ${TASKS_BULK_UPDATE_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
@@ -10417,10 +10726,13 @@ const HELP_TOPICS = new Map([
     "  audienti lists add-tag <list_id> <tag> [--json]",
     "  audienti lists remove-tag <list_id> <tag> [--json]",
     "  audienti lists delete <list_id> --confirm <yes|true|Y|y> [--json]",
+    "  audienti lists bulk-add-tag --tag <tag> <list_id> [list_id...] [--json]",
+    "  audienti lists merge <list_id> <list_id> [--json]",
+    "  audienti lists export <list_id> [--output <file.csv>] [--json]",
     "  audienti lists prospects <list_id> [--json]",
     "  audienti lists add-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
     "  audienti lists remove-prospects <list_id> <prsp_id> [prsp_id...] [--json]",
-    "  audienti lists routing-rules <list_id> <list|create|update|remove|move|apply> [args] [--json]",
+    "  audienti lists routing-rules <list_id> <list|create|update|remove|move|toggle|apply> [args] [--json]",
     "",
     "Status: read, create, update, delete, membership, and routing-rule commands implemented",
     "",
@@ -10435,6 +10747,7 @@ const HELP_TOPICS = new Map([
     "  audienti lists routing-rules <list_id> update <rule_id> --payload <file.json> [--json] [--account <acct_id>]",
     "  audienti lists routing-rules <list_id> remove <rule_id> [--json] [--account <acct_id>]",
     "  audienti lists routing-rules <list_id> move <rule_id> <up|down> [--json] [--account <acct_id>]",
+    "  audienti lists routing-rules <list_id> toggle <rule_id> [--json] [--account <acct_id>]",
     "  audienti lists routing-rules <list_id> apply [--json] [--account <acct_id>]",
     "",
     "Status: implemented",
@@ -10574,6 +10887,259 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  PATCH /api/v1/accounts/:account_id/lists/:id.json"
+  ].join("\n")],
+
+  ["lists bulk-add-tag", [
+    "Usage:",
+    `  ${LISTS_BULK_ADD_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add one normalized tag to several lists at once. All lists change or none do.",
+    "",
+    "Input shape:",
+    "  list_id: list_ prefix id or integer id; every id must belong to the account",
+    "  tag: string",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/lists/bulk_add_tag.json"
+  ].join("\n")],
+
+  ["lists merge", [
+    "Usage:",
+    `  ${LISTS_MERGE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Merge two lists. The older list keeps its name and gains the newer list's tags, prospects, agents, and routing targets; the newer list is deleted.",
+    "  System and HubSpot-synced lists cannot be merged.",
+    "",
+    "Input shape:",
+    "  list_id: exactly two different list ids in the account",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/lists/merge_selected.json"
+  ].join("\n")],
+
+  ["lists export", [
+    "Usage:",
+    `  ${LISTS_EXPORT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Download the list's prospects as CSV with the same columns as the web export.",
+    "  Prints to stdout unless --output is given.",
+    "",
+    "Input shape:",
+    "  list_id: list_ prefix id",
+    "  inactive-reason: optional filter for the inactive system list",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/lists/:id/export.json (returns text/csv)"
+  ].join("\n")],
+
+  ["lists routing-rules toggle", [
+    "Usage:",
+    `  ${LIST_ROUTING_RULES_TOGGLE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Turn one routing rule on or off.",
+    "",
+    "Input shape:",
+    "  rule_id: routing rule id on the list",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/lists/:list_id/routing_rules/:id/toggle.json"
+  ].join("\n")],
+
+  ["icps bulk-add-tag", [
+    "Usage:",
+    `  ${ICPS_BULK_ADD_TAG_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add one normalized tag to several ICPs at once. All ICPs change or none do.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefix id or integer id; every id must belong to the account",
+    "  tag: string",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/icps/bulk_add_tag.json"
+  ].join("\n")],
+
+  ["icps clone", [
+    "Usage:",
+    `  ${ICPS_CLONE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Copy an ICP and its audience rules under a new \"(Copy)\" name.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefix id or integer id",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/icps/:id/clone.json"
+  ].join("\n")],
+
+  ["icps delete", [
+    "Usage:",
+    `  ${ICPS_DELETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Delete an ICP. ICPs still used by motions or agents are refused; archive them instead.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefix id or integer id",
+    "  confirm: one of yes, true, Y, y",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/icps/:id.json"
+  ].join("\n")],
+
+  ["icps prospects", [
+    "Usage:",
+    `  ${ICPS_PROSPECTS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List prospects matched to an ICP, newest first, optionally filtered by a text query.",
+    "",
+    "Input shape:",
+    "  icp_id: icpp_ prefix id or integer id",
+    "  limit: 1-100 (default 25)",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/icps/:id/prospects.json"
+  ].join("\n")],
+
+  ["offers regenerate-research", [
+    "Usage:",
+    `  ${OFFERS_REGENERATE_RESEARCH_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queue a new research write-up for an offer, optionally steered by guidance. Returns once queued.",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  guidance: optional text",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/offers/:id/regenerate_research.json"
+  ].join("\n")],
+
+  ["offers update-writeup", [
+    "Usage:",
+    `  ${OFFERS_UPDATE_WRITEUP_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Replace an offer's write-up without queueing new research.",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  description: text",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:id/writeup.json"
+  ].join("\n")],
+
+  ["offers add-artifacts", [
+    "Usage:",
+    `  ${OFFERS_ADD_ARTIFACTS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Attach local files to an offer as artifacts. `audienti offers show` lists attached artifacts.",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  file: local file path; sent as base64",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/offers/:offer_id/artifacts.json"
+  ].join("\n")],
+
+  ["offers remove-artifact", [
+    "Usage:",
+    `  ${OFFERS_REMOVE_ARTIFACT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Remove one artifact from an offer.",
+    "",
+    "Input shape:",
+    "  artifact_id: id from `audienti offers show <offr_id>`",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/offers/:offer_id/artifacts/:id.json"
+  ].join("\n")],
+
+  ["tasks update", [
+    "Usage:",
+    `  ${TASKS_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Edit any task in the account. Only the options you pass change; pass an empty --prospect or --list to clear it.",
+    "",
+    "Input shape:",
+    "  task_id: ptsk_ prefix id or numeric id",
+    "  assigned-user: account user id or me",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/tasks/:id.json"
+  ].join("\n")],
+
+  ["tasks bulk-update", [
+    "Usage:",
+    `  ${TASKS_BULK_UPDATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Complete several tasks now, or queue their reassignment to one account user.",
+    "",
+    "Input shape:",
+    "  task_id: ptsk_ prefix ids; every id must belong to the account",
+    "  action: complete or reassign (reassign needs --assigned-user)",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/tasks/bulk_update.json"
+  ].join("\n")],
+
+  ["tools linkedin-strategy-review delete", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Delete one LinkedIn strategy review report.",
+    "",
+    "Input shape:",
+    "  rprt_id: rprt_ report id of a strategy review",
+    "  confirm: one of yes, true, Y, y",
+    "",
+    "API:",
+    "  DELETE /api/v1/accounts/:account_id/tools/linkedin-strategy-review/reports/:id.json"
   ].join("\n")],
 
   ["lists add-tag", [
@@ -12037,6 +12603,7 @@ const HELP_TOPICS = new Map([
     "  audienti tools linkedin-review reports [--limit <n>] [--json]",
     "  audienti tools linkedin-review show <rprt_id> [--json]",
     "  audienti tools linkedin-review status <rprt_id> [--json]",
+    "  audienti tools linkedin-strategy-review delete <rprt_id> --confirm <yes|true|Y|y> [--json]",
     "",
     "Status: implemented",
     "",
@@ -12047,7 +12614,8 @@ const HELP_TOPICS = new Map([
     "  audienti tools linkedin-review  Queue a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
     "  audienti tools linkedin-review reports  List recent LinkedIn Review reports for the active account.",
     "  audienti tools linkedin-review show     View the completed report content in the terminal.",
-    "  audienti tools linkedin-review status  Show the current report stage and run status."
+    "  audienti tools linkedin-review status  Show the current report stage and run status.",
+    "  audienti tools linkedin-strategy-review delete  Delete one LinkedIn strategy review report."
   ].join("\n")],
 
   ["tools list", [

@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.76] - 2026-09-27
+
+### Added
+
+- Add `lists bulk-add-tag|merge|export`, `lists routing-rules <list> toggle`, `icps bulk-add-tag|clone|delete|prospects`, `offers regenerate-research|update-writeup|add-artifacts|remove-artifact`, `tasks update|bulk-update`, and `tools linkedin-strategy-review delete` so list, ICP, offer, task, and strategy review catalog actions are reachable from the CLI. `offers show` now lists attached artifacts.
+
 ## [0.1.75] - 2026-09-27
 
 ### Added

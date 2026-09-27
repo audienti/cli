@@ -113,6 +113,33 @@ export class AudientiClient {
     });
   }
 
+  regenerateOfferResearch(accountId, offerId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "regenerate_research"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateOfferWriteup(accountId, offerId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "writeup"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  addOfferArtifacts(accountId, offerId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "artifacts"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeOfferArtifact(accountId, offerId, artifactId) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "artifacts", artifactId]), {
+      method: "DELETE"
+    });
+  }
+
   icps(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["icps"], query));
   }
@@ -161,6 +188,30 @@ export class AudientiClient {
       method: "DELETE",
       body
     });
+  }
+
+  bulkAddIcpTag(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["icps", "bulk_add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  cloneIcp(accountId, icpId) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "clone"]), {
+      method: "POST",
+      body: {}
+    });
+  }
+
+  deleteIcp(accountId, icpId) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId]), {
+      method: "DELETE"
+    });
+  }
+
+  icpProspects(accountId, icpId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["icps", icpId, "prospects"], query));
   }
 
   companies(accountId, query = {}) {
@@ -360,6 +411,20 @@ export class AudientiClient {
     });
   }
 
+  updateTask(accountId, taskId, body) {
+    return this.requestJson(accountPath(accountId, ["tasks", taskId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  bulkUpdateTasks(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tasks", "bulk_update"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
   lists(accountId) {
     return this.requestJson(accountPath(accountId, ["lists"]));
   }
@@ -400,6 +465,24 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["lists", listId]), {
       method: "DELETE"
     });
+  }
+
+  bulkAddListTag(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", "bulk_add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  mergeLists(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["lists", "merge_selected"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  exportList(accountId, listId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "export"], query));
   }
 
   listProspects(accountId, listId, query = {}) {
@@ -448,6 +531,12 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", ruleId, "move"]), {
       method: "PATCH",
       body
+    });
+  }
+
+  toggleListRoutingRule(accountId, listId, ruleId) {
+    return this.requestJson(accountPath(accountId, ["lists", listId, "routing_rules", ruleId, "toggle"]), {
+      method: "PATCH"
     });
   }
 
@@ -775,6 +864,12 @@ export class AudientiClient {
 
   linkedinReviewStatus(accountId, reportId) {
     return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports", reportId]));
+  }
+
+  deleteLinkedinStrategyReview(accountId, reportId) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-strategy-review", "reports", reportId]), {
+      method: "DELETE"
+    });
   }
 
   humanizeText(accountId, body) {
