@@ -52,11 +52,32 @@ fi
 
 "$binary" --help >/dev/null
 
+installed_version="$(node -e 'try { process.stdout.write(require(process.argv[1]).version || "") } catch {}' "$(npm root --global 2>/dev/null || true)/${package}/package.json" 2>/dev/null || true)"
+
+# A saved login means this is an upgrade: stay quiet.
+if "$binary" config list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",(c)=>s+=c).on("end",()=>{try{process.exit(JSON.parse(s).token?0:1)}catch{process.exit(1)}})'; then
+  say "Audienti CLI updated to ${installed_version:-the latest version}."
+  exit 0
+fi
+
+# `curl ... | bash` feeds this script on stdin, so the guided start must read
+# the keyboard from the terminal device instead.
+tty_device="${AUDIENTI_INSTALL_TTY:-/dev/tty}"
+if (: <"$tty_device") 2>/dev/null; then
+  say "Audienti CLI${installed_version:+ ${installed_version}} installed."
+  say ""
+  "$binary" start <"$tty_device" || say "You can pick up where you left off with: audienti start"
+  exit 0
+fi
+
 cat <<'NEXT'
 Audienti CLI installed.
 
 Next:
+  audienti start      Sign in or create an account (run it in a terminal)
+
+Without a terminal (CI or a coding agent):
   audienti auth token <token>
-  audienti accounts list --json
   audienti accounts select <acct_id>
+  audienti setup --url <company_url> --yes
 NEXT
