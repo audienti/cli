@@ -4,9 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.74] - 2026-09-27
+
 ### Added
 
+- Add `accounts show`, `company-rules show`, and `linkedin-lookups <kind>` so account details, single company rules, and LinkedIn targeting values are reachable from the CLI.
 - Add Motion-owned discovery signal tracking to `motions show` and the `motions signals` command, including attribution holds, source counts, and retained Agent provenance.
+
+### Fixed
+
+- LinkedIn lookups accept API tokens and prefixed ICP ids, so CLI lookups no longer fail with an authentication error.
 
 ## [0.1.73] - 2026-09-26
 

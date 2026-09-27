@@ -12511,3 +12511,174 @@ test("auth status checks live auth and masks token", async () => {
     assert.match(stdout.output, /Default account user: User One \(42\)/);
   });
 });
+
+test("accounts show fetches the selected or named account with bearer auth", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const accountPayload = {
+      id: 1,
+      prefix_id: "acct_one",
+      name: "One",
+      personal: false,
+      owner_id: 9,
+      account_users: [{ id: 3, user_id: 9 }, { id: 4, user_id: 10 }],
+      created_at: "2026-01-02T03:04:05Z"
+    };
+    const requestedUrls = [];
+    const fetch = createFetch((url, options) => {
+      requestedUrls.push(url.toString());
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse(accountPayload);
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["accounts", "show", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), accountPayload);
+
+    stdout = captureStream();
+    exitCode = await run(["accounts", "show", "acct_two"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Account: One \(acct_one\)/);
+    assert.match(stdout.output, /Personal: no/);
+    assert.match(stdout.output, /Members: 2/);
+
+    assert.deepEqual(requestedUrls, [
+      "https://app.audienti.com/api/v1/accounts/acct_one.json",
+      "https://app.audienti.com/api/v1/accounts/acct_two.json"
+    ]);
+  });
+});
+
+test("accounts show rejects extra arguments without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const fetch = createFetch(() => {
+      throw new Error("invalid commands must not call the API");
+    });
+
+    const stderr = captureStream();
+    const exitCode = await run(["accounts", "show", "acct_one", "acct_two", "--json"], { env, fetch, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Usage: audienti accounts show \[<acct_id>\]/);
+  });
+});
+
+test("company-rules show fetches one account rule", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const rulePayload = {
+      company_rule: {
+        id: 7,
+        prefix_id: "cdp_7",
+        name: "Competitor",
+        linkedin_company_url: "https://www.linkedin.com/company/competitor",
+        domain: "competitor.example",
+        disposition: "monitor",
+        scope_kind: "account_user",
+        account_user_email: "owner@example.com",
+        active: true,
+        note: "Watch only"
+      }
+    };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/company_rules/7.json");
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      return jsonResponse(rulePayload);
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["company-rules", "show", "7", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), rulePayload);
+
+    stdout = captureStream();
+    exitCode = await run(["company-rules", "show", "7"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Company rule Competitor \(cdp_7\)/);
+    assert.match(stdout.output, /Disposition: monitor \| Scope: user:owner@example\.com \| Active: yes/);
+    assert.match(stdout.output, /Domain: competitor\.example/);
+    assert.match(stdout.output, /Note: Watch only/);
+
+    const stderr = captureStream();
+    exitCode = await run(["company-rules", "show", "--json"], { env, fetch, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /Usage: audienti company-rules show <rule_id>/);
+  });
+});
+
+test("linkedin-lookups call lookup endpoints with query, icp and account params", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const requestedUrls = [];
+    const fetch = createFetch((url, options) => {
+      requestedUrls.push(url.toString());
+      assert.equal(options.method, "GET");
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      if (url.pathname.endsWith("/job_titles.json")) return jsonResponse([{ id: "jt-1", name: "Head of Sales" }]);
+      if (url.pathname.endsWith("/locations.json")) return jsonResponse([{ id: "us", name: "United States", source: "table" }]);
+      return jsonResponse([{ id: "B", name: "1-10" }]);
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["linkedin-lookups", "job-titles", "--query", "head of sales", "--icp", "icpp_one", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), [{ id: "jt-1", name: "Head of Sales" }]);
+
+    stdout = captureStream();
+    exitCode = await run(["linkedin_lookups", "locations", "--query", "United"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "ID\tNAME\tSOURCE\nus\tUnited States\ttable\n");
+
+    stdout = captureStream();
+    exitCode = await run(["linkedin-lookups", "company-sizes"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /B\t1-10\t-/);
+
+    assert.deepEqual(requestedUrls, [
+      "https://app.audienti.com/api/v1/linkedin_lookups/job_titles.json?q=head+of+sales&icp_id=icpp_one&account_id=acct_one",
+      "https://app.audienti.com/api/v1/linkedin_lookups/locations.json?q=United",
+      "https://app.audienti.com/api/v1/linkedin_lookups/company_sizes.json"
+    ]);
+  });
+});
+
+test("linkedin-lookups rejects unknown kinds and missing or unsupported options without calling the api", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const fetch = createFetch(() => {
+      throw new Error("invalid commands must not call the API");
+    });
+
+    for (const args of [
+      ["linkedin-lookups", "skills", "--json"],
+      ["linkedin-lookups", "industries", "--json"],
+      ["linkedin-lookups", "industries", "--query", "software", "--icp", "icpp_one"],
+      ["linkedin-lookups", "company-types", "--query", "public"]
+    ]) {
+      const stderr = captureStream();
+      const exitCode = await run(args, { env, fetch, stderr });
+      assert.equal(exitCode, 1, args.join(" "));
+      assert.match(stderr.output, /Usage: audienti linkedin-lookups <company-sizes\|company-types\|functions\|industries\|job-titles\|locations\|seniorities>/);
+    }
+  });
+});

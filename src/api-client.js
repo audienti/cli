@@ -40,6 +40,14 @@ export class AudientiClient {
     return this.requestJson("/api/v1/accounts.json");
   }
 
+  account(accountId) {
+    return this.requestJson(accountPath(accountId, []));
+  }
+
+  linkedinLookup(kind, query = {}) {
+    return this.requestJson(apiPath(["linkedin_lookups", kind], query));
+  }
+
   mcp(message) {
     return this.requestJson("/mcp", {
       method: "POST",
@@ -185,6 +193,10 @@ export class AudientiClient {
 
   companyRules(accountId) {
     return this.requestJson(accountPath(accountId, ["company_rules"]));
+  }
+
+  companyRule(accountId, ruleId) {
+    return this.requestJson(accountPath(accountId, ["company_rules", ruleId]));
   }
 
   createCompanyRule(accountId, body) {
@@ -819,11 +831,13 @@ export class AudientiClient {
 }
 
 function accountPath(accountId, segments, query = {}) {
+  return apiPath(["accounts", accountId, ...segments], query);
+}
+
+function apiPath(segments, query = {}) {
   const encodedSegments = [
     "api",
     "v1",
-    "accounts",
-    accountId,
     ...segments
   ].map((segment) => encodeURIComponent(segment));
   const searchParams = new URLSearchParams();

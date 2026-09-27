@@ -112,6 +112,18 @@ const COMPANY_RULES_CREATE_USAGE = "Usage: audienti company-rules create (--link
 const COMPANY_RULES_UPDATE_USAGE = "Usage: audienti company-rules update <rule_id> [--linkedin-url <url>] [--domain <domain>] [--disposition <monitor|nurture|not_fit|reject>] [--name <text>] [--user <account_user_id|email|me|none>] [--note <text>] [--json] [--account <acct_id>]";
 const COMPANY_RULES_REMOVE_USAGE = "Usage: audienti company-rules remove <rule_id> [--json] [--account <acct_id>]";
 const COMPANY_RULES_APPLY_USAGE = "Usage: audienti company-rules apply (<rule_id>|--all) [--json] [--account <acct_id>]";
+const COMPANY_RULES_SHOW_USAGE = "Usage: audienti company-rules show <rule_id> [--json] [--account <acct_id>]";
+const ACCOUNTS_SHOW_USAGE = "Usage: audienti accounts show [<acct_id>] [--json] [--account <acct_id>]";
+const LINKEDIN_LOOKUPS_USAGE = "Usage: audienti linkedin-lookups <company-sizes|company-types|functions|industries|job-titles|locations|seniorities> [--query <text>] [--icp <icp_id>] [--json] [--account <acct_id>]";
+const LINKEDIN_LOOKUP_KINDS = new Map([
+  ["company-sizes", { path: "company_sizes", query: "none", icp: false }],
+  ["company-types", { path: "company_types", query: "none", icp: false }],
+  ["functions", { path: "functions", query: "required", icp: true }],
+  ["industries", { path: "industries", query: "required", icp: false }],
+  ["job-titles", { path: "job_titles", query: "required", icp: true }],
+  ["locations", { path: "locations", query: "required", icp: true }],
+  ["seniorities", { path: "seniorities", query: "optional", icp: false }]
+]);
 const TASKS_LIST_USAGE = "Usage: audienti tasks list [--status <open|completed>] [--limit <n>] [--json] [--account <acct_id>]";
 const TASKS_ADD_USAGE = "Usage: audienti tasks add --title <text> --due <time> [--prospect <prsp_id>] [--list <list_id>] [--assigned-user <id|me>] [--notes <text>] [--json] [--account <acct_id>]";
 const TASKS_COMPLETE_USAGE = "Usage: audienti tasks complete <ptsk_id> [--json] [--account <acct_id>]";
@@ -265,6 +277,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "update" && action === "check") return updateCheck(rest, context);
   if (normalizedResource === "accounts" && action === "list") return accountsList(rest, context, { accountOverride });
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
+  if (normalizedResource === "accounts" && action === "show") return accountsShow(rest, context, { accountOverride });
+  if (normalizedResource === "linkedin-lookups") return linkedinLookups(action, rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
@@ -291,6 +305,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "dnc" && action === "import") return dncImport(rest, context, { accountOverride });
   if (normalizedResource === "dnc" && ["remove", "delete"].includes(action)) return dncRemove(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && action === "list") return companyRulesList(rest, context, { accountOverride });
+  if (normalizedResource === "company-rules" && action === "show") return companyRulesShow(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && action === "create") return companyRulesCreate(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && action === "update") return companyRulesUpdate(rest, context, { accountOverride });
   if (normalizedResource === "company-rules" && ["remove", "delete"].includes(action)) return companyRulesRemove(rest, context, { accountOverride });
@@ -482,6 +497,7 @@ function normalizeResource(resource) {
   if (resource === "principals") return "users";
   if (resource === "writers") return "writer";
   if (resource === "company_rules" || resource === "company-rules") return "company-rules";
+  if (resource === "linkedin_lookups" || resource === "linkedin-lookups") return "linkedin-lookups";
   if (resource === "social_cookie" || resource === "social_cookies") return "social-cookies";
   return resource === "plays" ? "motions" : resource;
 }
@@ -799,6 +815,64 @@ async function accountsList(args, context, { accountOverride } = {}) {
 
     const marker = accountId === activeAccountId ? "*" : " ";
     writeLine(context.stdout, `${marker} ${accountId}\t${account.name}`);
+  }
+}
+
+async function accountsShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 1) throw new CommandError(ACCOUNTS_SHOW_USAGE);
+
+  const config = await requireAuthenticatedConfig(context);
+  const accountId = positionals[0] || accountOverride || config.accountId;
+  if (!accountId) {
+    throw new CommandError("No active account. Run `audienti accounts select <acct_id>`, pass `--account <acct_id>`, or give an account id.");
+  }
+
+  const account = await clientFromConfig(config, context).account(accountId);
+  if (values.json) return writeJson(context.stdout, account);
+
+  writeLine(context.stdout, `Account: ${display(account?.name)} (${display(account?.prefix_id || accountId)})`);
+  writeLine(context.stdout, `Personal: ${account?.personal ? "yes" : "no"}`);
+  writeLine(context.stdout, `Members: ${Array.isArray(account?.account_users) ? account.account_users.length : 0}`);
+  writeLine(context.stdout, `Created: ${display(account?.created_at, "-")}`);
+}
+
+async function linkedinLookups(kind, args, context, { accountOverride } = {}) {
+  const lookup = LINKEDIN_LOOKUP_KINDS.get(String(kind || "").replaceAll("_", "-"));
+  if (!lookup) throw new CommandError(LINKEDIN_LOOKUPS_USAGE);
+
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    query: { type: "string" },
+    icp: { type: "string" }
+  });
+  const query = values.query?.trim();
+  const invalid = positionals.length > 0 ||
+    (lookup.query === "required" && !query) ||
+    (lookup.query === "none" && values.query !== undefined) ||
+    (!lookup.icp && values.icp !== undefined);
+  if (invalid) throw new CommandError(LINKEDIN_LOOKUPS_USAGE);
+
+  const config = await requireAuthenticatedConfig(context);
+  const params = { q: query };
+  if (values.icp) {
+    const accountId = accountOverride || config.accountId;
+    if (!accountId) {
+      throw new CommandError("No active account. Run `audienti accounts select <acct_id>` or pass `--account <acct_id>` to look up with --icp.");
+    }
+    params.icp_id = values.icp;
+    params.account_id = accountId;
+  }
+
+  const payload = await clientFromConfig(config, context).linkedinLookup(lookup.path, params);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rows = Array.isArray(payload) ? payload : [];
+  if (rows.length === 0) return writeLine(context.stdout, "No results found.");
+
+  writeLine(context.stdout, "ID\tNAME\tSOURCE");
+  for (const row of rows) {
+    writeLine(context.stdout, [display(row.id, "-"), display(row.name), display(row.source, "-")].join("\t"));
   }
 }
 
@@ -1337,6 +1411,22 @@ async function companyRulesList(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderCompanyRules(payload, context);
+}
+
+async function companyRulesShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(COMPANY_RULES_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.companyRule(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rule = payload?.company_rule;
+  writeLine(context.stdout, `Company rule ${display(rule?.name || rule?.domain || rule?.linkedin_company_identifier)} (${display(rule?.prefix_id || rule?.id)})`);
+  writeLine(context.stdout, `Disposition: ${display(rule?.disposition)} | Scope: ${companyRuleScopeLabel(rule)} | Active: ${rule?.active ? "yes" : "no"}`);
+  writeLine(context.stdout, `LinkedIn: ${display(rule?.linkedin_company_url || rule?.linkedin_company_identifier, "-")}`);
+  writeLine(context.stdout, `Domain: ${display(rule?.domain, "-")}`);
+  if (rule?.note) writeLine(context.stdout, `Note: ${rule.note}`);
 }
 
 async function companyRulesCreate(args, context, { accountOverride } = {}) {
@@ -8411,6 +8501,7 @@ const HELP_TOPICS = new Map([
     "  Setup & identity",
     "    audienti auth status",
     "    audienti config list",
+    "    audienti accounts show [acct_id]",
     "    audienti update check",
     "    audienti setup play preflight",
     "    audienti users list",
@@ -8498,9 +8589,11 @@ const HELP_TOPICS = new Map([
     "    audienti icps add-tag <icp_id> <tag>",
     "    audienti icps remove-tag <icp_id> <tag>",
     "    audienti companies search --query <text>",
+    "    audienti linkedin-lookups <kind> [--query <text>]",
     "    audienti dnc list",
     "    audienti dnc add <email|citation_id|profile_url>",
     "    audienti company-rules list",
+    "    audienti company-rules show <rule_id>",
     "    audienti company-rules create (--linkedin-url <url> | --domain <domain>) --disposition <state>",
     "",
     "  Writer",
@@ -8725,6 +8818,7 @@ const HELP_TOPICS = new Map([
   ["accounts", [
     "Usage:",
     "  audienti accounts list [--json]",
+    "  audienti accounts show [<acct_id>] [--json]",
     "  audienti accounts select <acct_id>",
     "",
     "Status: implemented",
@@ -8781,6 +8875,47 @@ const HELP_TOPICS = new Map([
     "",
     "Example:",
     "  audienti accounts list --json"
+  ].join("\n")],
+
+  ["accounts show", [
+    "Usage:",
+    `  ${ACCOUNTS_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:id.json",
+    "",
+    "Input shape:",
+    "  acct_id: string  Account prefix id; defaults to --account or the selected account",
+    "",
+    "Output shape:",
+    "  id, prefix_id, name, personal, owner_id, account_users[], created_at, updated_at"
+  ].join("\n")],
+
+  ["linkedin-lookups", [
+    "Usage:",
+    `  ${LINKEDIN_LOOKUPS_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Look up LinkedIn targeting values (the ids used in ICP filters).",
+    "",
+    "Kinds:",
+    "  job-titles, functions, locations  --query required; --icp prefers values saved on that ICP",
+    "  industries                        --query required",
+    "  seniorities                       --query optional filter",
+    "  company-sizes, company-types      no options; returns the full list",
+    "",
+    "API:",
+    "  GET /api/v1/linkedin_lookups/<kind>.json?q=<text>&icp_id=<icp_id>",
+    "",
+    "Output shape:",
+    "  [{ id, name, source? }]",
+    "",
+    "Example:",
+    "  audienti linkedin-lookups job-titles --query \"head of sales\" --json"
   ].join("\n")],
 
   ["accounts select", [
@@ -9413,6 +9548,7 @@ const HELP_TOPICS = new Map([
   ["company-rules", [
     "Usage:",
     "  audienti company-rules list [--json]",
+    `  ${COMPANY_RULES_SHOW_USAGE.slice("Usage: ".length)}`,
     `  ${COMPANY_RULES_CREATE_USAGE.slice("Usage: ".length)}`,
     `  ${COMPANY_RULES_UPDATE_USAGE.slice("Usage: ".length)}`,
     `  ${COMPANY_RULES_REMOVE_USAGE.slice("Usage: ".length)}`,
@@ -9432,6 +9568,16 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/company_rules.json"
+  ].join("\n")],
+
+  ["company-rules show", [
+    "Usage:",
+    `  ${COMPANY_RULES_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/company_rules/:id.json"
   ].join("\n")],
 
   ["company-rules create", [
