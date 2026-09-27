@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.78] - 2026-09-27
+
+### Fixed
+
+- Fix `audienti setup` and `audienti motions quick-start --confirm` failing with HTTP 400 when creating the drafted motion.
+- When drafting fails because the drafting service is down, `audienti setup` now says to try again in a few minutes instead of only suggesting a different website.
+
 ## [0.1.77] - 2026-09-27
 
 ### Added

@@ -359,7 +359,7 @@ test("setup explains a failed draft in plain words", async () => {
     assert.equal(exitCode, 1);
     assert.equal(
       stderr.output,
-      "Error: We couldn't draft a motion from that website (Website returned no readable text). Nothing was created. Check the address or add a sentence about who you sell to, then run `audienti setup` again.\n"
+      "Error: We couldn't draft a motion from that website (Website returned no readable text). Nothing was created. Run `audienti setup` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.\n"
     );
   });
 });

@@ -1115,7 +1115,7 @@ function setupCreateError(error) {
 
 function setupDraftFailedError(reason) {
   const detail = reason ? ` (${cleanSentence(reason)})` : "";
-  return new CommandError(`We couldn't draft a motion from that website${detail}. Nothing was created. Check the address or add a sentence about who you sell to, then run \`audienti setup\` again.`);
+  return new CommandError(`We couldn't draft a motion from that website${detail}. Nothing was created. Run \`audienti setup\` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.`);
 }
 
 function renderSetupDraft(draft, { ask }, say) {
