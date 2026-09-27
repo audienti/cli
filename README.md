@@ -17,17 +17,44 @@ Requires Node.js 20 or newer.
 
 ```bash
 curl -fsSL https://cli.audienti.com/install | bash
-audienti --help
 ```
 
-Or install directly through npm:
+At a terminal, the installer runs `audienti start` for you. Or install directly
+through npm, then start:
 
 ```bash
 npm install --global @audienti/cli
-audienti --help
+audienti start
 ```
 
 For one-off use, run `npx @audienti/cli --help`.
+
+## First run
+
+```bash
+audienti start
+audienti setup
+```
+
+`audienti start` opens Audienti in your browser so you can sign in or create an
+account, then picks your account and account user (automatically when there is
+only one) and offers to run setup.
+
+`audienti setup` asks for your company website, who you sell to, and what you
+want prospects to say yes to. It drafts your first motion, shows the draft, and
+asks `Create this?` before saving anything. Next, connect LinkedIn. Nothing is
+sent without your approval.
+
+Without a terminal, `audienti start` never prompts and reports what to do next,
+and `setup` takes flags:
+
+```bash
+audienti setup --url https://acme.com --sell-to "<who you sell to>" --ask "<what they say yes to>" --yes --json
+```
+
+Without `--yes`, a non-interactive setup drafts but creates nothing. Running
+`audienti` with no saved login starts `audienti start`; `audienti --help` still
+prints help.
 
 ## Authenticate
 

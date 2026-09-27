@@ -31,12 +31,25 @@ curl -fsSL https://cli.audienti.com/install | bash
 ```
 
 3. Authentication is explicit and per machine. Do not ask a user to paste a
-production token into chat, a repository file, an issue, or a CI secret. Prefer
-browser login:
+production token into chat, a repository file, an issue, or a CI secret. For a
+person at a terminal, the friendly first run is:
+
+```bash
+audienti start
+audienti setup
+```
+
+`audienti start` signs in through the browser (or creates an account) and picks
+the account. `audienti start --json` never prompts; it reports
+`sign_in_required` or `ready`. Browser login alone is:
 
 ```bash
 audienti auth login
 ```
+
+`audienti setup --url <company_url> --sell-to "<who they sell to>" --ask "<what
+prospects say yes to>" --json` drafts a first motion without creating it. Show
+the draft to the user and add `--yes` only after they approve creating it.
 
 Use `audienti auth token` only after the user supplies a token through an
 approved secure channel.

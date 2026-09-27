@@ -4,6 +4,15 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.77] - 2026-09-27
+
+### Added
+
+- Add `audienti start`, a friendly first run: it opens the browser so you can sign in or create an account, picks your account and account user (automatically when there is only one), and offers to run setup. Running `audienti` with no saved login now starts it; `audienti --help` is unchanged.
+- Add `audienti setup`, a guided wizard that asks for your company website, who you sell to, and what you want prospects to say yes to, drafts your first motion, shows the draft, and asks before creating it. Scripts and agents can pass `--url`, `--sell-to`, `--ask`, `--yes`, and `--json`; without a terminal it never prompts. `setup play preflight` is unchanged.
+- The install script now runs `audienti start` for new users at a terminal, only reports the new version when you are already signed in, and prints next steps when there is no terminal.
+- `motions quick-start --json` includes a `preview` summary of a ready draft.
+
 ## [0.1.76] - 2026-09-27
 
 ### Added
