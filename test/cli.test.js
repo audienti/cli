@@ -528,16 +528,19 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.equal(stderr.output, "");
 });
 
-test("bare command prints global help without an error prefix", async () => {
-  const stdout = captureStream();
-  const stderr = captureStream();
+test("bare command with a saved login prints global help without an error prefix", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token" }, { env });
+    const stdout = captureStream();
+    const stderr = captureStream();
 
-  const exitCode = await run([], { stdout, stderr });
+    const exitCode = await run([], { env, stdout, stderr });
 
-  assert.equal(exitCode, 0);
-  assert.match(stdout.output, /Usage:/);
-  assert.match(stdout.output, /audienti <command> \[options\]/);
-  assert.equal(stderr.output, "");
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Usage:/);
+    assert.match(stdout.output, /audienti <command> \[options\]/);
+    assert.equal(stderr.output, "");
+  });
 });
 
 test("command help documents accepted options without calling the api", async () => {

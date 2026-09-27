@@ -22,6 +22,12 @@ const API_MAX_LIST_LIMIT = 100;
 const DEFAULT_LOOKUP_TIMEOUT_SECONDS = 60;
 const DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS = 2;
 const DEFAULT_AUTH_LOGIN_TIMEOUT_SECONDS = 180;
+// Start covers signup plus email confirmation, which takes longer than a sign-in.
+const DEFAULT_START_LOGIN_TIMEOUT_SECONDS = 900;
+const DEFAULT_SETUP_TIMEOUT_SECONDS = 300;
+const START_USAGE = "Usage: audienti start [--host https://app.audienti.com] [--no-open] [--json]";
+const SETUP_USAGE = "Usage: audienti setup [--url <company_url>] [--sell-to <who you sell to>] [--ask <what the prospect says yes to>] [--yes] [--json]";
+const SETUP_FLAGS_EXAMPLE = "audienti setup --url https://acme.com --sell-to \"<who you sell to>\" --ask \"<what they say yes to>\" --yes";
 const DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS = 180;
 const DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS = 2;
 const PACKAGE_NAME = "@audienti/cli";
@@ -287,6 +293,7 @@ export async function run(argv = process.argv.slice(2), deps = {}) {
 
 async function dispatch(argv, context) {
   const { args, accountOverride } = extractGlobalOptions(argv);
+  if (args.length === 0 && !(await readConfig({ env: context.env })).token) return start([], context);
   const helpTopic = helpTopicFromArgs(args);
 
   if (helpTopic) {
@@ -317,6 +324,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "activity") return usersActivity(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "automation") return usersAutomation(rest, context, { accountOverride });
+  if (normalizedResource === "start") return start(args.slice(1), context);
+  if (normalizedResource === "setup" && (action === undefined || action.startsWith("--"))) return setupWizard(args.slice(1), context, { accountOverride });
   if (normalizedResource === "setup" && action === "play" && rest[0] === "preflight") return setupPlayPreflight(rest.slice(1), context, { accountOverride });
   if (normalizedResource === "social-cookies" && action === "sync-messages") return socialCookiesSyncMessages(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "list") return offersList(rest, context, { accountOverride });
@@ -596,25 +605,50 @@ async function authLogin(args, context) {
 
   const host = normalizeHost(values.host || DEFAULT_HOST);
   const timeoutSeconds = normalizeOptionalPositiveInteger(values["timeout-seconds"], "--timeout-seconds") || DEFAULT_AUTH_LOGIN_TIMEOUT_SECONDS;
+  const { client, user, payload } = await browserSignIn({
+    host,
+    timeoutSeconds,
+    open: !values["no-open"],
+    context,
+    announce(authUrl, callbackUrl) {
+      if (values.json) {
+        writeJson(context.stdout, {
+          kind: "auth_login_start",
+          auth_url: authUrl,
+          callback_url: callbackUrl,
+          timeout_seconds: timeoutSeconds
+        });
+      } else {
+        writeLine(context.stdout, "Open this URL to authenticate Audienti CLI:");
+        writeLine(context.stdout, authUrl);
+      }
+    }
+  });
+
+  const result = {
+    kind: "auth_login_complete",
+    host: client.host,
+    user: user?.name || payload.user_name || payload.user_email || user?.email || null,
+    account_id: payload.account_id || null,
+    account_name: payload.account_name || null
+  };
+
+  if (values.json) return writeJson(context.stdout, result);
+
+  writeLine(context.stdout, `Authenticated to ${client.host} as ${result.user || "current user"}.`);
+  if (result.account_id) writeLine(context.stdout, `Selected account ${result.account_name || result.account_id} (${result.account_id}).`);
+  if (!result.account_id) writeLine(context.stdout, "Run `audienti accounts list` to choose an account.");
+}
+
+async function browserSignIn({ host, timeoutSeconds, open, context, announce }) {
   const state = randomBytes(24).toString("hex");
   const callback = await createAuthCallbackServer({ state, context });
   const authUrl = new URL("/cli/auth", host);
   authUrl.searchParams.set("redirect_uri", callback.redirectUri);
   authUrl.searchParams.set("state", state);
 
-  if (values.json) {
-    writeJson(context.stdout, {
-      kind: "auth_login_start",
-      auth_url: authUrl.toString(),
-      callback_url: callback.redirectUri,
-      timeout_seconds: timeoutSeconds
-    });
-  } else {
-    writeLine(context.stdout, "Open this URL to authenticate Audienti CLI:");
-    writeLine(context.stdout, authUrl.toString());
-  }
-
-  if (!values["no-open"]) openBrowser(authUrl.toString(), context);
+  announce(authUrl.toString(), callback.redirectUri);
+  if (open) openBrowser(authUrl.toString(), context);
 
   let payload;
   try {
@@ -632,19 +666,473 @@ async function authLogin(args, context) {
     accountName: payload.account_name || undefined
   }, { env: context.env });
 
-  const result = {
-    kind: "auth_login_complete",
-    host: client.host,
-    user: user?.name || payload.user_name || payload.user_email || user?.email || null,
-    account_id: payload.account_id || null,
-    account_name: payload.account_name || null
+  return { client, user, payload };
+}
+
+async function start(args, context) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    host: { type: "string" },
+    "no-open": { type: "boolean" }
+  });
+  if (positionals.length > 0) throw new CommandError(START_USAGE);
+
+  const interactive = stdinIsInteractive(context) && !values.json;
+  const say = (line = "") => {
+    if (!values.json) writeLine(context.stdout, line);
+  };
+  let config = await readConfig({ env: context.env });
+  const host = normalizeHost(values.host || config.host || DEFAULT_HOST);
+
+  say("Welcome to Audienti.");
+  say("Audienti finds the people who fit your business, spots when they're ready to talk, and drafts the outreach.");
+  say("Nothing sends without your approval.");
+  say();
+
+  let session = await savedSession(config, context);
+  if (!session && !interactive) {
+    const payload = {
+      kind: "start",
+      status: "sign_in_required",
+      signed_in: false,
+      host,
+      sign_up_url: new URL("/users/sign_up", host).toString(),
+      sign_in_command: "audienti auth login",
+      next_command: "audienti start"
+    };
+    if (values.json) return writeJson(context.stdout, payload);
+
+    say("Sign in or create an account to continue.");
+    say(`  New here? Create an account at ${payload.sign_up_url}`);
+    say("  Then run `audienti auth login` in a terminal (it opens your browser),");
+    say("  or save an API token with `audienti auth token <token>`.");
+    say("Next: run `audienti start` again.");
+    return 0;
+  }
+
+  const prompter = createPrompter(context);
+  try {
+    if (session) {
+      say(`You're signed in as ${session.label}.`);
+    } else {
+      say("First, sign in or create an account.");
+      const { client, user, payload } = await browserSignIn({
+        host,
+        timeoutSeconds: DEFAULT_START_LOGIN_TIMEOUT_SECONDS,
+        open: !values["no-open"],
+        context,
+        announce(authUrl) {
+          say("We'll open Audienti in your browser. New here? Choose \"sign up for an account\" on that page.");
+          say("If the browser doesn't open, visit:");
+          say(`  ${authUrl}`);
+          say("Waiting for you to finish in the browser (confirm your email if asked)...");
+        }
+      });
+      config = await readConfig({ env: context.env });
+      session = { client, label: user?.name || payload.user_name || user?.email || payload.user_email || "you" };
+      say(`Signed in as ${session.label}.`);
+    }
+
+    const account = await chooseStartAccount(session.client, config, { interactive, prompter, say });
+    const accountUser = account ? await chooseStartAccountUser(session.client, account, { interactive, prompter, say }) : null;
+    if (account) {
+      const sameAccount = account.prefix_id === config.accountId;
+      await writeConfig({
+        ...config,
+        accountId: account.prefix_id,
+        accountName: account.name,
+        accountUserId: accountUser ? String(accountUser.id) : sameAccount ? config.accountUserId : undefined,
+        accountUserName: accountUser ? accountUser.name : sameAccount ? config.accountUserName : undefined,
+        accountUserEmail: accountUser ? accountUser.email : sameAccount ? config.accountUserEmail : undefined
+      }, { env: context.env });
+    }
+
+    const status = !account ? "account_selection_required" : !accountUser ? "account_user_selection_required" : "ready";
+    const nextCommand = status === "account_selection_required"
+      ? "audienti accounts select <acct_id>"
+      : status === "account_user_selection_required"
+        ? "audienti users select <account_user_id|email|name|me>"
+        : interactive ? "audienti setup" : SETUP_FLAGS_EXAMPLE;
+
+    if (values.json) {
+      return writeJson(context.stdout, {
+        kind: "start",
+        status,
+        signed_in: true,
+        host: session.client.host,
+        user: session.label,
+        account: account ? { id: account.prefix_id, name: account.name } : null,
+        account_user: accountUser ? { id: accountUser.id, name: accountUser.name || null, email: accountUser.email || null } : null,
+        next_command: nextCommand
+      });
+    }
+
+    if (status !== "ready" || !interactive) {
+      say(`Next: ${nextCommand}`);
+      return 0;
+    }
+
+    say();
+    if (await askYesNo(prompter, "Set up your first motion now? [Y/n] ", { defaultYes: true })) {
+      say();
+      return setupWizard([], context, { prompter });
+    }
+
+    say("No problem. When you're ready, run: audienti setup");
+    return 0;
+  } finally {
+    prompter.close();
+  }
+}
+
+async function savedSession(config, context) {
+  if (!config.token) return null;
+
+  const client = clientFromConfig(config, context);
+  try {
+    const user = await client.me();
+    return { client, label: user?.name || user?.email || "you" };
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) return null;
+    throw error;
+  }
+}
+
+async function chooseStartAccount(client, config, { interactive, prompter, say }) {
+  const accounts = await client.accounts();
+  if (!Array.isArray(accounts) || accounts.length === 0) {
+    throw new CommandError("This login has no Audienti account yet. Finish creating one in the browser, then run `audienti start` again.");
+  }
+
+  const saved = accounts.find((account) => account.prefix_id === config.accountId);
+  if (accounts.length === 1) {
+    say(`Using account ${accounts[0].name} (${accounts[0].prefix_id}).`);
+    return accounts[0];
+  }
+
+  if (!interactive) {
+    if (saved) {
+      say(`Using account ${saved.name} (${saved.prefix_id}).`);
+      return saved;
+    }
+    say("You have several accounts:");
+    for (const account of accounts) say(`  ${account.prefix_id}\t${account.name}`);
+    return null;
+  }
+
+  say("Which account should the CLI use?");
+  accounts.forEach((account, index) => {
+    say(`  ${index + 1}. ${account.name} (${account.prefix_id})${account === saved ? " - current" : ""}`);
+  });
+  const defaultIndex = saved ? accounts.indexOf(saved) + 1 : null;
+  const account = await askChoice(prompter, accounts, {
+    question: defaultIndex ? `Account [${defaultIndex}]: ` : "Account: ",
+    defaultChoice: saved,
+    resolve: (answer) => resolveAccountSelection(accounts, answer)
+  });
+  say(`Using account ${account.name} (${account.prefix_id}).`);
+  return account;
+}
+
+async function chooseStartAccountUser(client, account, { interactive, prompter, say }) {
+  const users = await client.users(account.prefix_id);
+  const rows = Array.isArray(users) ? users : [];
+  const currentUsers = rows.filter((candidate) => candidate.current);
+  const automatic = currentUsers.length === 1 ? currentUsers[0] : rows.length === 1 ? rows[0] : null;
+  if (automatic) {
+    say(`Working as ${accountUserLabel(automatic)}.`);
+    return automatic;
+  }
+
+  if (!interactive || rows.length === 0) {
+    say("Pick which account user you are:");
+    for (const accountUser of rows) say(`  ${accountUserLabel(accountUser)}`);
+    return null;
+  }
+
+  say("Which account user are you?");
+  rows.forEach((accountUser, index) => say(`  ${index + 1}. ${accountUserLabel(accountUser)}`));
+  const accountUser = await askChoice(prompter, rows, {
+    question: "Account user: ",
+    resolve: (answer) => resolveAccountUserSelection(rows, answer)
+  });
+  say(`Working as ${accountUserLabel(accountUser)}.`);
+  return accountUser;
+}
+
+async function askChoice(prompter, choices, { question, defaultChoice = null, resolve }) {
+  for (;;) {
+    const answer = await prompter.ask(question);
+    if (!answer && defaultChoice) return defaultChoice;
+
+    const number = Number(answer);
+    if (Number.isInteger(number) && number >= 1 && number <= choices.length) return choices[number - 1];
+
+    try {
+      const match = answer ? resolve(answer) : null;
+      if (match) return match;
+    } catch (error) {
+      if (!(error instanceof CommandError)) throw error;
+    }
+    prompter.say(`Type a number from 1 to ${choices.length}.`);
+  }
+}
+
+async function askYesNo(prompter, question, { defaultYes = false } = {}) {
+  for (;;) {
+    const answer = (await prompter.ask(question)).toLowerCase();
+    if (!answer) return defaultYes;
+    if (/^y(es)?$/.test(answer)) return true;
+    if (/^no?$/.test(answer)) return false;
+    prompter.say("Please answer y or n.");
+  }
+}
+
+function stdinIsInteractive(context) {
+  return Boolean(context.stdin && context.stdin.isTTY);
+}
+
+// One line reader per command run. The async iterator buffers lines typed
+// ahead of a question, so several questions can share one input stream.
+function createPrompter(context) {
+  let reader;
+  let lines;
+
+  return {
+    async ask(question) {
+      if (!lines) {
+        reader = createInterface({ input: context.stdin, terminal: false });
+        lines = reader[Symbol.asyncIterator]();
+      }
+      context.stdout.write(question);
+      const { value, done } = await lines.next();
+      if (done) throw new CommandError("Input ended before the questions were answered. Run the command again when you're ready.");
+      return String(value).trim();
+    },
+    say(line = "") {
+      writeLine(context.stdout, line);
+    },
+    close() {
+      reader?.close();
+    }
+  };
+}
+
+const SETUP_QUESTIONS = [
+  {
+    key: "url",
+    title: "What's your company website?",
+    good: "https://acme.com",
+    bad: "acme (not a full web address)",
+    skip: "Press Enter to use the website saved on your account."
+  },
+  {
+    key: "sell-to",
+    title: "Who do you sell to? One sentence.",
+    good: "Heads of finance at US software companies with 50-500 people.",
+    bad: "Everyone who could use our product.",
+    skip: "Press Enter to skip."
+  },
+  {
+    key: "ask",
+    title: "What do you want the prospect to say yes to?",
+    good: "A 20-minute call to see if our audit fits their month-end close.",
+    bad: "Buy now.",
+    skip: "Press Enter to skip."
+  }
+];
+
+async function setupWizard(args, context, { accountOverride, prompter: sharedPrompter } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    url: { type: "string" },
+    "sell-to": { type: "string" },
+    ask: { type: "string" },
+    yes: { type: "boolean" }
+  });
+  if (positionals.length > 0) throw new CommandError(SETUP_USAGE);
+
+  const interactive = stdinIsInteractive(context) && !values.json;
+  const say = (line = "") => {
+    if (!values.json) writeLine(context.stdout, line);
   };
 
-  if (values.json) return writeJson(context.stdout, result);
+  if (!interactive && !values.url) {
+    throw new CommandError([
+      "No terminal is attached, so `audienti setup` can't ask questions.",
+      "Pass the answers as flags instead:",
+      `  ${SETUP_FLAGS_EXAMPLE}`,
+      SETUP_USAGE
+    ].join("\n"));
+  }
 
-  writeLine(context.stdout, `Authenticated to ${client.host} as ${result.user || "current user"}.`);
-  if (result.account_id) writeLine(context.stdout, `Selected account ${result.account_name || result.account_id} (${result.account_id}).`);
-  if (!result.account_id) writeLine(context.stdout, "Run `audienti accounts list` to choose an account.");
+  const config = await readConfig({ env: context.env });
+  if (!config.token) {
+    throw new CommandError("You're not signed in yet. Run `audienti start` to sign in or create an account, then run `audienti setup`.");
+  }
+  const accountId = accountOverride || config.accountId;
+  if (!accountId) {
+    throw new CommandError("No account is picked yet. Run `audienti start` to choose one, then run `audienti setup`.");
+  }
+  const client = clientFromConfig(config, context);
+  const prompter = sharedPrompter || createPrompter(context);
+
+  try {
+    const answers = { url: values.url, "sell-to": values["sell-to"], ask: values.ask };
+    if (interactive) {
+      say("Let's set up your first motion. Three quick questions.");
+      for (const [index, question] of SETUP_QUESTIONS.entries()) {
+        if (answers[question.key] !== undefined) continue;
+
+        say();
+        say(`${index + 1}/${SETUP_QUESTIONS.length}  ${question.title}`);
+        say(`     Good: ${question.good}`);
+        say(`     Bad:  ${question.bad}`);
+        say(`     ${question.skip}`);
+        answers[question.key] = await prompter.ask("> ");
+      }
+      say();
+    }
+
+    const sellTo = cleanSentence(answers["sell-to"]);
+    const ask = cleanSentence(answers.ask);
+    const requestBody = {
+      quick_start: compactObject({
+        company_url: String(answers.url || "").trim() || undefined,
+        feedback: setupFeedback({ sellTo, ask })
+      })
+    };
+
+    say("Reading your website and drafting your first motion. This usually takes a minute or two.");
+    let draft;
+    try {
+      draft = await client.createQuickStart(accountId, requestBody);
+    } catch (error) {
+      throw setupCreateError(error);
+    }
+
+    let polls = 0;
+    draft = await waitForQuickStartDraft(client, accountId, draft, context, {
+      timeoutSeconds: DEFAULT_SETUP_TIMEOUT_SECONDS,
+      pollIntervalSeconds: DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS,
+      onPoll() {
+        polls += 1;
+        if (polls % 5 === 1) say(SETUP_PROGRESS[Math.min(Math.floor(polls / 5), SETUP_PROGRESS.length - 1)]);
+      }
+    });
+
+    if (draft?.status === "failed") throw setupDraftFailedError(draft?.error);
+    if (!quickStartReady(draft)) {
+      throw new CommandError("The draft is taking longer than usual. Nothing was created. Run `audienti setup` again in a few minutes.");
+    }
+
+    renderSetupDraft(draft, { ask }, say);
+
+    let confirmed = Boolean(values.yes);
+    if (!confirmed && interactive) confirmed = await askYesNo(prompter, "Create this? [y/N] ");
+
+    if (!confirmed) {
+      const payload = {
+        kind: "setup",
+        status: "draft_ready",
+        created: false,
+        draft,
+        next_command: interactive ? "audienti setup" : "Re-run with --yes to create it."
+      };
+      if (values.json) return writeJson(context.stdout, payload);
+
+      say("Nothing was created.");
+      say(interactive
+        ? "Run `audienti setup` again whenever you're ready. Changing your answers changes the draft."
+        : "Re-run the same command with --yes to create it.");
+      return 0;
+    }
+
+    const confirmation = await client.confirmQuickStart(accountId, draft.id, {});
+    const connectUrl = new URL("/user/social_cookies", client.host).toString();
+    if (values.json) {
+      return writeJson(context.stdout, {
+        kind: "setup",
+        status: "created",
+        created: true,
+        draft,
+        motion: confirmation?.motion || null,
+        reservation: confirmation?.reservation || null,
+        next_step: {
+          connect_linkedin_url: connectUrl,
+          check_command: "audienti setup play preflight"
+        }
+      });
+    }
+
+    const motion = confirmation?.motion || {};
+    say(`Created your first motion: ${display(motion.name)} (${display(motion.prefix_id)}).`);
+    say();
+    say("Next: connect your LinkedIn account so Audienti can reach people for you.");
+    say(`  Connect it here: ${connectUrl}`);
+    say("  Then check it with: audienti setup play preflight");
+    say("Nothing is sent until LinkedIn is connected, and nothing sends without your approval.");
+    return 0;
+  } finally {
+    if (!sharedPrompter) prompter.close();
+  }
+}
+
+const SETUP_PROGRESS = [
+  "Reading your website...",
+  "Working out who buys from you...",
+  "Drafting your offer and the first buying signals...",
+  "Still working. Thanks for waiting..."
+];
+
+function cleanSentence(value) {
+  return String(value || "").trim().replace(/[\s.]+$/, "");
+}
+
+function setupFeedback({ sellTo, ask }) {
+  const parts = [];
+  if (sellTo) parts.push(`We sell to: ${sellTo}.`);
+  if (ask) parts.push(`What we want the prospect to say yes to: ${ask}.`);
+  return parts.join(" ") || undefined;
+}
+
+function setupCreateError(error) {
+  if (!(error instanceof ApiError)) return error;
+
+  const reason = typeof error.body?.error === "string" ? cleanSentence(error.body.error) : null;
+  if (error.status === 401) {
+    return new CommandError("Your saved login no longer works. Run `audienti start` to sign in again.");
+  }
+  if (error.status === 403) {
+    return new CommandError("Only an account admin can replace the website already saved on this account. Run `audienti setup` again and press Enter at the website question to use the saved one.");
+  }
+  if (error.status === 422 && error.body?.status === "failed") return setupDraftFailedError(reason);
+  if (error.status === 422) {
+    return new CommandError(`That website didn't work: ${reason || "it was rejected"}. Use a full public address like https://acme.com, then run \`audienti setup\` again.`);
+  }
+  return error;
+}
+
+function setupDraftFailedError(reason) {
+  const detail = reason ? ` (${cleanSentence(reason)})` : "";
+  return new CommandError(`We couldn't draft a motion from that website${detail}. Nothing was created. Check the address or add a sentence about who you sell to, then run \`audienti setup\` again.`);
+}
+
+function renderSetupDraft(draft, { ask }, say) {
+  const preview = draft?.preview || {};
+  const icp = preview.icp || {};
+  const offer = preview.offer || {};
+  const titles = Array.isArray(icp.job_titles) && icp.job_titles.length ? ` (${icp.job_titles.join(", ")})` : "";
+
+  say("Here's the draft:");
+  if (preview.company_name || preview.product_or_service) {
+    say(`  Your business: ${[preview.company_name, preview.product_or_service].filter(Boolean).join(" - ")}`);
+  }
+  say(`  Who you'll reach: ${display(icp.name, "people who fit your website")}${titles}`);
+  say(`  Your offer: ${[offer.title, offer.description].filter(Boolean).join(" - ") || "drafted from your website"}`);
+  say(`  The ask: ${ask || "not set; the writer will suggest one"}`);
+  if (preview.premise) say(`  Why now: ${preview.premise}`);
+  say();
 }
 
 async function createAuthCallbackServer({ state, context }) {
@@ -4417,9 +4905,8 @@ async function inboxOpsActionsInBatches(client, accountId, { operation, rows, dr
 }
 
 async function confirmInboxOpsAction(context) {
-  const input = context.stdin;
-  if (!input || !input.isTTY) return false;
-  const prompt = createInterface({ input, output: context.stdout });
+  if (!stdinIsInteractive(context)) return false;
+  const prompt = createInterface({ input: context.stdin, output: context.stdout });
   try {
     const answer = await prompt.question("Apply? [y/N] ");
     return /^y(es)?$/i.test(String(answer).trim());
@@ -8112,13 +8599,14 @@ function quickStartTerminal(draft) {
   return quickStartReady(draft) || draft?.status === "failed";
 }
 
-async function waitForQuickStartDraft(client, accountId, initialDraft, context, { timeoutSeconds, pollIntervalSeconds }) {
+async function waitForQuickStartDraft(client, accountId, initialDraft, context, { timeoutSeconds, pollIntervalSeconds, onPoll }) {
   let draft = initialDraft;
   const deadline = context.now().getTime() + timeoutSeconds * 1000;
 
   while (!quickStartTerminal(draft)) {
     if (context.now().getTime() >= deadline) return draft;
 
+    onPoll?.();
     await context.sleep(pollIntervalSeconds * 1000);
     draft = await client.quickStart(accountId, draft.id);
   }
@@ -9176,6 +9664,8 @@ const HELP_TOPICS = new Map([
     "  audienti <command> [options]",
     "",
     "Start:",
+    "  audienti start                      Guided first run: sign in, pick your account",
+    "  audienti setup                      Guided setup of your first motion",
     "  audienti auth login                 Sign in through the browser",
     "  audienti auth token <token>         Save an API token",
     "  audienti accounts list             See accounts available to this token",
@@ -9637,16 +10127,47 @@ const HELP_TOPICS = new Map([
     "  Saves accountId and accountName in local CLI config."
   ].join("\n")],
 
+  ["start", [
+    "Usage:",
+    `  ${START_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Guided first run. Signs you in (or sends you to create an account) through the browser,",
+    "  picks your account and account user, then offers to run `audienti setup`.",
+    "  Running `audienti` with no arguments and no saved login starts here.",
+    "",
+    "Without a terminal:",
+    "  Never asks questions. Prints the sign-in command and the next step; `--json` returns them.",
+    "",
+    "Effect:",
+    "  Saves the login, accountId and accountUserId in local CLI config. Sends nothing."
+  ].join("\n")],
+
   ["setup", [
     "Usage:",
+    `  ${SETUP_USAGE.slice("Usage: ".length)}`,
     "  audienti setup play preflight [--principal <account_user_id|email|name|me>] [--platform linkedin] [--json]",
     "",
     "Status: implemented",
     "",
     "Purpose:",
+    "  `audienti setup` asks three questions (company website, who you sell to, what the prospect",
+    "  should say yes to), drafts an ICP, offer and motion with Quick Start, reads the draft back,",
+    "  and creates it only when you say yes. Nothing sends until LinkedIn is connected and approved.",
     "  Preflight account setup before an agent creates or activates an Audienti play.",
     "",
+    "Without a terminal:",
+    "  Pass --url (required) and optionally --sell-to and --ask. Add --yes to create the draft.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/quick_start.json",
+    "  GET /api/v1/accounts/:account_id/quick_start/:draft_id.json",
+    "  POST /api/v1/accounts/:account_id/quick_start/:draft_id/confirm.json",
+    "",
     "Commands:",
+    "  audienti setup                 Guided setup of your first motion",
     "  audienti setup play preflight  Check connected-account readiness and direct setup URLs"
   ].join("\n")],
 
