@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.84] - 2026-09-28
+
+### Added
+
+- `motions status` shows how many prospects' profile enrichment failed after every retry (`enrichment_failed_prospect_count`).
+
 ## [0.1.83] - 2026-09-28
 
 ### Changed

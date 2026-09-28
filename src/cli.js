@@ -7378,6 +7378,9 @@ function renderMotionStatus(status, context) {
   if (status?.action?.label) writeLine(context.stdout, `Action: ${status.action.label}`);
   renderDiscoveryRunReceipt(status?.discovery_run, context);
   if (status?.next_eligible_at) writeLine(context.stdout, `Retry at: ${status.next_eligible_at}`);
+  if (Number(status?.enrichment_failed_prospect_count) > 0) {
+    writeLine(context.stdout, `Enrichment failed (retries exhausted): ${status.enrichment_failed_prospect_count} prospects`);
+  }
 }
 
 function renderExecutableConfiguration(config, context) {
@@ -12077,6 +12080,7 @@ const HELP_TOPICS = new Map([
     "  description: string",
     "  action: { key: string, label: string } | null",
     "  next_eligible_at: persisted retry time when the server can calculate one",
+    "  enrichment_failed_prospect_count: actionable prospects whose profile enrichment failed after every retry",
     "  discovery_run: latest run id, status, trigger, seen/submitted/promoted/rejected counts, scope counts, outcome, timestamps, and error_message",
     "  stats: { target_count, deficit, projected_connectable, capacity, daily_target }",
     "",

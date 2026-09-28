@@ -3545,6 +3545,7 @@ test("motions status renders executable configuration validity", async () => {
           description: "Add at least one tracked LinkedIn profile URL before this motion can prepare or activate."
         },
         next_eligible_at: "2026-09-03T14:15:00Z",
+        enrichment_failed_prospect_count: 3,
         discovery_run: {
           id: 456,
           status: "failed",
@@ -3578,6 +3579,7 @@ test("motions status renders executable configuration validity", async () => {
     assert.match(stdout.output, /Scopes: 4 planned, 3 successful, 1 failed, 0 blocked/);
     assert.match(stdout.output, /Error: provider budget exhausted/);
     assert.match(stdout.output, /Retry at: 2026-09-03T14:15:00Z/);
+    assert.match(stdout.output, /Enrichment failed \(retries exhausted\): 3 prospects/);
   });
 });
 
