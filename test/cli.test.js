@@ -13281,6 +13281,38 @@ test("tools linkedin-strategy-review delete calls the report endpoint", async ()
   });
 });
 
+test("tools linkedin-strategy-review list, create and show call the report endpoints", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const report = { report: { prefix_id: "rprt_a", status: "processing", stage: "running_skill", url: "https://app.audienti.com/tools/linkedin-strategy-review/reports/rprt_a" }, profile: { url: "https://www.linkedin.com/in/jane" }, run: { status: "pending" } };
+    const fetch = catalogFetch(requests, (url, options) => {
+      if (options?.method === "POST") return jsonResponse({ ...report, queued: true }, { status: 201 });
+      if (String(url).includes("/reports/rprt_a")) return jsonResponse({ ...report, content: { payload: { summary: { headline: "Post twice a week" } }, evidence: {} } });
+      return jsonResponse({ reports: [report], count: 1, limit: 5 });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["tools", "linkedin-strategy-review", "list", "--limit", "5"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /rprt_a/);
+
+    stdout = captureStream();
+    assert.equal(await run(["tools", "linkedin-strategy-review", "create", "--url", "https://www.linkedin.com/in/jane"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /LinkedIn strategy review queued: rprt_a/);
+    assert.match(stdout.output, /audienti tools linkedin-strategy-review show rprt_a/);
+
+    stdout = captureStream();
+    assert.equal(await run(["tools", "linkedin-strategy-review", "show", "rprt_a", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).content.payload.summary.headline, "Post twice a week");
+
+    assert.deepEqual(requests, [
+      ["GET", `${CATALOG_BASE}/tools/linkedin-strategy-review/reports.json?limit=5`, undefined],
+      ["POST", `${CATALOG_BASE}/tools/linkedin-strategy-review/reports.json`, { linkedin_url: "https://www.linkedin.com/in/jane" }],
+      ["GET", `${CATALOG_BASE}/tools/linkedin-strategy-review/reports/rprt_a.json`, undefined]
+    ]);
+  });
+});
+
 test("catalog commands reject invalid usage without calling the API", async () => {
   await withTempConfigHome(async ({ env, root }) => {
     await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
@@ -13309,7 +13341,10 @@ test("catalog commands reject invalid usage without calling the API", async () =
       [["tasks", "bulk-update", "--action", "complete"], /Usage: audienti tasks bulk-update/],
       [["tasks", "bulk-update", "--action", "reassign", "ptsk_a"], /--assigned-user is required with --action reassign\./],
       [["tools", "linkedin-strategy-review", "delete", "rprt_a"], /Usage: audienti tools linkedin-strategy-review delete/],
-      [["tools", "linkedin-strategy-review", "list"], /Usage: audienti tools linkedin-strategy-review delete/]
+      [["tools", "linkedin-strategy-review", "archive"], /Usage: audienti tools linkedin-strategy-review delete/],
+      [["tools", "linkedin-strategy-review", "create", "https://www.linkedin.com/in/jane"], /Usage: audienti tools linkedin-strategy-review create/],
+      [["tools", "linkedin-strategy-review", "show", "rprt_a", "rprt_b"], /Usage: audienti tools linkedin-strategy-review show/],
+      [["tools", "linkedin-strategy-review", "list", "extra"], /Usage: audienti tools linkedin-strategy-review list/]
     ];
 
     for (const [args, pattern] of cases) {
@@ -13330,6 +13365,9 @@ test("catalog help topics describe the API routes", async () => {
     [["icps", "prospects"], /GET \/api\/v1\/accounts\/:account_id\/icps\/:id\/prospects/],
     [["offers", "add-artifacts"], /POST \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/artifacts/],
     [["tasks", "bulk-update"], /PATCH \/api\/v1\/accounts\/:account_id\/tasks\/bulk_update/],
+    [["tools", "linkedin-strategy-review", "list"], /GET \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\.json/],
+    [["tools", "linkedin-strategy-review", "create"], /POST \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\.json/],
+    [["tools", "linkedin-strategy-review", "show"], /GET \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\/:id/],
     [["tools", "linkedin-strategy-review", "delete"], /DELETE \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\/:id/]
   ];
 

@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.82] - 2026-09-28
+
+### Added
+
+- Run LinkedIn strategy reviews from the CLI: `tools linkedin-strategy-review list [--limit]`, `create --url <linkedin_profile_url>`, and `show <rprt_id>` (`--json` includes the report content), next to the existing `delete`.
+
 ## [0.1.81] - 2026-09-28
 
 ### Added

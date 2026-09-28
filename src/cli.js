@@ -213,7 +213,16 @@ const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_STATUS_USAGE = "Usage: audienti tools linkedin-review status <rprt_id> [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_STRATEGY_REVIEW_LIST_USAGE = "Usage: audienti tools linkedin-strategy-review list [--limit <n>] [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_STRATEGY_REVIEW_CREATE_USAGE = "Usage: audienti tools linkedin-strategy-review create --url <linkedin_profile_url> [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_STRATEGY_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-strategy-review show <rprt_id> [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE = "Usage: audienti tools linkedin-strategy-review delete <rprt_id> --confirm <yes|true|Y|y> [--json] [--account <acct_id>]";
+const TOOLS_LINKEDIN_STRATEGY_REVIEW_USAGE = [
+  TOOLS_LINKEDIN_STRATEGY_REVIEW_LIST_USAGE,
+  TOOLS_LINKEDIN_STRATEGY_REVIEW_CREATE_USAGE,
+  TOOLS_LINKEDIN_STRATEGY_REVIEW_SHOW_USAGE,
+  TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE
+].join("\n");
 const LISTS_BULK_ADD_TAG_USAGE = "Usage: audienti lists bulk-add-tag --tag <tag> <list_id> [list_id...] [--json] [--account <acct_id>]";
 const LISTS_MERGE_USAGE = "Usage: audienti lists merge <list_id> <list_id> [--json] [--account <acct_id>]";
 const LISTS_EXPORT_USAGE = "Usage: audienti lists export <list_id> [--output <file.csv>] [--inactive-reason <reason>] [--json] [--account <acct_id>]";
@@ -4566,7 +4575,10 @@ async function toolsLinkedinReviewStatus(args, context, { accountOverride } = {}
 
 async function toolsLinkedinStrategyReview(args, context, { accountOverride } = {}) {
   const [subaction, ...rest] = args;
-  if (subaction !== "delete") throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE);
+  if (subaction === "list") return toolsLinkedinStrategyReviewList(rest, context, { accountOverride });
+  if (subaction === "create") return toolsLinkedinStrategyReviewCreate(rest, context, { accountOverride });
+  if (subaction === "show") return toolsLinkedinStrategyReviewShow(rest, context, { accountOverride });
+  if (subaction !== "delete") throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_USAGE);
 
   const { values, positionals } = parseCommandArgs(rest, { ...jsonOptions(), confirm: { type: "string" } });
   const normalizedConfirm = String(values.confirm || "").trim().toLowerCase();
@@ -4579,6 +4591,56 @@ async function toolsLinkedinStrategyReview(args, context, { accountOverride } = 
   if (values.json) return writeJson(context.stdout, payload);
 
   writeLine(context.stdout, `Deleted LinkedIn strategy review report ${display(payload?.id || positionals[0])}.`);
+}
+
+async function toolsLinkedinStrategyReviewList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), limit: { type: "string" } });
+  if (positionals.length > 0) throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_LIST_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinStrategyReviews(accountId, compactObject({ limit: values.limit }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const rows = Array.isArray(payload?.reports) ? payload.reports : [];
+  if (rows.length === 0) {
+    writeLine(context.stdout, "No LinkedIn strategy review reports found.");
+    return;
+  }
+  writeAlignedTable(context, ["REPORT ID", "STATUS", "STAGE", "PROFILE", "UPDATED"], rows.map(linkedinReviewReportRow));
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Inspect one report with `audienti tools linkedin-strategy-review show <rprt_id>`.");
+}
+
+async function toolsLinkedinStrategyReviewCreate(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), url: { type: "string" } });
+  if (positionals.length > 0 || !values.url) throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_CREATE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createLinkedinStrategyReview(accountId, { linkedin_url: values.url });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewStatus(payload, context, { title: "LinkedIn strategy review queued" });
+  const reportId = payload?.report?.prefix_id;
+  if (reportId) writeLine(context.stdout, `Run \`audienti tools linkedin-strategy-review show ${reportId}\` to check progress.`);
+}
+
+async function toolsLinkedinStrategyReviewShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(TOOLS_LINKEDIN_STRATEGY_REVIEW_SHOW_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.linkedinStrategyReview(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderLinkedinReviewStatus(payload, context, { title: "LinkedIn strategy review" });
+  const content = payload?.content?.payload || {};
+  if (Object.keys(content).length === 0) {
+    writeLine(context.stdout, "");
+    writeLine(context.stdout, "No report content is available yet.");
+    return;
+  }
+  writeLine(context.stdout, "");
+  writeLine(context.stdout, "Use --json for the full report content.");
 }
 
 async function operatorQueue(args, context, { accountOverride } = {}) {
@@ -11659,6 +11721,48 @@ const HELP_TOPICS = new Map([
     "  PATCH /api/v1/accounts/:account_id/tasks/bulk_update.json"
   ].join("\n")],
 
+  ["tools linkedin-strategy-review list", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_STRATEGY_REVIEW_LIST_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List recent LinkedIn strategy review reports for the active account, newest first.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tools/linkedin-strategy-review/reports.json"
+  ].join("\n")],
+
+  ["tools linkedin-strategy-review create", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_STRATEGY_REVIEW_CREATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Queue a LinkedIn strategy review for a person profile, like the Tools page.",
+    "",
+    "Input shape:",
+    "  url: LinkedIn person profile URL (post and company URLs are refused)",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/tools/linkedin-strategy-review/reports.json"
+  ].join("\n")],
+
+  ["tools linkedin-strategy-review show", [
+    "Usage:",
+    `  ${TOOLS_LINKEDIN_STRATEGY_REVIEW_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show one LinkedIn strategy review's status; --json includes the report content.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/tools/linkedin-strategy-review/reports/:id.json"
+  ].join("\n")],
+
   ["tools linkedin-strategy-review delete", [
     "Usage:",
     `  ${TOOLS_LINKEDIN_STRATEGY_REVIEW_DELETE_USAGE.slice("Usage: ".length)}`,
@@ -13137,6 +13241,9 @@ const HELP_TOPICS = new Map([
     "  audienti tools linkedin-review reports [--limit <n>] [--json]",
     "  audienti tools linkedin-review show <rprt_id> [--json]",
     "  audienti tools linkedin-review status <rprt_id> [--json]",
+    "  audienti tools linkedin-strategy-review list [--limit <n>] [--json]",
+    "  audienti tools linkedin-strategy-review create --url <linkedin_profile_url> [--json]",
+    "  audienti tools linkedin-strategy-review show <rprt_id> [--json]",
     "  audienti tools linkedin-strategy-review delete <rprt_id> --confirm <yes|true|Y|y> [--json]",
     "",
     "Status: implemented",
@@ -13149,6 +13256,9 @@ const HELP_TOPICS = new Map([
     "  audienti tools linkedin-review reports  List recent LinkedIn Review reports for the active account.",
     "  audienti tools linkedin-review show     View the completed report content in the terminal.",
     "  audienti tools linkedin-review status  Show the current report stage and run status.",
+    "  audienti tools linkedin-strategy-review list    List recent LinkedIn strategy review reports.",
+    "  audienti tools linkedin-strategy-review create  Queue a LinkedIn strategy review for a person profile.",
+    "  audienti tools linkedin-strategy-review show    Show one strategy review's status and content.",
     "  audienti tools linkedin-strategy-review delete  Delete one LinkedIn strategy review report."
   ].join("\n")],
 

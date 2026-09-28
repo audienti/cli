@@ -1121,6 +1121,21 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["tools", "linkedin-review", "reports", reportId]));
   }
 
+  linkedinStrategyReviews(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-strategy-review", "reports"], query));
+  }
+
+  createLinkedinStrategyReview(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-strategy-review", "reports"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  linkedinStrategyReview(accountId, reportId) {
+    return this.requestJson(accountPath(accountId, ["tools", "linkedin-strategy-review", "reports", reportId]));
+  }
+
   deleteLinkedinStrategyReview(accountId, reportId) {
     return this.requestJson(accountPath(accountId, ["tools", "linkedin-strategy-review", "reports", reportId]), {
       method: "DELETE"
