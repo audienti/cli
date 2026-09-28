@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { PassThrough, Readable } from "node:stream";
 import test from "node:test";
 import { writeConfig } from "../src/config.js";
 import { run } from "../src/cli.js";
@@ -43,7 +44,19 @@ const CASES = [
   { args: ["motions", "retire-strategy", "motn_one", "--strategy", "44"], method: "POST", path: "/motions/motn_one/strategies/44/retire.json", body: undefined, response: { already_retired: true, strategy: { id: 44, state: "retired" } }, output: /already retired/ },
   { args: ["motions", "refresh-launch-check", "motn_one"], method: "POST", path: "/motions/motn_one/refresh_launch_check.json", body: undefined, response: { name: "Q3", demand_status: "demand", producer_status: "runnable", reason: "launch" }, output: /Q3: demand demand, producer runnable/ },
   { args: ["motions", "refresh-launch-checks"], method: "POST", path: "/motions/refresh_launch_checks.json", body: undefined, response: { summary: "2 checked, 1 launchable" }, output: /Launch checks refreshed: 2 checked/ },
-  { args: ["motions", "update-premise", "motn_one", "--premise", "Buyers under audit pressure."], method: "PATCH", path: "/motions/motn_one/update_premise.json", body: { motion: { premise: "Buyers under audit pressure." } }, output: /Updated the premise for motn_one/ }
+  { args: ["motions", "update-premise", "motn_one", "--premise", "Buyers under audit pressure."], method: "PATCH", path: "/motions/motn_one/update_premise.json", body: { motion: { premise: "Buyers under audit pressure." } }, output: /Updated the premise for motn_one/ },
+  { args: ["social-cookies", "show", "scok_one"], method: "GET", path: "/social_cookies/scok_one.json", body: undefined, response: { social_cookie: { prefix_id: "scok_one", name: "Pat LinkedIn", platform: "LinkedIn", status: "active", connection: { title: "Connected" }, account_facts: [{ label: "Platform", value: "LinkedIn" }] } }, output: /Pat LinkedIn \(scok_one\)\nPlatform: LinkedIn \| Status: active/ },
+  { args: ["social-cookies", "pause", "scok_one"], method: "POST", path: "/social_cookies/scok_one/pause.json", body: undefined, response: { outcome: "paused", message: "Social account paused." }, output: /Social account paused\./ },
+  { args: ["social-cookies", "resume", "scok_one"], method: "POST", path: "/social_cookies/scok_one/resume.json", body: undefined },
+  { args: ["social-cookies", "resume-autopilot", "scok_one"], method: "POST", path: "/social_cookies/scok_one/resume_autopilot.json", body: undefined },
+  { args: ["social-cookies", "recheck-account-type", "scok_one"], method: "POST", path: "/social_cookies/scok_one/recheck_account_type.json", body: undefined },
+  { args: ["social-cookies", "reconnect", "scok_one"], method: "POST", path: "/social_cookies/scok_one/reconnect.json", body: undefined },
+  { args: ["social-cookies", "delete", "scok_one"], method: "DELETE", path: "/social_cookies/scok_one.json", body: undefined },
+  { args: ["social-cookies", "create", "--service", "linkedin", "--username", "pat", "--attributes", '{"country_code":"US","rate_limit_overrides":{"connect":{"daily":"9"}}}'], method: "POST", path: "/social_cookies.json", body: { social_cookie: { country_code: "US", rate_limit_overrides: { connect: { daily: "9" } }, service_identifier: "linkedin", username: "pat" } }, response: { social_cookie: { prefix_id: "scok_new" } }, output: /Added social account scok_new; login is queued\./ },
+  { args: ["social-cookies", "update", "scok_one", "--name", "Renamed"], method: "PATCH", path: "/social_cookies/scok_one.json", body: { social_cookie: { name: "Renamed" } } },
+  { args: ["social-cookies", "rights", "scok_one", "--workspace", "acct_two", "--grant"], method: "PATCH", path: "/social_cookies/scok_one/rights.json", body: { access_account_id: "acct_two", granted: true }, response: { accounts: [{ name: "Two", prefix_id: "acct_two" }] }, output: /Workspaces: Two \(acct_two\)/ },
+  { args: ["social-cookies", "rights", "scok_one", "--workspaces", "acct_one,acct_two"], method: "PATCH", path: "/social_cookies/scok_one/rights.json", body: { access_account_ids: ["acct_one", "acct_two"] } },
+  { args: ["social-cookies", "settings", "scok_one", "--scope", "limits", "--key", "connection_requests", "--target", "10", "--daily", "20", "--hourly", "4"], method: "PATCH", path: "/social_cookies/scok_one/settings.json", body: { scope: "limits", key: "connection_requests", target: "10", daily: "20", hourly: "4" }, response: { scope: "limits" }, output: /Saved limits for social account scok_one/ }
 ];
 
 async function withConfig(fn) {
@@ -262,4 +275,145 @@ test("motions update exits zero when no status change is blocked", async () => {
     const fetch = createFetch(() => jsonResponse({ name: "Mixed", prefix_id: "motn_one", status: "active" }));
     assert.equal(await run(["motions", "update", "motn_one", "--status", "active", "--json"], { env, fetch, stdout }), 0);
   });
+});
+
+// --- social account secrets (#2306) -----------------------------------------
+
+const SECRET = "pw-SENTINEL-2306";
+
+async function runSocial(args, { env, stdin, response = { status: "ok" } } = {}) {
+  const stdout = captureStream();
+  const stderr = captureStream();
+  const bodies = [];
+  const fetch = createFetch((_url, options) => {
+    bodies.push(options.body === undefined ? undefined : JSON.parse(options.body));
+    return jsonResponse(response);
+  });
+  const exitCode = await run(args, { env, fetch, stdout, stderr, stdin });
+  return { exitCode, stdout: stdout.output, stderr: stderr.output, bodies, fetch };
+}
+
+test("social-cookies refuses secrets passed as flags and sends nothing", async () => {
+  await withConfig(async (env) => {
+    for (const args of [
+      ["social-cookies", "create", "--service", "linkedin", "--password", SECRET],
+      ["social-cookies", "create", "--service", "linkedin", `--password=${SECRET}`],
+      ["social-cookies", "update", "scok_one", "--cookie-bundle", SECRET],
+      ["social-cookies", "update", "scok_one", "--otp-secret", SECRET],
+      ["social-cookies", "submit-otp", "scok_one", "--otp", "123456"],
+      ["social-cookies", "submit-otp", "scok_one", "--code", "123456"],
+      ["social-cookies", "settings", "scok_one", "--scope", "details", "--password", SECRET]
+    ]) {
+      const result = await runSocial(args, { env });
+      assert.equal(result.exitCode, 1, args.join(" "));
+      assert.equal(result.fetch.calls.length, 0, args.join(" "));
+      assert.match(result.stderr, /not accepted because command-line secrets leak/);
+      assert.doesNotMatch(result.stderr + result.stdout, /SENTINEL|123456/);
+    }
+  });
+});
+
+test("social-cookies refuses secret keys inside JSON options", async () => {
+  await withConfig(async (env) => {
+    for (const args of [
+      ["social-cookies", "create", "--service", "linkedin", "--attributes", JSON.stringify({ password: SECRET })],
+      ["social-cookies", "update", "scok_one", "--attributes", JSON.stringify({ cookie_bundle: SECRET })],
+      ["social-cookies", "settings", "scok_one", "--scope", "details", "--body", JSON.stringify({ social_cookie: { password: SECRET } })]
+    ]) {
+      const result = await runSocial(args, { env });
+      assert.equal(result.exitCode, 1, args.join(" "));
+      assert.equal(result.fetch.calls.length, 0);
+      assert.doesNotMatch(result.stderr, /SENTINEL/);
+    }
+  });
+});
+
+test("social-cookies create reads the password from stdin and never prints it", async () => {
+  await withConfig(async (env) => {
+    const result = await runSocial(["social-cookies", "create", "--service", "linkedin", "--username", "pat", "--password-stdin"], {
+      env, stdin: Readable.from([`${SECRET}\n`]), response: { social_cookie: { prefix_id: "scok_new" } }
+    });
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.deepEqual(result.bodies, [{ social_cookie: { service_identifier: "linkedin", username: "pat", password: SECRET } }]);
+    assert.doesNotMatch(result.stdout + result.stderr, /SENTINEL/);
+  });
+});
+
+test("social-cookies update reads a secrets bundle from stdin and rejects unknown keys", async () => {
+  await withConfig(async (env) => {
+    const bundle = { password: SECRET, otp_secret: "JBSWY3DP", cookie_bundle: "li_at=x", messaging_pin: "4821" };
+    const ok = await runSocial(["social-cookies", "update", "scok_one", "--secrets-stdin", "--json"], {
+      env, stdin: Readable.from([JSON.stringify(bundle)]), response: { social_cookie: { prefix_id: "scok_one" } }
+    });
+    assert.equal(ok.exitCode, 0, ok.stderr);
+    assert.deepEqual(ok.bodies, [{ social_cookie: bundle }]);
+    assert.doesNotMatch(ok.stdout, /SENTINEL|JBSWY3DP|li_at|4821/);
+
+    const bad = await runSocial(["social-cookies", "update", "scok_one", "--secrets-stdin"], { env, stdin: Readable.from([JSON.stringify({ token: "x" })]) });
+    assert.equal(bad.exitCode, 1);
+    assert.equal(bad.fetch.calls.length, 0);
+  });
+});
+
+test("social-cookies settings takes a password from the environment only for details and servers", async () => {
+  await withConfig(async (env) => {
+    const secretEnv = { ...env, AUDIENTI_SOCIAL_PASSWORD: SECRET };
+    const ok = await runSocial(["social-cookies", "settings", "scok_one", "--scope", "details", "--password-env"], { env: secretEnv, response: { scope: "details" } });
+    assert.equal(ok.exitCode, 0, ok.stderr);
+    assert.deepEqual(ok.bodies, [{ scope: "details", social_cookie: { password: SECRET } }]);
+    assert.doesNotMatch(ok.stdout, /SENTINEL/);
+
+    const refused = await runSocial(["social-cookies", "settings", "scok_one", "--scope", "gate", "--password-env"], { env: secretEnv });
+    assert.equal(refused.exitCode, 1);
+    assert.equal(refused.fetch.calls.length, 0);
+  });
+});
+
+test("social-cookies submit-otp reads the code from stdin or the environment and never prints it", async () => {
+  await withConfig(async (env) => {
+    const fromStdin = await runSocial(["social-cookies", "submit-otp", "scok_one", "--otp-stdin"], {
+      env, stdin: Readable.from([" 482913\n"]), response: { outcome: "otp_submitted", message: "OTP submitted. Verifying..." }
+    });
+    assert.equal(fromStdin.exitCode, 0, fromStdin.stderr);
+    assert.deepEqual(fromStdin.bodies, [{ otp_code: "482913" }]);
+    assert.equal(fromStdin.stdout, "OTP submitted. Verifying...\n");
+
+    const fromEnv = await runSocial(["social-cookies", "submit-otp", "scok_one", "--otp-env", "--json"], {
+      env: { ...env, AUDIENTI_OTP_CODE: "482913" }, response: { outcome: "otp_submitted" }
+    });
+    assert.equal(fromEnv.exitCode, 0, fromEnv.stderr);
+    assert.deepEqual(fromEnv.bodies, [{ otp_code: "482913" }]);
+    assert.doesNotMatch(fromEnv.stdout + fromEnv.stderr, /482913/);
+
+    const noSource = await runSocial(["social-cookies", "submit-otp", "scok_one"], { env, stdin: Readable.from([]) });
+    assert.equal(noSource.exitCode, 1);
+    assert.equal(noSource.fetch.calls.length, 0);
+  });
+});
+
+test("social-cookies submit-otp prompts on a terminal without echoing the code", async () => {
+  await withConfig(async (env) => {
+    const stdin = new PassThrough();
+    stdin.isTTY = true;
+    const rawModes = [];
+    stdin.setRawMode = (mode) => rawModes.push(mode);
+    setImmediate(() => stdin.write("48291\u007f3\r"));
+
+    const result = await runSocial(["social-cookies", "submit-otp", "scok_one"], { env, stdin, response: { message: "OTP submitted. Verifying..." } });
+    assert.equal(result.exitCode, 0, result.stderr);
+    assert.deepEqual(result.bodies, [{ otp_code: "48293" }]);
+    assert.deepEqual(rawModes, [true, false]);
+    assert.match(result.stderr, /One-time code \(hidden\): \n/);
+    assert.doesNotMatch(result.stdout + result.stderr, /4829/);
+  });
+});
+
+test("social-cookies help lists the new actions and the safe secret inputs", async () => {
+  const stdout = captureStream();
+  assert.equal(await run(["help", "social-cookies"], { stdout }), 0);
+  for (const command of ["show", "pause", "resume", "resume-autopilot", "recheck-account-type", "reconnect", "delete", "submit-otp", "create", "update", "rights", "settings"]) {
+    assert.match(stdout.output, new RegExp(`audienti social-cookies ${command} `), command);
+  }
+  assert.match(stdout.output, /--password-stdin/);
+  assert.match(stdout.output, /--otp-stdin/);
 });

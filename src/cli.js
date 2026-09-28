@@ -14070,6 +14070,195 @@ const HELP_TOPICS = new Map([
   ].join("\n")]
 ]);
 
+// Social account credentials (#2306). Secrets never travel as argv flags,
+// because argv lands in shell history and the process list. They come from
+// stdin, one named environment variable, or a no-echo terminal prompt, and the
+// CLI never prints them.
+const SOCIAL_SECRET_KEYS = ["password", "otp_secret", "cookie_bundle", "messaging_pin", "otp_code"];
+const SOCIAL_SECRET_FLAGS = new Set(["password", "pass", "otp", "otp-code", "code", "otp-secret", "totp", "totp-secret", "cookie", "cookies", "cookie-bundle", "messaging-pin", "pin", "secret"]);
+const SOCIAL_PASSWORD_ENV = "AUDIENTI_SOCIAL_PASSWORD";
+const SOCIAL_OTP_ENV = "AUDIENTI_OTP_CODE";
+const SOCIAL_COOKIE_ATTRIBUTE_KEYS = new Set([
+  "service_identifier", "username", "name", "email", "phone_number",
+  "geo_location", "country_code", "postal_code", "state_code", "city",
+  "imap_server", "imap_port", "smtp_server", "smtp_port", "use_ssl",
+  "automation_controls", "rate_limit_overrides", "operator_controls"
+]);
+const SOCIAL_COOKIE_FIELD_OPTIONS = {
+  name: { type: "string" },
+  email: { type: "string" },
+  attributes: { type: "string" },
+  "password-stdin": { type: "boolean" },
+  "secrets-stdin": { type: "boolean" },
+  "password-env": { type: "boolean" },
+  "prompt-password": { type: "boolean" }
+};
+
+function rejectSecretArgs(args) {
+  for (const arg of args) {
+    if (!String(arg).startsWith("--")) continue;
+    const flag = String(arg).slice(2).split("=")[0];
+    if (SOCIAL_SECRET_FLAGS.has(flag)) {
+      throw new CommandError(`--${flag} is not accepted because command-line secrets leak into shell history. Use --password-stdin, --secrets-stdin, --otp-stdin, the ${SOCIAL_PASSWORD_ENV} or ${SOCIAL_OTP_ENV} variable, or the hidden prompt.`);
+    }
+  }
+}
+
+function rejectSecretKeys(object, flag) {
+  const walk = (value) => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, nested] of Object.entries(value)) {
+      if (SOCIAL_SECRET_KEYS.includes(key)) throw new CommandError(`${flag} must not contain ${key}. Send secrets through stdin, an environment variable, or the hidden prompt.`);
+      walk(nested);
+    }
+  };
+  walk(object);
+}
+
+function trimSecret(text) {
+  return String(text ?? "").replace(/\r?\n$/, "");
+}
+
+// Reads one line from the terminal without echoing it.
+async function promptHidden(context, question) {
+  const input = context.stdin;
+  if (!input?.isTTY || typeof input.setRawMode !== "function") {
+    throw new CommandError("No terminal is available for a hidden prompt. Use stdin or an environment variable instead.");
+  }
+  const output = context.stderr || context.stdout;
+  output.write(question);
+  input.setRawMode(true);
+  input.resume();
+
+  return new Promise((resolve, reject) => {
+    let value = "";
+    const finish = (error) => {
+      input.removeListener("data", onData);
+      input.setRawMode(false);
+      input.pause();
+      output.write("\n");
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const onData = (chunk) => {
+      for (const char of String(chunk)) {
+        if (char === "\r" || char === "\n" || char === "\u0004") return finish();
+        if (char === "\u0003") return finish(new CommandError("Cancelled."));
+        if (char === "\u007f" || char === "\b") value = value.slice(0, -1);
+        else value += char;
+      }
+    };
+    input.on("data", onData);
+  });
+}
+
+async function readSocialOtp(values, usageLine, context) {
+  if (values["otp-stdin"] && values["otp-env"]) throw new CommandError(usageLine);
+  let code;
+  if (values["otp-stdin"]) code = await readStdinText(context);
+  else if (values["otp-env"]) code = context.env?.[SOCIAL_OTP_ENV];
+  else if (stdinIsInteractive(context)) code = await promptHidden(context, "One-time code (hidden): ");
+  else throw new CommandError(`Provide the code with --otp-stdin, --otp-env (${SOCIAL_OTP_ENV}), or run in a terminal for a hidden prompt.`);
+
+  const trimmed = String(code ?? "").trim();
+  if (!trimmed) throw new CommandError("The one-time code is empty.");
+  return trimmed;
+}
+
+// Returns the secret fields to send, or {} when none were requested.
+async function readSocialSecrets(values, usageLine, context, { allowBundle = true } = {}) {
+  const sources = ["password-stdin", "secrets-stdin", "password-env", "prompt-password"].filter((key) => values[key]);
+  if (sources.length > 1) throw new CommandError(`Use only one of --${sources.join(", --")}.`);
+  const [source] = sources;
+  if (!source) return {};
+
+  if (source === "password-stdin") return { password: trimSecret(await readStdinText(context)) };
+  if (source === "password-env") {
+    const password = context.env?.[SOCIAL_PASSWORD_ENV];
+    if (!password) throw new CommandError(`${SOCIAL_PASSWORD_ENV} is not set.`);
+    return { password };
+  }
+  if (source === "prompt-password") return { password: await promptHidden(context, "Password (hidden): ") };
+
+  if (!allowBundle) throw new CommandError(usageLine);
+  let parsed;
+  try {
+    parsed = JSON.parse(await readStdinText(context));
+  } catch {
+    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, cookie_bundle, or messaging_pin.");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, cookie_bundle, or messaging_pin.");
+  }
+  const allowed = ["password", "otp_secret", "cookie_bundle", "messaging_pin"];
+  const unknown = Object.keys(parsed).filter((key) => !allowed.includes(key));
+  if (unknown.length > 0) throw new CommandError(`--secrets-stdin accepts only ${allowed.join(", ")}.`);
+  return parsed;
+}
+
+async function socialCookieBody(values, usageLine, context, fields) {
+  const attributes = parseJsonObjectOption(values.attributes, "--attributes") || {};
+  const unknown = Object.keys(attributes).filter((key) => !SOCIAL_COOKIE_ATTRIBUTE_KEYS.has(key));
+  if (unknown.length > 0) {
+    throw new CommandError(`--attributes accepts only ${[...SOCIAL_COOKIE_ATTRIBUTE_KEYS].join(", ")}. Secrets go through stdin, an environment variable, or the hidden prompt.`);
+  }
+  rejectSecretKeys(attributes, "--attributes");
+
+  return {
+    ...attributes,
+    ...compactObject({ ...fields, name: values.name, email: values.email }),
+    ...(await readSocialSecrets(values, usageLine, context))
+  };
+}
+
+function socialCookieRightsBody(values, usageLine) {
+  if (values.workspaces !== undefined) {
+    if (values.workspace || values.grant || values.revoke) throw new CommandError(usageLine);
+    return { access_account_ids: values.workspaces.split(",").map((id) => id.trim()).filter(Boolean) };
+  }
+  if (!values.workspace || values.grant === values.revoke) throw new CommandError(usageLine);
+  return { access_account_id: values.workspace, granted: Boolean(values.grant) };
+}
+
+async function socialCookieSettingsBody(values, usageLine, context) {
+  const body = parseJsonObjectOption(values.body, "--body") || {};
+  rejectSecretKeys(body, "--body");
+  const merged = {
+    ...body,
+    ...compactObject({
+      scope: values.scope,
+      enabled: values.enabled,
+      key: values.key,
+      target: values.target,
+      daily: values.daily,
+      hourly: values.hourly,
+      action_type: values["action-type"],
+      mode: values.mode,
+      level: values.level
+    })
+  };
+
+  const secrets = await readSocialSecrets(values, usageLine, context, { allowBundle: false });
+  if (Object.keys(secrets).length > 0) {
+    if (!["details", "servers"].includes(values.scope)) throw new CommandError("A password is accepted only with --scope details or --scope servers.");
+    merged.social_cookie = { ...(merged.social_cookie || {}), ...secrets };
+  }
+  return merged;
+}
+
+function describeSocialCookie(cookie) {
+  if (!cookie) return "Social account not found.";
+  const lines = [
+    `${display(cookie.name || cookie.username)} (${display(cookie.prefix_id)})`,
+    `Platform: ${display(cookie.platform)} | Status: ${display(cookie.status)}${cookie.autopilot_paused ? " | Autopilot paused" : ""}`,
+    `Connection: ${display(cookie.connection?.title)}`
+  ];
+  if (cookie.connection?.body) lines.push(`  ${cookie.connection.body}`);
+  if (cookie.otp_pending) lines.push("Waiting for a one-time code: run `audienti social-cookies submit-otp`.");
+  for (const fact of cookie.account_facts || []) lines.push(`${display(fact?.label)}: ${display(fact?.value)}`);
+  return lines.join("\n");
+}
+
 // Single-purpose actions that mirror one web button each (#2300, #2302).
 // Every entry calls one API route that shares its service with the web action.
 const ACCOUNT_OPTION_USAGE = "[--json] [--account <acct_id>]";
@@ -14427,6 +14616,131 @@ const PARITY_ACTION_COMMANDS = new Map([
     required: ["premise"],
     run: (client, accountId, [id], values) => client.updateMotionPremise(accountId, id, { motion: { premise: values.premise } }),
     done: ([id]) => `Updated the premise for ${id}.`
+  }],
+  // Social account page (#2306). Passwords, OTP codes, cookies, TOTP secrets
+  // and the messaging PIN are never argv flags: they come from stdin, an
+  // environment variable, or a no-echo terminal prompt, and are never printed.
+  ["social-cookies show", {
+    usage: "audienti social-cookies show <scok_id>",
+    purpose: "Show one social account's connection state and facts, like its Overview. Never shows credentials.",
+    api: "GET /api/v1/accounts/:account_id/social_cookies/:id.json",
+    run: (client, accountId, [id]) => client.socialCookie(accountId, id),
+    done: (_positionals, payload) => describeSocialCookie(payload?.social_cookie)
+  }],
+  ["social-cookies pause", {
+    usage: "audienti social-cookies pause <scok_id>",
+    purpose: "Pause one social account so no activity runs until it is resumed.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/pause.json",
+    run: (client, accountId, [id]) => client.pauseSocialCookie(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies resume", {
+    usage: "audienti social-cookies resume <scok_id>",
+    purpose: "Resume a paused social account; it reconnects before activity restarts.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/resume.json",
+    run: (client, accountId, [id]) => client.resumeSocialCookie(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies resume-autopilot", {
+    usage: "audienti social-cookies resume-autopilot <scok_id>",
+    purpose: "Clear an automatic autopilot pause on one social account.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/resume_autopilot.json",
+    run: (client, accountId, [id]) => client.resumeSocialCookieAutopilot(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies recheck-account-type", {
+    usage: "audienti social-cookies recheck-account-type <scok_id>",
+    purpose: "Queue a LinkedIn account-type check (Premium, Sales Navigator) for one connected account.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/recheck_account_type.json",
+    run: (client, accountId, [id]) => client.recheckSocialCookieAccountType(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies reconnect", {
+    usage: "audienti social-cookies reconnect <scok_id>",
+    purpose: "Ask one social account to reconnect; a mailbox rechecks its connection.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/reconnect.json",
+    run: (client, accountId, [id]) => client.reconnectSocialCookie(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies delete", {
+    usage: "audienti social-cookies delete <scok_id>",
+    purpose: "Delete one social account you own.",
+    api: "DELETE /api/v1/accounts/:account_id/social_cookies/:id.json",
+    run: (client, accountId, [id]) => client.deleteSocialCookie(accountId, id),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies submit-otp", {
+    usage: "audienti social-cookies submit-otp <scok_id> [--otp-stdin | --otp-env]",
+    purpose: "Send the one-time login code a social account is waiting for. Reads the code from stdin (--otp-stdin), AUDIENTI_OTP_CODE (--otp-env), or a hidden prompt.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies/:id/submit_otp.json",
+    secretInput: true,
+    options: { "otp-stdin": { type: "boolean" }, "otp-env": { type: "boolean" } },
+    parse: async (values, usageLine, context) => ({ ...values, otpCode: await readSocialOtp(values, usageLine, context) }),
+    run: (client, accountId, [id], values) => client.submitSocialCookieOtp(accountId, id, { otp_code: values.otpCode }),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["social-cookies create", {
+    usage: "audienti social-cookies create --service <linkedin|gmail|...> --username <name> [--name <label>] [--email <email>] [--attributes <json>] [--password-stdin | --secrets-stdin | --password-env | --prompt-password]",
+    minPositionals: 0,
+    maxPositionals: 0,
+    purpose: "Add a social account and queue its login, like Add account on the web. Secrets come from stdin, AUDIENTI_SOCIAL_PASSWORD, or a hidden prompt; never from flags.",
+    api: "POST /api/v1/accounts/:account_id/social_cookies.json",
+    secretInput: true,
+    options: { service: { type: "string" }, username: { type: "string" }, ...SOCIAL_COOKIE_FIELD_OPTIONS },
+    required: ["service"],
+    parse: async (values, usageLine, context) => ({
+      ...values,
+      body: { social_cookie: await socialCookieBody(values, usageLine, context, { service_identifier: values.service, username: values.username }) }
+    }),
+    run: (client, accountId, _positionals, values) => client.createSocialCookie(accountId, values.body),
+    done: (_positionals, payload) => `Added social account ${display(payload?.social_cookie?.prefix_id)}; login is queued.`
+  }],
+  ["social-cookies update", {
+    usage: "audienti social-cookies update <scok_id> [--username <name>] [--name <label>] [--email <email>] [--attributes <json>] [--password-stdin | --secrets-stdin | --password-env | --prompt-password]",
+    purpose: "Edit one social account's details, controls and limits, like its edit page. A stored password is kept unless a new one is sent.",
+    api: "PATCH /api/v1/accounts/:account_id/social_cookies/:id.json",
+    secretInput: true,
+    options: { username: { type: "string" }, ...SOCIAL_COOKIE_FIELD_OPTIONS },
+    parse: async (values, usageLine, context) => ({
+      ...values,
+      body: { social_cookie: await socialCookieBody(values, usageLine, context, { username: values.username }) }
+    }),
+    run: (client, accountId, [id], values) => client.updateSocialCookie(accountId, id, values.body),
+    done: ([id]) => `Updated social account ${id}.`
+  }],
+  ["social-cookies rights", {
+    usage: "audienti social-cookies rights <scok_id> (--workspace <acct_id> (--grant | --revoke) | --workspaces <acct_id,acct_id>)",
+    purpose: "Choose which of your workspaces may use one social account, like its Access tab.",
+    api: "PATCH /api/v1/accounts/:account_id/social_cookies/:id/rights.json",
+    options: { workspace: { type: "string" }, workspaces: { type: "string" }, grant: { type: "boolean" }, revoke: { type: "boolean" } },
+    parse: (values, usageLine) => ({ ...values, body: socialCookieRightsBody(values, usageLine) }),
+    run: (client, accountId, [id], values) => client.updateSocialCookieRights(accountId, id, values.body),
+    done: (_positionals, payload) => `Workspaces: ${(payload?.accounts || []).map((account) => `${display(account?.name)} (${display(account?.prefix_id)})`).join(", ") || "none"}.`
+  }],
+  ["social-cookies settings", {
+    usage: "audienti social-cookies settings <scok_id> --scope <scope> [--enabled <true|false>] [--key <key>] [--target <n>] [--daily <n>] [--hourly <n>] [--action-type <type>] [--mode <mode>] [--level <level>] [--body <json>] [--password-stdin | --password-env | --prompt-password]",
+    purpose: "Change one Overview setting (scopes: sending, gate, action, visibility_mode, operator, limits, limits_preset, hours, advanced, automation, details, location, servers). Only details and servers accept a password, from stdin, AUDIENTI_SOCIAL_PASSWORD, or a hidden prompt.",
+    api: "PATCH /api/v1/accounts/:account_id/social_cookies/:id/settings.json",
+    secretInput: true,
+    options: {
+      scope: { type: "string" },
+      enabled: { type: "string" },
+      key: { type: "string" },
+      target: { type: "string" },
+      daily: { type: "string" },
+      hourly: { type: "string" },
+      "action-type": { type: "string" },
+      mode: { type: "string" },
+      level: { type: "string" },
+      body: { type: "string" },
+      "password-stdin": { type: "boolean" },
+      "password-env": { type: "boolean" },
+      "prompt-password": { type: "boolean" }
+    },
+    required: ["scope"],
+    parse: async (values, usageLine, context) => ({ ...values, body: await socialCookieSettingsBody(values, usageLine, context) }),
+    run: (client, accountId, [id], values) => client.updateSocialCookieSettings(accountId, id, values.body),
+    done: ([id], payload) => `Saved ${display(payload?.scope)} for social account ${id}.`
   }]
 ]);
 
@@ -14476,13 +14790,14 @@ function parseJsonObjectOption(raw, flag) {
 async function runParityActionCommand(topic, args, context, { accountOverride } = {}) {
   const spec = PARITY_ACTION_COMMANDS.get(topic);
   const usageLine = `Usage: ${spec.usage} ${ACCOUNT_OPTION_USAGE}`;
+  if (spec.secretInput) rejectSecretArgs(args);
   const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), ...(spec.options || {}) });
   const minPositionals = spec.minPositionals ?? 1;
   const maxPositionals = spec.maxPositionals ?? 1;
   if (positionals.length < minPositionals || positionals.length > maxPositionals) throw new CommandError(usageLine);
   if ((spec.required || []).some((key) => !values[key])) throw new CommandError(usageLine);
 
-  const parsedValues = spec.parse ? spec.parse(values, usageLine) : values;
+  const parsedValues = spec.parse ? await spec.parse(values, usageLine, context) : values;
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await spec.run(client, accountId, positionals, parsedValues);

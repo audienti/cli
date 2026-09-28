@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.81] - 2026-09-28
+
+### Added
+
+- Manage social accounts from the CLI: `social-cookies show`, `pause`, `resume`, `resume-autopilot`, `recheck-account-type`, `reconnect`, `delete`, `submit-otp`, `create`, `update`, `rights` (`--workspace --grant|--revoke` or `--workspaces`), and `settings --scope`.
+- Secrets never go on the command line. Passwords, one-time codes, cookies, TOTP secrets, and messaging PINs come from stdin (`--password-stdin`, `--secrets-stdin`, `--otp-stdin`), an environment variable (`--password-env` reads `AUDIENTI_SOCIAL_PASSWORD`, `--otp-env` reads `AUDIENTI_OTP_CODE`), or a hidden terminal prompt. Flags such as `--password` or `--otp` are refused before any request is sent, and the CLI never prints a secret.
+
 ## [0.1.80] - 2026-09-28
 
 ### Added

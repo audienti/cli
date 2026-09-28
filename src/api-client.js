@@ -74,6 +74,54 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["social_cookies"], query));
   }
 
+  socialCookie(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId]));
+  }
+
+  createSocialCookie(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["social_cookies"]), { method: "POST", body });
+  }
+
+  updateSocialCookie(accountId, socialCookieId, body) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId]), { method: "PATCH", body });
+  }
+
+  deleteSocialCookie(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId]), { method: "DELETE" });
+  }
+
+  pauseSocialCookie(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "pause"]), { method: "POST" });
+  }
+
+  resumeSocialCookie(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "resume"]), { method: "POST" });
+  }
+
+  resumeSocialCookieAutopilot(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "resume_autopilot"]), { method: "POST" });
+  }
+
+  recheckSocialCookieAccountType(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "recheck_account_type"]), { method: "POST" });
+  }
+
+  reconnectSocialCookie(accountId, socialCookieId) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "reconnect"]), { method: "POST" });
+  }
+
+  submitSocialCookieOtp(accountId, socialCookieId, body) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "submit_otp"]), { method: "POST", body });
+  }
+
+  updateSocialCookieRights(accountId, socialCookieId, body) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "rights"]), { method: "PATCH", body });
+  }
+
+  updateSocialCookieSettings(accountId, socialCookieId, body) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "settings"]), { method: "PATCH", body });
+  }
+
   syncSocialCookieMessages(accountId, socialCookieId, body = {}) {
     return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "sync_messages"]), {
       method: "POST",
