@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.83] - 2026-09-28
+
+### Changed
+
+- `social-cookies show` returns fixed status text for paused and failed accounts, matching the web page, and never raw provider diagnostics.
+
 ## [0.1.82] - 2026-09-28
 
 ### Added
