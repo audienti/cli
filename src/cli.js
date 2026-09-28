@@ -1,7 +1,7 @@
 import { parseArgs } from "node:util";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -309,6 +309,8 @@ async function dispatch(argv, context) {
 
   const [resource, action, ...rest] = args;
   const normalizedResource = normalizeResource(resource);
+  const parityActionTopic = `${normalizedResource} ${action}`;
+  if (PARITY_ACTION_COMMANDS.has(parityActionTopic)) return runParityActionCommand(parityActionTopic, rest, context, { accountOverride });
 
   if (normalizedResource === "auth" && action === "token") return authToken(rest, context);
   if (normalizedResource === "auth" && action === "login") return authLogin(rest, context);
@@ -14056,3 +14058,340 @@ const HELP_TOPICS = new Map([
     "  Operator outcome writeback is implemented for prospect rows, not visibility rows."
   ].join("\n")]
 ]);
+
+// Single-purpose actions that mirror one web button each (#2300, #2302).
+// Every entry calls one API route that shares its service with the web action.
+const ACCOUNT_OPTION_USAGE = "[--json] [--account <acct_id>]";
+const PARITY_ACTION_COMMANDS = new Map([
+  ["prospects defer", {
+    usage: "audienti prospects defer <prsp_id>",
+    purpose: "Push one prospect out of the queue for 24 hours, like Defer in the queue.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/defer.json",
+    run: (client, accountId, [id]) => client.deferProspect(accountId, id),
+    done: ([id]) => `Deferred prospect ${id} for 24 hours.`
+  }],
+  ["prospects delay", {
+    usage: "audienti prospects delay <prsp_id> --for <1_day|1_week|1_month|3_months|6_months>",
+    purpose: "Delay one prospect and move it to the Delayed list until the window ends.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/delay.json",
+    options: { for: { type: "string" } },
+    required: ["for"],
+    run: (client, accountId, [id], values) => client.delayProspect(accountId, id, { delay_duration: values.for }),
+    done: ([id], payload) => `Delayed prospect ${id} until ${display(payload?.undelay_at)}.`
+  }],
+  ["prospects monitor", {
+    usage: "audienti prospects monitor <prsp_id> [--note <text>]",
+    purpose: "Move one prospect to monitoring, like Monitor on the prospect page.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/monitor.json",
+    options: { note: { type: "string" } },
+    run: (client, accountId, [id], values) => client.monitorProspect(accountId, id, compactObject({ monitor_note: values.note })),
+    done: ([id]) => `Monitoring prospect ${id}.`
+  }],
+  ["prospects unmonitor", {
+    usage: "audienti prospects unmonitor <prsp_id>",
+    purpose: "Stop monitoring one prospect.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/unmonitor.json",
+    run: (client, accountId, [id]) => client.unmonitorProspect(accountId, id),
+    done: ([id]) => `Stopped monitoring prospect ${id}.`
+  }],
+  ["prospects rename", {
+    usage: "audienti prospects rename <prsp_id> --name <display_name>",
+    purpose: "Change a prospect's display name. Backend admins only, like the web action.",
+    api: "PATCH /api/v1/accounts/:account_id/prospects/:id/display_name.json",
+    options: { name: { type: "string" } },
+    required: ["name"],
+    run: (client, accountId, [id], values) => client.renameProspect(accountId, id, { display_name: values.name }),
+    done: ([id]) => `Renamed prospect ${id}.`
+  }],
+  ["prospects import-post", {
+    usage: "audienti prospects import-post <prsp_id> --url <post_url> [--topic <topic_id>]",
+    purpose: "Import one LinkedIn post for a prospect in the background.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/import_post.json",
+    options: { url: { type: "string" }, topic: { type: "string" } },
+    required: ["url"],
+    run: (client, accountId, [id], values) => client.importProspectPost(accountId, id, compactObject({ url: values.url, topic_id: values.topic })),
+    done: ([id]) => `Queued post import for prospect ${id}.`
+  }],
+  ["prospects sync", {
+    usage: "audienti prospects sync <prsp_id> --social-cookie <id>",
+    purpose: "Queue a message and email sync for one prospect through the selected LinkedIn account and other eligible sync accounts.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/sync.json",
+    options: { "social-cookie": { type: "string" } },
+    required: ["social-cookie"],
+    run: (client, accountId, [id], values) => client.syncProspect(accountId, id, compactObject({ social_cookie_id: values["social-cookie"] })),
+    done: ([id]) => `Queued message sync for prospect ${id}.`
+  }],
+  ["prospects cancel-event", {
+    usage: "audienti prospects cancel-event <prsp_id> --event <event_id>",
+    purpose: "Cancel one scheduled event for a prospect.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/cancel_scheduled_event.json",
+    options: { event: { type: "string" } },
+    required: ["event"],
+    run: (client, accountId, [id], values) => client.cancelProspectScheduledEvent(accountId, id, { event_id: values.event }),
+    done: ([id], payload) => `Canceled scheduled event ${display(payload?.event?.id)} for prospect ${id}.`
+  }],
+  ["prospects queue-draft", {
+    usage: "audienti prospects queue-draft <prsp_id> [--context <json_object>] [--angle <n>]",
+    purpose: "Write the queue draft for one prospect, like Write in the queue composer. Without --context the server uses the prospect's current queue action.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/write.json",
+    options: { context: { type: "string" }, angle: { type: "string" } },
+    parse: (values) => ({ ...values, context: parseJsonObjectOption(values.context, "--context") }),
+    run: (client, accountId, [id], values) => client.writeProspectQueueDraft(accountId, id, compactObject({ context: values.context, angle_index: values.angle })),
+    done: ([id]) => `Wrote queue draft for prospect ${id}.`
+  }],
+  ["prospects rewrite", {
+    usage: "audienti prospects rewrite <prsp_id> [--subject <text>] [--message <text>] [--angle <n>]",
+    purpose: "Start a fresh queue draft for one prospect in the background.",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/rewrite.json",
+    options: { subject: { type: "string" }, message: { type: "string" }, angle: { type: "string" } },
+    run: (client, accountId, [id], values) => client.rewriteProspectQueueDraft(accountId, id, compactObject({ subject: values.subject, message: values.message, angle_index: values.angle })),
+    done: ([id]) => `Started queue draft rewrite for prospect ${id}.`
+  }],
+  ["prospects engage", {
+    usage: "audienti prospects engage <prsp_id> --type <action_type> [--message <text>] [--subject <text>] [--message-mode <mode>] [--social-cookie <id>] [--profile <id>] [--scheduled-at <iso8601>] [--post <post_id>] [--comment <comment_id>] [--reply-to <event_id>] [--request-event <event_id>] [--request-mode blank] [--queue-action] [--principal <account_user_id>]",
+    purpose: "Run one manual engagement for a prospect with the same rules as the prospect composer. Use --post or --comment for post likes and comments, --reply-to for a message reply, and --queue-action to act like the queue composer (a connection request on a disconnected LinkedIn account is prepared, not sent).",
+    api: "POST /api/v1/accounts/:account_id/prospects/:id/engage.json",
+    options: {
+      type: { type: "string" },
+      message: { type: "string" },
+      subject: { type: "string" },
+      "message-mode": { type: "string" },
+      "social-cookie": { type: "string" },
+      profile: { type: "string" },
+      "scheduled-at": { type: "string" },
+      post: { type: "string" },
+      comment: { type: "string" },
+      "reply-to": { type: "string" },
+      "request-event": { type: "string" },
+      "request-mode": { type: "string" },
+      "queue-action": { type: "boolean" },
+      principal: { type: "string" }
+    },
+    required: ["type"],
+    run: (client, accountId, [id], values) => client.engageProspect(accountId, id, compactObject({
+      action_type: values.type,
+      message: values.message,
+      subject: values.subject,
+      message_mode: values["message-mode"],
+      engage_point_id: values["social-cookie"],
+      profile_id: values.profile,
+      scheduled_at: values["scheduled-at"],
+      mention_id: values.post,
+      comment_id: values.comment,
+      message_id: values["reply-to"],
+      request_event_id: values["request-event"],
+      request_mode: values["request-mode"],
+      queue_action: values["queue-action"] ? true : undefined,
+      principal_account_user_id: values.principal
+    })),
+    done: (_positionals, payload) => display(payload?.message)
+  }],
+  ["prospects reject-selected", {
+    usage: "audienti prospects reject-selected <prsp_id> [<prsp_id> ...]",
+    minPositionals: 1,
+    maxPositionals: Infinity,
+    purpose: "Reject several prospects at once. Locked or unavailable prospects are reported as failed.",
+    api: "POST /api/v1/accounts/:account_id/prospects/reject_selected.json",
+    run: (client, accountId, ids) => client.rejectSelectedProspects(accountId, { prospect_ids: ids }),
+    done: (_positionals, payload) => `Rejected ${payload?.rejected?.length ?? 0}; failed ${payload?.failed?.length ?? 0}.`
+  }],
+  ["prospects intake", {
+    usage: "audienti prospects intake --url <linkedin_url> [--list <list_id>] [--assign <account_user_id>] [--signal <custom_signal_id>]",
+    minPositionals: 0,
+    maxPositionals: 0,
+    purpose: "Add one LinkedIn person by URL, like Add prospect on the web.",
+    api: "POST /api/v1/accounts/:account_id/prospects/intake.json",
+    options: { url: { type: "string" }, list: { type: "string" }, assign: { type: "string" }, signal: { type: "string" } },
+    required: ["url"],
+    run: (client, accountId, _positionals, values) => client.intakeProspect(accountId, compactObject({
+      url: values.url,
+      list_id: values.list,
+      assigned_to_account_user_id: values.assign,
+      custom_signal_id: values.signal
+    })),
+    done: () => "Prospect intake queued."
+  }],
+  ["events retry", {
+    usage: "audienti events retry <event_id>",
+    purpose: "Retry one failed event, with the same eligibility rules as the web retry button.",
+    api: "POST /api/v1/accounts/:account_id/events/:id/retry.json",
+    run: (client, accountId, [id]) => client.retryEvent(accountId, id),
+    done: ([id], payload) => `Retried event ${id} as ${display(payload?.event?.id)}.`
+  }],
+  ["profiles delete", {
+    usage: "audienti profiles delete <profile_id>",
+    purpose: "Remove one profile from its prospect. Backend admins only, like the web action.",
+    api: "DELETE /api/v1/accounts/:account_id/profiles/:id.json",
+    run: (client, accountId, [id]) => client.deleteProfile(accountId, id),
+    done: ([id]) => `Removed profile ${id}.`
+  }],
+  ["companies stop-pursuing", {
+    usage: "audienti companies stop-pursuing <company_profile_id>",
+    purpose: "Stop pursuing one company, like Stop pursuing on the company page.",
+    api: "POST /api/v1/accounts/:account_id/companies/:id/stop_pursuing.json",
+    run: (client, accountId, [id]) => client.stopPursuingCompany(accountId, id),
+    done: ([id]) => `Stopped pursuing company ${id}.`
+  }],
+  ["content defer", {
+    usage: "audienti content defer <work_item_id> --for <1_day|1_week|1_month|3_months|6_months>",
+    purpose: "Defer one content work item.",
+    api: "POST /api/v1/accounts/:account_id/content_ops/work_items/:id/defer.json",
+    options: { for: { type: "string" } },
+    required: ["for"],
+    run: (client, accountId, [id], values) => client.contentDefer(accountId, id, { delay_duration: values.for }),
+    done: ([id]) => `Deferred work item ${id}.`
+  }],
+  ["inbox-ops update-filters", {
+    usage: "audienti inbox-ops update-filters [--subscriptions <true|false>] [--automated-no-reply <true|false>] [--provider-promotions <true|false>] [--sender-allow <email>]... [--sender-filter <email>]... [--domain-allow <domain>]... [--domain-filter <domain>]...",
+    minPositionals: 0,
+    maxPositionals: 0,
+    purpose: "Save the owner's Inbox Ops email filters. Rule flags replace the saved list for that rule.",
+    api: "PATCH /api/v1/accounts/:account_id/inbox_ops/filters.json",
+    options: {
+      subscriptions: { type: "string" },
+      "automated-no-reply": { type: "string" },
+      "provider-promotions": { type: "string" },
+      "sender-allow": { type: "string", multiple: true },
+      "sender-filter": { type: "string", multiple: true },
+      "domain-allow": { type: "string", multiple: true },
+      "domain-filter": { type: "string", multiple: true }
+    },
+    run: (client, accountId, _positionals, values) => client.updateInboxOpsFilters(accountId, compactObject({
+      subscriptions: values.subscriptions,
+      automated_no_reply: values["automated-no-reply"],
+      provider_promotions: values["provider-promotions"],
+      sender_allow_rules: values["sender-allow"],
+      sender_filter_rules: values["sender-filter"],
+      domain_allow_rules: values["domain-allow"],
+      domain_filter_rules: values["domain-filter"]
+    })),
+    done: () => "Saved Inbox Ops filters."
+  }],
+  ["inbox-ops reply", {
+    usage: "audienti inbox-ops reply <row_id> --message <text> [--subject <text>]",
+    purpose: "Queue a reply to one Inbox Ops row. Each run sends a new reply token.",
+    api: "POST /api/v1/accounts/:account_id/inbox_ops/:row_id/reply.json",
+    options: { message: { type: "string" }, subject: { type: "string" } },
+    required: ["message"],
+    run: (client, accountId, [rowId], values) => client.inboxOpsReply(accountId, rowId, compactObject({
+      message: values.message,
+      subject: values.subject,
+      reply_token: randomUUID()
+    })),
+    done: ([rowId], payload) => `Reply ${display(payload?.status)} for ${rowId}.`
+  }],
+  ["inbox-ops draft-reply", {
+    usage: "audienti inbox-ops draft-reply <row_id>",
+    purpose: "Draft a reply for one Inbox Ops row without sending it.",
+    api: "POST /api/v1/accounts/:account_id/inbox_ops/:row_id/reply/write.json",
+    run: (client, accountId, [rowId]) => client.inboxOpsWriteReply(accountId, rowId),
+    done: (_positionals, payload) => display(payload?.message ?? payload?.body)
+  }],
+  ["inbox-ops adopt", {
+    usage: "audienti inbox-ops adopt <row_id> [--target-account <acct_id>] [--motion <motion_id>]",
+    purpose: "Adopt the prospect behind one Inbox Ops row.",
+    api: "POST /api/v1/accounts/:account_id/inbox_ops/:row_id/adopt.json",
+    options: { "target-account": { type: "string" }, motion: { type: "string" } },
+    run: (client, accountId, [rowId], values) => client.inboxOpsAdopt(accountId, rowId, compactObject({
+      target_account_id: values["target-account"],
+      motion_id: values.motion
+    })),
+    done: ([rowId]) => `Adopted ${rowId}.`
+  }],
+  ["network-ops adopt", {
+    usage: "audienti network-ops adopt <row_id> --target-account <acct_id> --motion <motion_id>",
+    purpose: "Accept one inbound connection request and adopt the person into a motion in an account owned by the request's LinkedIn account owner.",
+    api: "POST /api/v1/accounts/:account_id/network_ops/:row_id/adopt.json",
+    options: { "target-account": { type: "string" }, motion: { type: "string" } },
+    required: ["target-account", "motion"],
+    run: (client, accountId, [rowId], values) => client.networkOpsAction(accountId, rowId, "adopt", {
+      target_account_id: values["target-account"],
+      motion_id: values.motion
+    }),
+    done: ([rowId]) => `Adopted ${rowId}.`
+  }],
+  ["network-ops ignore", {
+    usage: "audienti network-ops ignore <row_id>",
+    purpose: "Ignore one inbound connection request without accepting or declining it.",
+    api: "POST /api/v1/accounts/:account_id/network_ops/:row_id/ignore.json",
+    run: (client, accountId, [rowId]) => client.networkOpsAction(accountId, rowId, "ignore"),
+    done: ([rowId]) => `Ignored ${rowId}.`
+  }],
+  ["reconciliations add-to-motion", {
+    usage: "audienti reconciliations add-to-motion <source_key> --motion <motion_id>",
+    purpose: "Add one reconciliation candidate to a motion.",
+    api: "POST /api/v1/accounts/:account_id/reconciliations/:id/add_to_motion.json",
+    options: { motion: { type: "string" } },
+    required: ["motion"],
+    run: (client, accountId, [key], values) => client.reconciliationAddToMotion(accountId, key, { motion_id: values.motion }),
+    done: ([key]) => `Added ${key} to the motion.`
+  }],
+  ["reconciliations ignore", {
+    usage: "audienti reconciliations ignore <source_key>",
+    purpose: "Ignore one reconciliation candidate.",
+    api: "POST /api/v1/accounts/:account_id/reconciliations/:id/ignore.json",
+    run: (client, accountId, [key]) => client.reconciliationIgnore(accountId, key),
+    done: ([key]) => `Ignored ${key}.`
+  }]
+]);
+
+for (const [topic, spec] of PARITY_ACTION_COMMANDS) {
+  if (HELP_TOPICS.has(topic)) throw new Error(`duplicate help topic ${topic}`);
+  HELP_TOPICS.set(topic, [
+    "Usage:",
+    `  ${spec.usage} ${ACCOUNT_OPTION_USAGE}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    `  ${spec.purpose}`,
+    "",
+    "API:",
+    `  ${spec.api}`
+  ].join("\n"));
+}
+
+// List the single-purpose actions under their group help (`audienti help prospects`).
+const parityActionUsagesByGroup = new Map();
+for (const [topic, spec] of PARITY_ACTION_COMMANDS) {
+  const group = topic.split(" ")[0];
+  if (!parityActionUsagesByGroup.has(group)) parityActionUsagesByGroup.set(group, []);
+  parityActionUsagesByGroup.get(group).push(`  ${spec.usage} ${ACCOUNT_OPTION_USAGE}`);
+}
+for (const [group, usages] of parityActionUsagesByGroup) {
+  const section = ["Actions:", ...usages].join("\n");
+  const existing = HELP_TOPICS.get(group);
+  HELP_TOPICS.set(group, existing ? `${existing}\n\n${section}` : section);
+}
+
+function parseJsonObjectOption(raw, flag) {
+  if (raw === undefined) return undefined;
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new CommandError(`${flag} must be a JSON object, for example '{"selected_action":{"key":"send_email"}}'.`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new CommandError(`${flag} must be a JSON object, for example '{"selected_action":{"key":"send_email"}}'.`);
+  }
+  return parsed;
+}
+
+async function runParityActionCommand(topic, args, context, { accountOverride } = {}) {
+  const spec = PARITY_ACTION_COMMANDS.get(topic);
+  const usageLine = `Usage: ${spec.usage} ${ACCOUNT_OPTION_USAGE}`;
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), ...(spec.options || {}) });
+  const minPositionals = spec.minPositionals ?? 1;
+  const maxPositionals = spec.maxPositionals ?? 1;
+  if (positionals.length < minPositionals || positionals.length > maxPositionals) throw new CommandError(usageLine);
+  if ((spec.required || []).some((key) => !values[key])) throw new CommandError(usageLine);
+
+  const parsedValues = spec.parse ? spec.parse(values, usageLine) : values;
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await spec.run(client, accountId, positionals, parsedValues);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, spec.done(positionals, payload));
+}

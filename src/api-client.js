@@ -794,6 +794,160 @@ export class AudientiClient {
     });
   }
 
+  deferProspect(accountId, prospectId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "defer"]), {
+      method: "POST"
+    });
+  }
+
+  delayProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "delay"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  monitorProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "monitor"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  unmonitorProspect(accountId, prospectId) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "unmonitor"]), {
+      method: "POST"
+    });
+  }
+
+  renameProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "display_name"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  importProspectPost(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "import_post"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  syncProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sync"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  cancelProspectScheduledEvent(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "cancel_scheduled_event"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  writeProspectQueueDraft(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "write"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  rewriteProspectQueueDraft(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "rewrite"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  engageProspect(accountId, prospectId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", prospectId, "engage"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  rejectSelectedProspects(accountId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", "reject_selected"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  intakeProspect(accountId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["prospects", "intake"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  retryEvent(accountId, eventId) {
+    return this.requestJson(accountPath(accountId, ["events", eventId, "retry"]), {
+      method: "POST"
+    });
+  }
+
+  deleteProfile(accountId, profileId) {
+    return this.requestJson(accountPath(accountId, ["profiles", profileId]), {
+      method: "DELETE"
+    });
+  }
+
+  stopPursuingCompany(accountId, companyId) {
+    return this.requestJson(accountPath(accountId, ["companies", companyId, "stop_pursuing"]), {
+      method: "POST"
+    });
+  }
+
+  contentDefer(accountId, workItemId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "defer"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateInboxOpsFilters(accountId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", "filters"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  inboxOpsReply(accountId, rowId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", rowId, "reply"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  inboxOpsWriteReply(accountId, rowId) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", rowId, "reply", "write"]), {
+      method: "POST"
+    });
+  }
+
+  inboxOpsAdopt(accountId, rowId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["inbox_ops", rowId, "adopt"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  reconciliationAddToMotion(accountId, sourceKey, body = {}) {
+    return this.requestJson(accountPath(accountId, ["reconciliations", sourceKey, "add_to_motion"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  reconciliationIgnore(accountId, sourceKey) {
+    return this.requestJson(accountPath(accountId, ["reconciliations", sourceKey, "ignore"]), {
+      method: "POST"
+    });
+  }
+
   prospectSequencePreview(accountId, prospectId, body = {}) {
     return this.requestJson(accountPath(accountId, ["prospects", prospectId, "sequence_preview"]), {
       method: "POST",
@@ -883,9 +1037,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["operator"], query));
   }
 
-  networkOpsAction(accountId, rowId, action) {
+  networkOpsAction(accountId, rowId, action, body) {
     return this.requestJson(accountPath(accountId, ["network_ops", rowId, action]), {
-      method: "POST"
+      method: "POST",
+      ...(body === undefined ? {} : { body })
     });
   }
 

@@ -4,6 +4,14 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.79] - 2026-09-28
+
+### Added
+
+- Run the remaining prospect page actions from the CLI: `prospects defer`, `delay --for`, `monitor`, `unmonitor`, `rename --name`, `import-post --url`, `sync --social-cookie`, `cancel-event --event`, `queue-draft` (optional `--context` JSON object), `rewrite`, `engage --type` (with `--post`, `--comment`, `--reply-to`, `--request-event`, `--queue-action` and `--principal` targets), `reject-selected`, and `intake --url`.
+- Add `events retry`, `profiles delete`, `companies stop-pursuing`, `content defer --for`, `network-ops adopt --target-account --motion`, `network-ops ignore`, `reconciliations add-to-motion --motion`, and `reconciliations ignore`.
+- Add `inbox-ops update-filters`, `inbox-ops draft-reply`, `inbox-ops reply --message`, and `inbox-ops adopt`. Each reply sends a fresh reply token so a retried command cannot send twice.
+
 ## [0.1.78] - 2026-09-27
 
 ### Fixed
