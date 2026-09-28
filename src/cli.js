@@ -3337,10 +3337,21 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const motion = await client.updateMotion(accountId, positionals[0], { motion: await motionUpdatePayload(values) });
-  if (values.json) return writeJson(context.stdout, motion);
+  const statusBlocked = motion?.status_change?.status === "blocked";
+  if (values.json) {
+    writeJson(context.stdout, motion);
+    return statusBlocked ? 1 : undefined;
+  }
 
   writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}).`);
   renderMotion(motion, context);
+  if (!statusBlocked) return undefined;
+
+  writeLine(
+    context.stderr,
+    `Status not changed to ${display(motion.status_change.requested_status)}: ${display(motion.status_change.reason)}. Other changes were saved.`
+  );
+  return 1;
 }
 
 async function motionUpdatePayload(values) {
@@ -14332,6 +14343,90 @@ const PARITY_ACTION_COMMANDS = new Map([
     api: "POST /api/v1/accounts/:account_id/reconciliations/:id/ignore.json",
     run: (client, accountId, [key]) => client.reconciliationIgnore(accountId, key),
     done: ([key]) => `Ignored ${key}.`
+  }],
+  // Motion list bulk actions, strategy retirement, launch checks and premise (#2301).
+  ["motions bulk-add-tag", {
+    usage: "audienti motions bulk-add-tag <motn_id> [<motn_id> ...] --tag <tag>",
+    minPositionals: 1,
+    maxPositionals: Infinity,
+    purpose: "Add one tag to several motions, like Add tag on the motion list. Any motion outside the account fails the whole request.",
+    api: "POST /api/v1/accounts/:account_id/motions/bulk_add_tag.json",
+    options: { tag: { type: "string" } },
+    required: ["tag"],
+    run: (client, accountId, ids, values) => client.bulkAddMotionTag(accountId, { motion_ids: ids, tag: values.tag }),
+    done: (_positionals, payload) => `Tagged ${payload?.length ?? 0} motions.`
+  }],
+  ["motions bulk-remove-tag", {
+    usage: "audienti motions bulk-remove-tag <motn_id> [<motn_id> ...] --tag <tag>",
+    minPositionals: 1,
+    maxPositionals: Infinity,
+    purpose: "Remove one tag from several motions, like Remove tag on the motion list.",
+    api: "POST /api/v1/accounts/:account_id/motions/bulk_remove_tag.json",
+    options: { tag: { type: "string" } },
+    required: ["tag"],
+    run: (client, accountId, ids, values) => client.bulkRemoveMotionTag(accountId, { motion_ids: ids, tag: values.tag }),
+    done: (_positionals, payload) => `Removed the tag from ${payload?.length ?? 0} motions.`
+  }],
+  ["motions bulk-update-principal", {
+    usage: "audienti motions bulk-update-principal <motn_id> [<motn_id> ...] --principal <account_user_id>",
+    minPositionals: 1,
+    maxPositionals: Infinity,
+    purpose: "Give several motions the same owner, like Change owner on the motion list. The owner must be a user in this account.",
+    api: "POST /api/v1/accounts/:account_id/motions/bulk_update_principal.json",
+    options: { principal: { type: "string" } },
+    required: ["principal"],
+    run: (client, accountId, ids, values) => client.bulkUpdateMotionPrincipal(accountId, { motion_ids: ids, principal_account_user_id: values.principal }),
+    done: (_positionals, payload) => `Assigned ${payload?.length ?? 0} motions.`
+  }],
+  ["motions bulk-update-status", {
+    usage: "audienti motions bulk-update-status <motn_id> [<motn_id> ...] --status <preparing|active|closing|paused|archived>",
+    minPositionals: 1,
+    maxPositionals: Infinity,
+    purpose: "Change the status of several motions with the same lifecycle rules as the motion list. Motions the rules block keep their status and are listed with the reason.",
+    api: "POST /api/v1/accounts/:account_id/motions/bulk_update_status.json",
+    options: { status: { type: "string" } },
+    required: ["status"],
+    run: (client, accountId, ids, values) => client.bulkUpdateMotionStatus(accountId, { motion_ids: ids, status: values.status }),
+    done: (_positionals, payload) => [
+      `Set ${payload?.applied_count ?? 0} motions to ${display(payload?.status)}; ${payload?.blocked_count ?? 0} blocked.`,
+      ...(payload?.blocked || []).map((row) => `  ${row.motion_id}: ${display(row.reason)}`)
+    ].join("\n")
+  }],
+  ["motions retire-strategy", {
+    usage: "audienti motions retire-strategy <motn_id> --strategy <strategy_id>",
+    purpose: "Retire one strategy of an inbound motion. Retirement is permanent; the slot refills from the backlog on the next planning pass.",
+    api: "POST /api/v1/accounts/:account_id/motions/:id/strategies/:motion_search_scope_id/retire.json",
+    options: { strategy: { type: "string" } },
+    required: ["strategy"],
+    run: (client, accountId, [id], values) => client.retireMotionStrategy(accountId, id, values.strategy),
+    done: (_positionals, payload) => (payload?.already_retired
+      ? `Strategy ${display(payload?.strategy?.id)} is already retired.`
+      : `Retired strategy ${display(payload?.strategy?.id)}.`)
+  }],
+  ["motions refresh-launch-check", {
+    usage: "audienti motions refresh-launch-check <motn_id>",
+    purpose: "Recheck whether one motion can launch discovery, without starting discovery.",
+    api: "POST /api/v1/accounts/:account_id/motions/:id/refresh_launch_check.json",
+    run: (client, accountId, [id]) => client.refreshMotionLaunchCheck(accountId, id),
+    done: (_positionals, payload) => `${display(payload?.name)}: demand ${display(payload?.demand_status)}, producer ${display(payload?.producer_status)}, reason ${display(payload?.reason)}.`
+  }],
+  ["motions refresh-launch-checks", {
+    usage: "audienti motions refresh-launch-checks",
+    minPositionals: 0,
+    maxPositionals: 0,
+    purpose: "Recheck launch readiness for every motion in the account, without starting discovery.",
+    api: "POST /api/v1/accounts/:account_id/motions/refresh_launch_checks.json",
+    run: (client, accountId) => client.refreshMotionLaunchChecks(accountId),
+    done: (_positionals, payload) => `Launch checks refreshed: ${display(payload?.summary)}.`
+  }],
+  ["motions update-premise", {
+    usage: "audienti motions update-premise <motn_id> --premise <text>",
+    purpose: "Save a motion's premise and rebuild its ICP targeting from it, like Update premise in the Operator.",
+    api: "PATCH /api/v1/accounts/:account_id/motions/:id/update_premise.json",
+    options: { premise: { type: "string" } },
+    required: ["premise"],
+    run: (client, accountId, [id], values) => client.updateMotionPremise(accountId, id, { motion: { premise: values.premise } }),
+    done: ([id]) => `Updated the premise for ${id}.`
   }]
 ]);
 

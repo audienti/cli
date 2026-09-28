@@ -675,6 +675,59 @@ export class AudientiClient {
     });
   }
 
+  bulkAddMotionTag(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", "bulk_add_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  bulkRemoveMotionTag(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", "bulk_remove_tag"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  bulkUpdateMotionPrincipal(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", "bulk_update_principal"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  bulkUpdateMotionStatus(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", "bulk_update_status"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  retireMotionStrategy(accountId, motionId, strategyId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "strategies", strategyId, "retire"]), {
+      method: "POST"
+    });
+  }
+
+  refreshMotionLaunchCheck(accountId, motionId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "refresh_launch_check"]), {
+      method: "POST"
+    });
+  }
+
+  refreshMotionLaunchChecks(accountId) {
+    return this.requestJson(accountPath(accountId, ["motions", "refresh_launch_checks"]), {
+      method: "POST"
+    });
+  }
+
+  updateMotionPremise(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "update_premise"]), {
+      method: "PATCH",
+      body
+    });
+  }
+
   createQuickStart(accountId, body) {
     return this.requestJson(accountPath(accountId, ["quick_start"]), {
       method: "POST",

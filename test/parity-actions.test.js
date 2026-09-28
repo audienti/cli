@@ -34,7 +34,16 @@ const CASES = [
   { args: ["network-ops", "adopt", "network_ops_event_1", "--target-account", "acct_two", "--motion", "motn_one"], method: "POST", path: "/network_ops/network_ops_event_1/adopt.json", body: { target_account_id: "acct_two", motion_id: "motn_one" } },
   { args: ["network-ops", "ignore", "network_ops_event_1"], method: "POST", path: "/network_ops/network_ops_event_1/ignore.json", body: undefined },
   { args: ["reconciliations", "add-to-motion", "src_1", "--motion", "mot_one"], method: "POST", path: "/reconciliations/src_1/add_to_motion.json", body: { motion_id: "mot_one" } },
-  { args: ["reconciliations", "ignore", "src_1"], method: "POST", path: "/reconciliations/src_1/ignore.json", body: undefined }
+  { args: ["reconciliations", "ignore", "src_1"], method: "POST", path: "/reconciliations/src_1/ignore.json", body: undefined },
+  { args: ["motions", "bulk-add-tag", "motn_one", "motn_two", "--tag", "q3"], method: "POST", path: "/motions/bulk_add_tag.json", body: { motion_ids: ["motn_one", "motn_two"], tag: "q3" }, response: [{ id: 1 }, { id: 2 }], output: /Tagged 2 motions/ },
+  { args: ["motions", "bulk-remove-tag", "motn_one", "--tag", "q3"], method: "POST", path: "/motions/bulk_remove_tag.json", body: { motion_ids: ["motn_one"], tag: "q3" }, response: [{ id: 1 }], output: /Removed the tag from 1 motions/ },
+  { args: ["motions", "bulk-update-principal", "motn_one", "--principal", "12"], method: "POST", path: "/motions/bulk_update_principal.json", body: { motion_ids: ["motn_one"], principal_account_user_id: "12" }, response: [{ id: 1 }], output: /Assigned 1 motions/ },
+  { args: ["motions", "bulk-update-status", "motn_one", "motn_two", "--status", "active"], method: "POST", path: "/motions/bulk_update_status.json", body: { motion_ids: ["motn_one", "motn_two"], status: "active" }, response: { status: "active", applied_count: 1, blocked_count: 1, blocked: [{ motion_id: "motn_two", reason: "awaiting_sender" }], motions: [] }, output: /Set 1 motions to active; 1 blocked\.\n  motn_two: awaiting_sender/ },
+  { args: ["motions", "retire-strategy", "motn_one", "--strategy", "44"], method: "POST", path: "/motions/motn_one/strategies/44/retire.json", body: undefined, response: { already_retired: false, strategy: { id: 44, state: "retired" } }, output: /Retired strategy 44/ },
+  { args: ["motions", "retire-strategy", "motn_one", "--strategy", "44"], method: "POST", path: "/motions/motn_one/strategies/44/retire.json", body: undefined, response: { already_retired: true, strategy: { id: 44, state: "retired" } }, output: /already retired/ },
+  { args: ["motions", "refresh-launch-check", "motn_one"], method: "POST", path: "/motions/motn_one/refresh_launch_check.json", body: undefined, response: { name: "Q3", demand_status: "demand", producer_status: "runnable", reason: "launch" }, output: /Q3: demand demand, producer runnable/ },
+  { args: ["motions", "refresh-launch-checks"], method: "POST", path: "/motions/refresh_launch_checks.json", body: undefined, response: { summary: "2 checked, 1 launchable" }, output: /Launch checks refreshed: 2 checked/ },
+  { args: ["motions", "update-premise", "motn_one", "--premise", "Buyers under audit pressure."], method: "PATCH", path: "/motions/motn_one/update_premise.json", body: { motion: { premise: "Buyers under audit pressure." } }, output: /Updated the premise for motn_one/ }
 ];
 
 async function withConfig(fn) {
@@ -166,7 +175,9 @@ test("help topics document each new action and its API route", async () => {
     [["prospects", "defer", "help"], /POST \/api\/v1\/accounts\/:account_id\/prospects\/:id\/defer\.json/],
     [["events", "retry", "help"], /POST \/api\/v1\/accounts\/:account_id\/events\/:id\/retry\.json/],
     [["inbox-ops", "update-filters", "help"], /PATCH \/api\/v1\/accounts\/:account_id\/inbox_ops\/filters\.json/],
-    [["reconciliations", "ignore", "help"], /POST \/api\/v1\/accounts\/:account_id\/reconciliations\/:id\/ignore\.json/]
+    [["reconciliations", "ignore", "help"], /POST \/api\/v1\/accounts\/:account_id\/reconciliations\/:id\/ignore\.json/],
+    [["motions", "bulk-update-status", "help"], /POST \/api\/v1\/accounts\/:account_id\/motions\/bulk_update_status\.json/],
+    [["motions", "retire-strategy", "help"], /POST \/api\/v1\/accounts\/:account_id\/motions\/:id\/strategies\/:motion_search_scope_id\/retire\.json/]
   ]) {
     const stdout = captureStream();
     assert.equal(await run(args, { stdout }), 0);
@@ -179,10 +190,76 @@ test("group help lists the single-purpose actions", async () => {
   for (const [args, usage] of [
     [["help", "prospects"], /audienti prospects defer <prsp_id>/],
     [["help", "events"], /audienti events retry <event_id>/],
-    [["help", "network-ops"], /audienti network-ops adopt <row_id>/]
+    [["help", "network-ops"], /audienti network-ops adopt <row_id>/],
+    [["help", "motions"], /audienti motions bulk-add-tag <motn_id>/],
+    [["help", "motions"], /audienti motions refresh-launch-checks/],
+    [["help", "motions"], /audienti motions update-premise <motn_id> --premise <text>/]
   ]) {
     const stdout = captureStream();
     assert.equal(await run(args, { stdout }), 0);
     assert.match(stdout.output, usage);
   }
+});
+
+test("motions update exits non-zero and prints the reason when the status change is blocked", async () => {
+  await withConfig(async (env) => {
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() =>
+      jsonResponse(
+        {
+          error: "Status not changed: awaiting_sender.",
+          motion_id: "motn_one",
+          status: "preparing",
+          requested_status: "active",
+          status_blocked: true,
+          reason: "awaiting_sender"
+        },
+        { status: 422 }
+      )
+    );
+    const exitCode = await run(["motions", "update", "motn_one", "--status", "active"], { env, fetch, stdout, stderr });
+    assert.notEqual(exitCode, 0);
+    assert.match(stderr.output, /Status not changed: awaiting_sender\./);
+    assert.equal(stdout.output, "");
+    assert.equal(fetch.calls[0].options.method, "PATCH");
+  });
+});
+
+const MIXED_BLOCKED_MOTION = {
+  name: "Mixed",
+  prefix_id: "motn_one",
+  status: "paused",
+  play_tags: ["kept"],
+  status_change: { status: "blocked", requested_status: "active", reason: "awaiting_sender" }
+};
+
+test("motions update prints saved changes and the blocked status reason, then exits non-zero", async () => {
+  await withConfig(async (env) => {
+    const stdout = captureStream();
+    const stderr = captureStream();
+    const fetch = createFetch(() => jsonResponse(MIXED_BLOCKED_MOTION));
+    const exitCode = await run(["motions", "update", "motn_one", "--status", "active", "--tags", "kept"], { env, fetch, stdout, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stdout.output, /Updated motion Mixed \(motn_one\)\./);
+    assert.match(stderr.output, /Status not changed to active: awaiting_sender\. Other changes were saved\./);
+  });
+});
+
+test("motions update --json prints the full body and exits non-zero when the status change is blocked", async () => {
+  await withConfig(async (env) => {
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse(MIXED_BLOCKED_MOTION));
+    const exitCode = await run(["motions", "update", "motn_one", "--status", "active", "--tags", "kept", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 1);
+    assert.deepEqual(JSON.parse(stdout.output), MIXED_BLOCKED_MOTION);
+  });
+});
+
+test("motions update exits zero when no status change is blocked", async () => {
+  await withConfig(async (env) => {
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({ name: "Mixed", prefix_id: "motn_one", status: "active" }));
+    assert.equal(await run(["motions", "update", "motn_one", "--status", "active", "--json"], { env, fetch, stdout }), 0);
+  });
 });

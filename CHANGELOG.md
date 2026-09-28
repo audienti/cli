@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.80] - 2026-09-28
+
+### Added
+
+- Run the motion list and motion health actions from the CLI: `motions bulk-add-tag --tag`, `bulk-remove-tag --tag`, `bulk-update-principal --principal`, `bulk-update-status --status` (prints any motion the lifecycle rules blocked), `retire-strategy --strategy`, `refresh-launch-check`, `refresh-launch-checks`, and `update-premise --premise`.
+
 ## [0.1.79] - 2026-09-28
 
 ### Added
