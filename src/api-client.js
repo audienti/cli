@@ -632,6 +632,23 @@ export class AudientiClient {
     });
   }
 
+  motionProfileSignals(accountId, motionId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "profile_signals"]));
+  }
+
+  addMotionProfileSignal(accountId, motionId, body) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "profile_signals"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  removeMotionProfileSignal(accountId, motionId, signalId) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "profile_signals", signalId]), {
+      method: "DELETE"
+    });
+  }
+
   removeMotionAbmCompany(accountId, motionId, rowId) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "abm_companies", rowId]), {
       method: "DELETE"

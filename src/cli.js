@@ -183,6 +183,9 @@ const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <co
 const MOTIONS_ABM_COMPANIES_LIST_USAGE = "Usage: audienti motions abm-companies <motn_id> list [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_ADD_USAGE = "Usage: audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_REMOVE_USAGE = "Usage: audienti motions abm-companies <motn_id> remove <row_id> [--json] [--account <acct_id>]";
+const MOTIONS_PROFILE_SIGNALS_LIST_USAGE = "Usage: audienti motions profile-signals <motn_id> list [--json] [--account <acct_id>]";
+const MOTIONS_PROFILE_SIGNALS_ADD_USAGE = "Usage: audienti motions profile-signals <motn_id> add (<profile_url> [--category <competitor|influencer|partner|customer|recruiter>] | --owned --social-cookie <id>) [--roles <commenters,reactors>] [--json] [--account <acct_id>]";
+const MOTIONS_PROFILE_SIGNALS_REMOVE_USAGE = "Usage: audienti motions profile-signals <motn_id> remove <signal_id> [--json] [--account <acct_id>]";
 const ICPS_SHOW_USAGE = "Usage: audienti icps show <icp_id> [--json] [--account <acct_id>]";
 const ICPS_LIST_USAGE = "Usage: audienti icps list [--status <active|archived|all>] [--tag <tag>] [--json] [--account <acct_id>]";
 const ICPS_UPDATE_USAGE = "Usage: audienti icps update <icp_id> ([--name <text>] [--notes <text>] [--discovery-keyword <text>] [--tags <tag[,tag...]>] | --payload <file.json>) [--json] [--account <acct_id>]";
@@ -403,6 +406,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "signals") return motionsSignals(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
   if (normalizedResource === "motions" && ["abm-companies", "company-filters"].includes(action)) return motionsAbmCompanies(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "profile-signals") return motionsProfileSignals(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "analytics") return motionsAnalytics(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "prospects") return motionsProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "add-prospects") return motionsAddProspects(rest, context, { accountOverride });
@@ -3308,6 +3312,73 @@ async function motionsAbmCompaniesRemove(motionId, args, context, { accountOverr
 
   writeLine(context.stdout, `Removed company filter ${display(positionals[0])} from motion ${display(payload?.motion_id || motionId)}.`);
   renderMotionAbmCompanies(payload, context);
+}
+
+const MOTIONS_PROFILE_SIGNALS_USAGE = "Usage: audienti motions profile-signals <motn_id> <list|add|remove> [args] [--json] [--account <acct_id>]";
+
+async function motionsProfileSignals(args, context, { accountOverride } = {}) {
+  const [motionId, subaction, ...rest] = args;
+  if (!motionId || !subaction) throw new CommandError(MOTIONS_PROFILE_SIGNALS_USAGE);
+
+  if (subaction === "list") return motionsProfileSignalsList(motionId, rest, context, { accountOverride });
+  if (subaction === "add") return motionsProfileSignalsAdd(motionId, rest, context, { accountOverride });
+  if (["remove", "delete"].includes(subaction)) return motionsProfileSignalsRemove(motionId, rest, context, { accountOverride });
+
+  throw new CommandError(MOTIONS_PROFILE_SIGNALS_USAGE);
+}
+
+async function motionsProfileSignalsList(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(MOTIONS_PROFILE_SIGNALS_LIST_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.motionProfileSignals(accountId, motionId);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderMotionProfileSignals(payload, context);
+}
+
+async function motionsProfileSignalsAdd(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    category: { type: "string" },
+    owned: { type: "boolean" },
+    "social-cookie": { type: "string" },
+    roles: { type: "string" }
+  });
+  const owned = Boolean(values.owned);
+  if (owned ? (positionals.length > 0 || !values["social-cookie"]) : positionals.length !== 1) {
+    throw new CommandError(MOTIONS_PROFILE_SIGNALS_ADD_USAGE);
+  }
+
+  const profileSignal = owned
+    ? { category: "owned", social_cookie_id: values["social-cookie"] }
+    : { url: positionals[0], ...(values.category ? { category: values.category } : {}) };
+  if (values.roles !== undefined) {
+    const roles = String(values.roles).split(",").map((role) => role.trim().toLowerCase()).filter(Boolean);
+    if (roles.some((role) => !["commenters", "reactors"].includes(role))) throw new CommandError(MOTIONS_PROFILE_SIGNALS_ADD_USAGE);
+    profileSignal.commenters_enabled = roles.includes("commenters");
+    profileSignal.reactors_enabled = roles.includes("reactors");
+  }
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.addMotionProfileSignal(accountId, motionId, { profile_signal: profileSignal });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Tracking ${display(payload?.profile_signal?.canonical_url)} for motion ${display(payload?.motion_id || motionId)}.`);
+  renderMotionProfileSignals(payload, context);
+}
+
+async function motionsProfileSignalsRemove(motionId, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(MOTIONS_PROFILE_SIGNALS_REMOVE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.removeMotionProfileSignal(accountId, motionId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Removed profile signal ${display(positionals[0])} from motion ${display(payload?.motion_id || motionId)}.`);
+  renderMotionProfileSignals(payload, context);
 }
 
 async function motionsDelete(args, context, { accountOverride } = {}) {
@@ -7272,20 +7343,15 @@ function renderMotionDiscoverySignals(payload, context) {
   const counts = payload?.counts || {};
   const motionId = payload?.prefix_id ? ` (${display(payload.prefix_id)})` : "";
 
-  writeLine(context.stdout, `Motion-owned discovery signals${motionId}: ${display(counts.total, "0")} total, ${display(counts.actionable, "0")} actionable, ${display(counts.pending, "0")} pending, ${display(counts.held, "0")} held`);
+  writeLine(context.stdout, `Motion-owned discovery signals${motionId}: ${display(counts.total, "0")} total, ${display(counts.actionable, "0")} actionable, ${display(counts.inactive, "0")} inactive`);
   if (rows.length === 0) return;
 
   for (const row of rows) {
-    const provenance = Array.isArray(row.agent_provenance)
-      ? row.agent_provenance.map((entry) => [entry.agent_name, entry.agent_id].filter(Boolean).join(" · ")).filter(Boolean).join(", ")
-      : "";
-    const status = row.actionable ? "actionable" : display(row.status, "pending");
+    const status = row.actionable ? "actionable" : display(row.status, "inactive");
     const sourceCounts = row.source_counts || {};
     const detail = [
       row.canonical_url || row.topic?.slug || row.source_key,
-      `sources=${display(sourceCounts.total, "0")}/${display(sourceCounts.accepted, "0")}/${display(sourceCounts.rejected, "0")}`,
-      provenance ? `agents=${provenance}` : null,
-      !row.actionable && row.motion_attribution_reason ? `reason=${singleLine(row.motion_attribution_reason)}` : null
+      `sources=${display(sourceCounts.total, "0")}/${display(sourceCounts.accepted, "0")}/${display(sourceCounts.rejected, "0")}`
     ].filter(Boolean).join("; ");
     writeLine(context.stdout, `- [${status}] ${display(row.type, "signal")}: ${display(row.label, "unnamed")} (${detail})`);
   }
@@ -7302,6 +7368,18 @@ function renderMotionAbmCompanies(payload, context, { showEmpty = true } = {}) {
     display(row.id),
     display(row.kind),
     display(row.normalized_value || row.raw_value),
+    display(row.status)
+  ]));
+}
+
+function renderMotionProfileSignals(payload, context) {
+  const rows = Array.isArray(payload?.profile_signals) ? payload.profile_signals : [];
+  if (rows.length === 0) return writeLine(context.stdout, "No profile signals found.");
+
+  writeAlignedTable(context, ["SIGNAL ID", "CATEGORY", "PROFILE", "STATUS"], rows.map((row) => [
+    display(row.id),
+    display(row.source_kind === "owned" ? "owned" : row.category),
+    display(row.canonical_url),
     display(row.status)
   ]));
 }
@@ -11931,6 +12009,9 @@ const HELP_TOPICS = new Map([
     "  audienti motions abm-companies <motn_id> list [--json]",
     "  audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json]",
     "  audienti motions abm-companies <motn_id> remove <row_id> [--json]",
+    "  audienti motions profile-signals <motn_id> list [--json]",
+    "  audienti motions profile-signals <motn_id> add (<profile_url> [--category <type>] | --owned --social-cookie <id>) [--roles <commenters,reactors>] [--json]",
+    "  audienti motions profile-signals <motn_id> remove <signal_id> [--json]",
     "  audienti motions create --payload <file.json> [--json]",
     `  ${MOTIONS_UPDATE_USAGE.slice("Usage: ".length).replace(" [--account <acct_id>]", "")}`,
     "  audienti motions add-tag <motn_id> <tag> [--json]",
@@ -12017,7 +12098,7 @@ const HELP_TOPICS = new Map([
     "  inbound_channels: enabled inbound collectors for inbound motions",
     "  lopa_profiles[]: tracked LinkedIn profile rows for LOPA motions",
     "  signal_rows[]: outbound signal configuration rows",
-    "  discovery_signals: Motion-owned Topic/profile signals with attribution state and Agent provenance",
+    "  discovery_signals: Motion-owned Topic/profile signals with status and source counts",
     "  abm_companies[]: motion-scoped positive company filter rows",
     "",
     "API:",
@@ -12032,13 +12113,31 @@ const HELP_TOPICS = new Map([
     "",
     "Purpose:",
     "  Read the Topic and tracked-profile signals owned by one Motion.",
-    "  Actionable rows have exact Motion attribution; pending and held rows remain inspectable with their reason and evidence.",
+    "  Active rows feed discovery; paused or inactive rows stay visible but do not feed discovery.",
     "",
     "Output:",
-    "  Shows attribution state, canonical source URL or Topic, accepted/rejected source counts, and retained Agent provenance.",
+    "  Shows status, canonical source URL or Topic, and accepted/rejected source counts.",
     "",
     "API:",
     "  GET /api/v1/accounts/:account_id/motions/:id/signals.json"
+  ].join("\n")],
+
+  ["motions profile-signals", [
+    "Usage:",
+    `  ${MOTIONS_PROFILE_SIGNALS_LIST_USAGE.slice("Usage: ".length)}`,
+    `  ${MOTIONS_PROFILE_SIGNALS_ADD_USAGE.slice("Usage: ".length)}`,
+    `  ${MOTIONS_PROFILE_SIGNALS_REMOVE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List, add, or remove the social profiles a motion tracks for discovery signals.",
+    "  --owned tracks your own LinkedIn profile through a connected session in this account.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/motions/:motion_id/profile_signals.json",
+    "  POST /api/v1/accounts/:account_id/motions/:motion_id/profile_signals.json",
+    "  DELETE /api/v1/accounts/:account_id/motions/:motion_id/profile_signals/:id.json"
   ].join("\n")],
 
   ["motions abm-companies", [

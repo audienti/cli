@@ -3664,14 +3664,14 @@ test("motions show renders signal rows and motion configuration details", async 
     assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/in\/source-profile \(creator\)/);
     assert.match(stdout.output, /Signal rows:/);
     assert.match(stdout.output, /posting_language=QBR/);
-    assert.match(stdout.output, /Motion-owned discovery signals \(motn_lopa\): 1 total, 1 actionable, 0 pending, 0 held/);
+    assert.match(stdout.output, /Motion-owned discovery signals \(motn_lopa\): 1 total, 1 actionable, 0 inactive/);
     assert.match(stdout.output, /\[actionable\] topic: AML vendor governance/);
     assert.match(stdout.output, /ROW ID\s+KIND\s+VALUE\s+STATUS/);
     assert.match(stdout.output, /https:\/\/www\.linkedin\.com\/company\/acme/);
   });
 });
 
-test("motions signals reads Motion-owned attribution and renders held reasons", async () => {
+test("motions signals renders inactive Motion-owned signals with source counts", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
       host: "https://app.audienti.com",
@@ -3686,18 +3686,17 @@ test("motions signals reads Motion-owned attribution and renders held reasons", 
       assert.equal(options.headers.Authorization, "Bearer saved-token");
       return jsonResponse({
         prefix_id: "motn_signals",
-        counts: { total: 1, actionable: 0, pending: 0, held: 1 },
+        counts: { total: 1, actionable: 0, inactive: 1 },
         signals: [
           {
             type: "profile_signal",
-            label: "@held-profile",
-            source_key: "profile_signal:https://www.linkedin.com/in/held-profile",
-            canonical_url: "https://www.linkedin.com/in/held-profile",
+            label: "@paused-profile",
+            source_key: "profile_signal:https://www.linkedin.com/in/paused-profile",
+            canonical_url: "https://www.linkedin.com/in/paused-profile",
             actionable: false,
-            status: "held",
-            motion_attribution_reason: "ambiguous_motion_owner",
-            source_counts: { total: 2, accepted: 1, rejected: 1 },
-            agent_provenance: [{ agent_name: "Legacy Finder", agent_id: 34 }]
+            status: "paused",
+            motion_attribution_state: "attributed",
+            source_counts: { total: 2, accepted: 1, rejected: 1 }
           }
         ]
       });
@@ -3706,10 +3705,9 @@ test("motions signals reads Motion-owned attribution and renders held reasons", 
     const exitCode = await run(["motions", "signals", "motn_signals"], { env, fetch, stdout });
 
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Motion-owned discovery signals \(motn_signals\): 1 total, 0 actionable, 0 pending, 1 held/);
-    assert.match(stdout.output, /\[held\] profile_signal: @held-profile/);
-    assert.match(stdout.output, /reason=ambiguous_motion_owner/);
-    assert.match(stdout.output, /agents=Legacy Finder · 34/);
+    assert.match(stdout.output, /Motion-owned discovery signals \(motn_signals\): 1 total, 0 actionable, 1 inactive/);
+    assert.match(stdout.output, /\[paused\] profile_signal: @paused-profile \(https:\/\/www\.linkedin\.com\/in\/paused-profile; sources=2\/1\/1\)/);
+    assert.doesNotMatch(stdout.output, /agents=|reason=/);
   });
 });
 
@@ -3770,6 +3768,54 @@ test("motions abm-companies manages motion company filters", async () => {
     exitCode = await run(["motions", "abm-companies", "motn_abm", "remove", "11"], { env, fetch, stdout });
     assert.equal(exitCode, 0);
     assert.match(stdout.output, /Removed company filter 11/);
+  });
+});
+
+test("motions profile-signals lists, adds, and removes tracked profiles", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const row = { id: 21, category: "competitor", source_kind: "tracked", canonical_url: "https://www.linkedin.com/in/rival", status: "active" };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_ps/profile_signals.json" && options.method === "POST") {
+        assert.deepEqual(JSON.parse(options.body), {
+          profile_signal: { url: "https://linkedin.com/in/rival/", category: "competitor", commenters_enabled: true, reactors_enabled: false }
+        });
+        return jsonResponse({ motion_id: "motn_ps", profile_signal: row, profile_signals: [row] }, { status: 201 });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_ps/profile_signals.json" && options.method === "GET") {
+        return jsonResponse({ motion_id: "motn_ps", profile_signals: [row] });
+      }
+
+      if (url.pathname === "/api/v1/accounts/acct_one/motions/motn_ps/profile_signals/21.json" && options.method === "DELETE") {
+        return jsonResponse({ motion_id: "motn_ps", profile_signals: [], deleted: true });
+      }
+
+      throw new Error(`unexpected ${options.method} ${url.pathname}`);
+    });
+
+    let exitCode = await run(["motions", "profile-signals", "motn_ps", "add", "https://linkedin.com/in/rival/", "--category", "competitor", "--roles", "commenters"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Tracking https:\/\/www\.linkedin\.com\/in\/rival for motion motn_ps/);
+
+    stdout.output = "";
+    exitCode = await run(["motions", "profile-signals", "motn_ps", "list"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /SIGNAL ID\s+CATEGORY\s+PROFILE\s+STATUS/);
+    assert.match(stdout.output, /21\s+competitor\s+https:\/\/www\.linkedin\.com\/in\/rival\s+active\s*$/m);
+
+    stdout.output = "";
+    exitCode = await run(["motions", "profile-signals", "motn_ps", "remove", "21"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Removed profile signal 21 from motion motn_ps/);
+    assert.match(stdout.output, /No profile signals found/);
   });
 });
 

@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.86] - 2026-09-28
+
+### Added
+
+- `audienti motions profile-signals <motn_id> list|add|remove` manages the social profiles a motion tracks, including your own LinkedIn profile with `--owned --social-cookie <id>`.
+
+### Changed
+
+- `motions show` no longer lists agent provenance for discovery signals, because signals now belong to the motion (#1811).
+
 ## [0.1.85] - 2026-09-28
 
 ### Changed
