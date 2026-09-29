@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.85] - 2026-09-28
+
+### Changed
+
+- Social account lists and lookups skip accounts an admin has offboarded. Opening an offboarded account through the API returns 403 with code `offboarded`.
+
 ## [0.1.84] - 2026-09-28
 
 ### Added
