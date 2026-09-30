@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.87] - 2026-09-30
+
+### Removed
+
+- `social-cookies update --secrets-stdin` no longer accepts `cookie_bundle`; the server no longer stores saved cookie text. The CLI still refuses cookie secrets passed as flags or JSON attributes.
+
 ## [0.1.86] - 2026-09-28
 
 ### Added

@@ -14398,12 +14398,12 @@ async function readSocialSecrets(values, usageLine, context, { allowBundle = tru
   try {
     parsed = JSON.parse(await readStdinText(context));
   } catch {
-    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, cookie_bundle, or messaging_pin.");
+    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, or messaging_pin.");
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, cookie_bundle, or messaging_pin.");
+    throw new CommandError("--secrets-stdin expects a JSON object with password, otp_secret, or messaging_pin.");
   }
-  const allowed = ["password", "otp_secret", "cookie_bundle", "messaging_pin"];
+  const allowed = ["password", "otp_secret", "messaging_pin"];
   const unknown = Object.keys(parsed).filter((key) => !allowed.includes(key));
   if (unknown.length > 0) throw new CommandError(`--secrets-stdin accepts only ${allowed.join(", ")}.`);
   return parsed;

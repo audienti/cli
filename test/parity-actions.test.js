@@ -341,13 +341,13 @@ test("social-cookies create reads the password from stdin and never prints it", 
 
 test("social-cookies update reads a secrets bundle from stdin and rejects unknown keys", async () => {
   await withConfig(async (env) => {
-    const bundle = { password: SECRET, otp_secret: "JBSWY3DP", cookie_bundle: "li_at=x", messaging_pin: "4821" };
+    const bundle = { password: SECRET, otp_secret: "JBSWY3DP", messaging_pin: "4821" };
     const ok = await runSocial(["social-cookies", "update", "scok_one", "--secrets-stdin", "--json"], {
       env, stdin: Readable.from([JSON.stringify(bundle)]), response: { social_cookie: { prefix_id: "scok_one" } }
     });
     assert.equal(ok.exitCode, 0, ok.stderr);
     assert.deepEqual(ok.bodies, [{ social_cookie: bundle }]);
-    assert.doesNotMatch(ok.stdout, /SENTINEL|JBSWY3DP|li_at|4821/);
+    assert.doesNotMatch(ok.stdout, /SENTINEL|JBSWY3DP|4821/);
 
     const bad = await runSocial(["social-cookies", "update", "scok_one", "--secrets-stdin"], { env, stdin: Readable.from([JSON.stringify({ token: "x" })]) });
     assert.equal(bad.exitCode, 1);
