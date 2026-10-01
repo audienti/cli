@@ -162,7 +162,7 @@ const OFFERS_DELETE_USAGE = "Usage: audienti offers delete <offr_id> --confirm <
 const WRITER_TEST_RUN_USAGE = "Usage: audienti writer test-run <prsp_id> [--json] [--mode <plan|report|step>] [--branch <both|no-accept|accepted>] [--step <step_key|row_number>] [--report <rprt_id>] [--no-wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--account <acct_id>]";
 const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_id> <rprt_id> [--json] [--account <acct_id>]";
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
-const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] [--approach <text>] | --payload <file.json>) [--json] [--account <acct_id>]";
+const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] [--approach <text>] [--gift <gift_id|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
@@ -238,6 +238,14 @@ const OFFERS_REGENERATE_RESEARCH_USAGE = "Usage: audienti offers regenerate-rese
 const OFFERS_UPDATE_WRITEUP_USAGE = "Usage: audienti offers update-writeup <offr_id> --description <text> [--json] [--account <acct_id>]";
 const OFFERS_ADD_ARTIFACTS_USAGE = "Usage: audienti offers add-artifacts <offr_id> <file> [file...] [--json] [--account <acct_id>]";
 const OFFERS_REMOVE_ARTIFACT_USAGE = "Usage: audienti offers remove-artifact <offr_id> <artifact_id> [--json] [--account <acct_id>]";
+const OFFERS_ADD_GIFT_USAGE = "Usage: audienti offers add-gift <offr_id> --title <text> [--summary <text>] [--send-url <url>] [--file <path>] [--json] [--account <acct_id>]";
+const OFFERS_UPDATE_GIFT_USAGE = "Usage: audienti offers update-gift <offr_id> <gift_id> [--title <text>] [--summary <text>] [--send-url <url>] [--file <path>] [--remove-file] [--status <on|off>] [--json] [--account <acct_id>]";
+const OFFERS_TURN_OFF_GIFT_USAGE = "Usage: audienti offers turn-off-gift <offr_id> <gift_id> [--json] [--account <acct_id>]";
+const OFFERS_TURN_ON_GIFT_USAGE = "Usage: audienti offers turn-on-gift <offr_id> <gift_id> [--json] [--account <acct_id>]";
+const OFFERS_UPDATE_INSIGHT_USAGE = "Usage: audienti offers update-insight <offr_id> <insight_id> [--content <text>] [--source-url <url>] [--status <on|off>] [--json] [--account <acct_id>]";
+const OFFERS_TURN_OFF_INSIGHT_USAGE = "Usage: audienti offers turn-off-insight <offr_id> <insight_id> [--json] [--account <acct_id>]";
+const OFFERS_TURN_ON_INSIGHT_USAGE = "Usage: audienti offers turn-on-insight <offr_id> <insight_id> [--json] [--account <acct_id>]";
+const MOTIONS_CREATE_USAGE = "Usage: audienti motions create --payload <file.json> [--gift <gift_id|none>] [--json] [--account <acct_id>]";
 const TASKS_UPDATE_USAGE = "Usage: audienti tasks update <ptsk_id> [--title <text>] [--due <time>] [--notes <text>] [--prospect <prsp_id|\"\">] [--list <list_id|\"\">] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const TASKS_BULK_UPDATE_USAGE = "Usage: audienti tasks bulk-update --action <complete|reassign> [--assigned-user <id|me>] <ptsk_id> [ptsk_id...] [--json] [--account <acct_id>]";
 const SOCIAL_COOKIES_SYNC_MESSAGES_USAGE = "Usage: audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] [--json] [--account <acct_id>]";
@@ -351,6 +359,13 @@ async function dispatch(argv, context) {
   if (normalizedResource === "offers" && action === "update-writeup") return offersUpdateWriteup(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "add-artifacts") return offersAddArtifacts(rest, context, { accountOverride });
   if (normalizedResource === "offers" && action === "remove-artifact") return offersRemoveArtifact(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "add-gift") return offersAddGift(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "update-gift") return offersUpdateGift(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "turn-off-gift") return offersSetGiftStatus(rest, context, { accountOverride, status: "inactive" });
+  if (normalizedResource === "offers" && action === "turn-on-gift") return offersSetGiftStatus(rest, context, { accountOverride, status: "active" });
+  if (normalizedResource === "offers" && action === "update-insight") return offersUpdateInsight(rest, context, { accountOverride });
+  if (normalizedResource === "offers" && action === "turn-off-insight") return offersSetInsightStatus(rest, context, { accountOverride, status: "inactive" });
+  if (normalizedResource === "offers" && action === "turn-on-insight") return offersSetInsightStatus(rest, context, { accountOverride, status: "active" });
   if (normalizedResource === "icps" && action === "list") return icpsList(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "show") return icpsShow(rest, context, { accountOverride });
   if (normalizedResource === "icps" && action === "analytics") return analyticsIcps(rest, context, { accountOverride });
@@ -1841,6 +1856,128 @@ async function offersRemoveArtifact(args, context, { accountOverride } = {}) {
   writeLine(context.stdout, `Removed artifact ${display(artifactId)} from offer ${display(payload?.offer_id || offerId)}.`);
 }
 
+const OFFER_SHELF_STATUSES = { on: "active", off: "inactive", active: "active", inactive: "inactive" };
+
+function offerShelfStatus(value, usage) {
+  if (value === undefined) return undefined;
+
+  const status = OFFER_SHELF_STATUSES[String(value).trim().toLowerCase()];
+  if (!status) throw new CommandError(`--status must be on or off.\n${usage}`);
+  return status;
+}
+
+async function offerGiftFile(path) {
+  if (path === undefined) return undefined;
+
+  try {
+    return { filename: basename(path), data: (await readFile(path)).toString("base64") };
+  } catch (error) {
+    throw new CommandError(`Cannot read ${path}: ${error.message}`);
+  }
+}
+
+async function offersAddGift(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    title: { type: "string" },
+    summary: { type: "string" },
+    "send-url": { type: "string" },
+    file: { type: "string" }
+  });
+  if (positionals.length !== 1 || !String(values.title || "").trim()) throw new CommandError(OFFERS_ADD_GIFT_USAGE);
+
+  const gift = compactObject({
+    title: values.title,
+    summary: values.summary,
+    send_url: values["send-url"],
+    file: await offerGiftFile(values.file)
+  });
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.createOfferGift(accountId, positionals[0], { gift });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Added gift ${display(payload?.gift?.title)} (${display(payload?.gift?.prefix_id)}) to offer ${display(payload?.offer_id || positionals[0])}.`);
+  renderOfferGifts([payload?.gift], context);
+}
+
+async function offersUpdateGift(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    title: { type: "string" },
+    summary: { type: "string" },
+    "send-url": { type: "string" },
+    file: { type: "string" },
+    "remove-file": { type: "boolean" },
+    status: { type: "string" }
+  });
+  if (values.file !== undefined && values["remove-file"]) throw new CommandError("Use --file or --remove-file, not both.");
+  const gift = compactObject({
+    title: values.title,
+    summary: values.summary,
+    send_url: values["send-url"],
+    remove_file: values["remove-file"] ? true : undefined,
+    status: offerShelfStatus(values.status, OFFERS_UPDATE_GIFT_USAGE)
+  });
+  if (positionals.length !== 2 || (Object.keys(gift).length === 0 && values.file === undefined)) throw new CommandError(OFFERS_UPDATE_GIFT_USAGE);
+
+  const file = await offerGiftFile(values.file);
+  if (file) gift.file = file;
+  const [offerId, giftId] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateOfferGift(accountId, offerId, giftId, { gift });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Updated gift ${display(payload?.gift?.title)} (${display(payload?.gift?.prefix_id || giftId)}).`);
+  renderOfferGifts([payload?.gift], context);
+}
+
+async function offersSetGiftStatus(args, context, { accountOverride, status } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(status === "active" ? OFFERS_TURN_ON_GIFT_USAGE : OFFERS_TURN_OFF_GIFT_USAGE);
+
+  const [offerId, giftId] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateOfferGift(accountId, offerId, giftId, { gift: { status } });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Turned ${status === "active" ? "on" : "off"} gift ${display(payload?.gift?.title)} (${display(payload?.gift?.prefix_id || giftId)}).`);
+}
+
+async function offersUpdateInsight(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    content: { type: "string" },
+    "source-url": { type: "string" },
+    status: { type: "string" }
+  });
+  const insight = compactObject({
+    content: values.content,
+    source_url: values["source-url"],
+    status: offerShelfStatus(values.status, OFFERS_UPDATE_INSIGHT_USAGE)
+  });
+  if (positionals.length !== 2 || Object.keys(insight).length === 0) throw new CommandError(OFFERS_UPDATE_INSIGHT_USAGE);
+
+  const [offerId, insightId] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateOfferInsight(accountId, offerId, insightId, { insight });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Updated insight ${display(payload?.insight?.id || insightId)}.`);
+  renderOfferInsights([payload?.insight], context);
+}
+
+async function offersSetInsightStatus(args, context, { accountOverride, status } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 2) throw new CommandError(status === "active" ? OFFERS_TURN_ON_INSIGHT_USAGE : OFFERS_TURN_OFF_INSIGHT_USAGE);
+
+  const [offerId, insightId] = positionals;
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.updateOfferInsight(accountId, offerId, insightId, { insight: { status } });
+  if (values.json) return writeJson(context.stdout, payload);
+
+  writeLine(context.stdout, `Turned ${status === "active" ? "on" : "off"} insight ${display(payload?.insight?.id || insightId)}.`);
+}
+
 async function icpsList(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
@@ -3234,19 +3371,36 @@ async function motionsAddProspects(args, context, { accountOverride } = {}) {
 async function motionsCreate(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
-    payload: { type: "string" }
+    payload: { type: "string" },
+    gift: { type: "string" }
   });
   if (positionals.length > 0 || !values.payload) {
-    throw new CommandError("Usage: audienti motions create --payload <file.json> [--json] [--account <acct_id>]");
+    throw new CommandError(MOTIONS_CREATE_USAGE);
   }
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = normalizeMotionCreatePayload(await readJsonPayload(values.payload));
+  const payload = withMotionGift(normalizeMotionCreatePayload(await readJsonPayload(values.payload)), values.gift);
   const created = await client.createMotion(accountId, { motion: payload });
   if (values.json) return writeJson(context.stdout, created);
 
   writeLine(context.stdout, `Created motion ${display(created?.name)} (${display(created?.prefix_id)}).`);
   renderMotion(created, context);
+}
+
+// --gift names a ready gift on the motion's offer. "none" clears the gift.
+function normalizeMotionGift(value) {
+  if (value === undefined) return undefined;
+
+  const gift = String(value).trim();
+  if (!gift) throw new CommandError("--gift needs a gift id or none.");
+  return gift.toLowerCase() === "none" ? null : gift;
+}
+
+function withMotionGift(payload, value) {
+  const gift = normalizeMotionGift(value);
+  if (gift === undefined || !payload || typeof payload !== "object" || Array.isArray(payload)) return payload;
+
+  return { ...payload, offer_gift_id: gift };
 }
 
 function normalizeMotionCreatePayload(payload) {
@@ -3408,7 +3562,8 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
     "own-post-engagement": { type: "string" },
     "start-date": { type: "string" },
     "end-date": { type: "string" },
-    "maximum-company-count": { type: "string" }
+    "maximum-company-count": { type: "string" },
+    gift: { type: "string" }
   });
   const hasUpdateField = values.payload || motionSimpleFieldsPresent(values);
   if (positionals.length !== 1 || !hasUpdateField) {
@@ -3455,7 +3610,8 @@ async function motionUpdatePayload(values) {
     approach: values.approach,
     starts_on: normalizeMotionDate(values["start-date"], "--start-date"),
     ends_on: normalizeMotionDate(values["end-date"], "--end-date"),
-    maximum_company_count: normalizeMotionMaximumCompanyCount(values["maximum-company-count"])
+    maximum_company_count: normalizeMotionMaximumCompanyCount(values["maximum-company-count"]),
+    offer_gift_id: normalizeMotionGift(values.gift)
   };
   for (const [key, value] of Object.entries(nullableSettings)) {
     if (value !== undefined) payload[key] = value;
@@ -3471,7 +3627,8 @@ function motionSimpleFieldsPresent(values) {
     values["own-post-engagement"] !== undefined ||
     values["start-date"] !== undefined ||
     values["end-date"] !== undefined ||
-    values["maximum-company-count"] !== undefined;
+    values["maximum-company-count"] !== undefined ||
+    values.gift !== undefined;
 }
 
 function rejectMotionPlanningMode(payload) {
@@ -7039,6 +7196,47 @@ function renderOffer(offer, context) {
   if (offer?.description) writeLine(context.stdout, `Description: ${offer.description}`);
   if (offer?.url) writeLine(context.stdout, `URL: ${offer.url}`);
   if (Array.isArray(offer?.artifacts) && offer.artifacts.length > 0) renderOfferArtifacts(offer.artifacts, context);
+  if (Array.isArray(offer?.gifts)) renderOfferGifts(offer.gifts, context);
+  if (Array.isArray(offer?.insights)) renderOfferInsights(offer.insights, context);
+}
+
+const OFFER_GIFT_STATE_LABELS = { ready: "ready", needs_link: "needs a link", off: "off" };
+
+function renderOfferGifts(gifts, context) {
+  const rows = (Array.isArray(gifts) ? gifts : []).filter(Boolean);
+  if (rows.length === 0) return writeLine(context.stdout, "No gifts.");
+
+  writeLine(context.stdout, "GIFT ID\tSTATE\tTITLE\tSEND LINK\tWHO IT HELPS");
+  for (const gift of rows) {
+    writeLine(
+      context.stdout,
+      [
+        display(gift.prefix_id || gift.id),
+        display(OFFER_GIFT_STATE_LABELS[gift.state] || gift.state),
+        display(gift.title),
+        display(gift.send_url || gift.file?.filename, "-"),
+        display(gift.summary, "-")
+      ].join("\t")
+    );
+  }
+}
+
+function renderOfferInsights(insights, context) {
+  const rows = (Array.isArray(insights) ? insights : []).filter(Boolean);
+  if (rows.length === 0) return writeLine(context.stdout, "No insights.");
+
+  writeLine(context.stdout, "INSIGHT ID\tSTATUS\tINSIGHT\tSOURCE");
+  for (const insight of rows) {
+    writeLine(
+      context.stdout,
+      [
+        display(insight.id),
+        insight.status === "active" ? "on" : insight.status === "inactive" ? "off" : display(insight.status),
+        display(insight.content),
+        display(insight.source_url || insight.source_label, "-")
+      ].join("\t")
+    );
+  }
 }
 
 function renderOfferArtifacts(artifacts, context) {
@@ -7295,6 +7493,7 @@ function renderMotion(motion, context) {
   writeLine(context.stdout, `Maximum companies: ${display(motion?.maximum_company_count, "not set")}`);
   renderExecutableConfiguration(motion?.executable_configuration, context);
   if (motion?.offer?.name) writeLine(context.stdout, `Offer: ${motion.offer.name} (${display(motion.offer.prefix_id)})`);
+  if (motion?.offer_gift?.title) writeLine(context.stdout, `Gift: ${motion.offer_gift.title} (${display(motion.offer_gift.prefix_id)})`);
   if (motion?.icp?.name) writeLine(context.stdout, `ICP: ${motion.icp.name} (${display(motion.icp.prefix_id)})`);
   if (motion?.list?.name) writeLine(context.stdout, `List: ${motion.list.name} (${display(motion.list.prefix_id)})`);
   writeLine(context.stdout, `Own-post engagement: ${motion?.own_post_engagement ? "enabled" : "disabled"}`);
@@ -9921,6 +10120,7 @@ const HELP_TOPICS = new Map([
     "    audienti offers regenerate-research <offr_id> [--guidance <text>]",
     "    audienti offers update-writeup <offr_id> --description <text>",
     "    audienti offers add-artifacts <offr_id> <file> [file...]",
+    "    audienti offers add-gift <offr_id> --title <text> [--send-url <url>]",
     "    audienti icps list [--status <active|archived|all>] [--tag <tag>]",
     "    audienti icps show <icp_id>",
     "    audienti icps update <icp_id> [--tags <tag[,tag...]> | --payload <file.json>]",
@@ -10508,6 +10708,13 @@ const HELP_TOPICS = new Map([
     "  audienti offers update-writeup <offr_id> --description <text> [--json]",
     "  audienti offers add-artifacts <offr_id> <file> [file...] [--json]",
     "  audienti offers remove-artifact <offr_id> <artifact_id> [--json]",
+    "  audienti offers add-gift <offr_id> --title <text> [--send-url <url> | --file <path>] [--json]",
+    "  audienti offers update-gift <offr_id> <gift_id> [--title <text>] [--send-url <url>] [--json]",
+    "  audienti offers turn-off-gift <offr_id> <gift_id> [--json]",
+    "  audienti offers turn-on-gift <offr_id> <gift_id> [--json]",
+    "  audienti offers update-insight <offr_id> <insight_id> [--content <text>] [--json]",
+    "  audienti offers turn-off-insight <offr_id> <insight_id> [--json]",
+    "  audienti offers turn-on-insight <offr_id> <insight_id> [--json]",
     "",
     "Status: implemented",
     "",
@@ -10567,6 +10774,11 @@ const HELP_TOPICS = new Map([
     `  ${OFFERS_SHOW_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show one offer with its artifacts, gifts, and insights.",
+    "  A gift is a free, useful thing the offer already has. It is ready once it has a send link or a file; otherwise it needs a link.",
+    "  An insight is an exact fact or quote with its source.",
     "",
     "Input shape:",
     "  offr_id: offr_ prefixed id or integer id",
@@ -11768,6 +11980,129 @@ const HELP_TOPICS = new Map([
     "  DELETE /api/v1/accounts/:account_id/offers/:offer_id/artifacts/:id.json"
   ].join("\n")],
 
+  ["offers add-gift", [
+    "Usage:",
+    `  ${OFFERS_ADD_GIFT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Add a gift to an offer by hand. A gift is a free, useful thing you already have, such as a guide, a report, or a tool.",
+    "  The gift is ready once it has a send link or a file. Do not use a page that asks for an email as the send link.",
+    "",
+    "Input shape:",
+    "  offr_id: offr_ prefixed id or integer id",
+    "  title: string",
+    "  summary: who the gift helps | optional",
+    "  send-url: the file or page a prospect opens | optional",
+    "  file: local file path; sent as base64 | optional",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/offers/:offer_id/gifts.json"
+  ].join("\n")],
+
+  ["offers update-gift", [
+    "Usage:",
+    `  ${OFFERS_UPDATE_GIFT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Edit a gift, give it a send link or a file, or turn it off or on. Only the given fields change.",
+    "  A gift that is turned off or loses its send link is removed from any motion that carried it.",
+    "",
+    "Input shape:",
+    "  gift_id: ogft_ prefixed id or integer id from `audienti offers show <offr_id>`",
+    "  status: on | off | optional",
+    "  --remove-file: take the attached file off the gift; without a send link the gift then needs a link",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/gifts/:id.json"
+  ].join("\n")],
+
+  ["offers turn-off-gift", [
+    "Usage:",
+    `  ${OFFERS_TURN_OFF_GIFT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Turn off a gift. It stays on the offer, motions stop carrying it, and later site scans do not turn it back on.",
+    "",
+    "Input shape:",
+    "  gift_id: ogft_ prefixed id or integer id from `audienti offers show <offr_id>`",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/gifts/:id.json"
+  ].join("\n")],
+
+  ["offers turn-on-gift", [
+    "Usage:",
+    `  ${OFFERS_TURN_ON_GIFT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Turn a gift back on.",
+    "",
+    "Input shape:",
+    "  gift_id: ogft_ prefixed id or integer id from `audienti offers show <offr_id>`",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/gifts/:id.json"
+  ].join("\n")],
+
+  ["offers update-insight", [
+    "Usage:",
+    `  ${OFFERS_UPDATE_INSIGHT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Edit an insight or turn it off or on. An insight is an exact fact or quote with its source. Only the given fields change.",
+    "",
+    "Input shape:",
+    "  insight_id: integer id from `audienti offers show <offr_id>`",
+    "  content: string | optional",
+    "  source-url: URL | optional",
+    "  status: on | off | optional",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/insights/:id.json"
+  ].join("\n")],
+
+  ["offers turn-off-insight", [
+    "Usage:",
+    `  ${OFFERS_TURN_OFF_INSIGHT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Turn off an insight. It stays on the offer and later site scans do not turn it back on.",
+    "",
+    "Input shape:",
+    "  insight_id: integer id from `audienti offers show <offr_id>`",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/insights/:id.json"
+  ].join("\n")],
+
+  ["offers turn-on-insight", [
+    "Usage:",
+    `  ${OFFERS_TURN_ON_INSIGHT_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Turn an insight back on.",
+    "",
+    "Input shape:",
+    "  insight_id: integer id from `audienti offers show <offr_id>`",
+    "",
+    "API:",
+    "  PATCH /api/v1/accounts/:account_id/offers/:offer_id/insights/:id.json"
+  ].join("\n")],
+
   ["tasks update", [
     "Usage:",
     `  ${TASKS_UPDATE_USAGE.slice("Usage: ".length)}`,
@@ -12325,7 +12660,7 @@ const HELP_TOPICS = new Map([
 
   ["motions create", [
     "Usage:",
-    "  audienti motions create --payload <file.json> [--json] [--account <acct_id>]",
+    `  ${MOTIONS_CREATE_USAGE.slice("Usage: ".length)}`,
     "",
     "Status: implemented",
     "",
@@ -12339,6 +12674,7 @@ const HELP_TOPICS = new Map([
     "  kind: outbound | inbound | lopa | transition",
     "  status: draft | active | paused | archived",
     "  offer_id: offr_ prefix id",
+    "  offer_gift_id: ogft_ prefix id | null | optional; a ready gift on this offer. --gift <gift_id|none> sets the same field",
     "  principal_account_user_id: integer | me | optional",
     "  icp_id: icpp_ prefix id | optional",
     "  list_id: list_ prefix id | optional",
@@ -12419,6 +12755,7 @@ const HELP_TOPICS = new Map([
     "  start-date: YYYY-MM-DD | none | optional",
     "  end-date: YYYY-MM-DD | none | optional",
     "  maximum-company-count: positive integer | none | optional",
+    "  gift: ogft_ prefix id | none | optional; a ready gift on the motion's own offer (offer_gift_id in payload mode)",
     "  payload: file.json | optional full or partial motion object using the account API shape",
     "",
     "Behavior:",

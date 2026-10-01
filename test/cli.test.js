@@ -13271,6 +13271,114 @@ test("offers catalog commands call the research, write-up, and artifact endpoint
   });
 });
 
+test("offers gift and insight commands show the shelf and call the gift and insight endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const guide = { id: 4, prefix_id: "ogft_a", title: "Pipeline guide", summary: "Helps sales leaders.", send_url: "https://example.com/guide.pdf", state: "ready", status: "active" };
+    const research = { id: 5, prefix_id: "ogft_b", title: "Cold research", summary: "", send_url: null, state: "needs_link", status: "active" };
+    const insight = { id: 7, content: "27.5% of requests were accepted.", source_url: "https://example.com/research", status: "active" };
+    const fetch = catalogFetch(requests, (url, options) => {
+      const path = new URL(url).pathname;
+      const body = options.body ? JSON.parse(options.body) : {};
+      if (path.endsWith("/offers/offr_a.json")) return jsonResponse({ prefix_id: "offr_a", name: "Audit", artifacts: [], gifts: [guide, research], insights: [insight] });
+      if (path.includes("/insights/")) return jsonResponse({ offer_id: "offr_a", insight: { ...insight, ...body.insight } });
+      if (options.method === "POST") return jsonResponse({ offer_id: "offr_a", gift: { ...guide, prefix_id: "ogft_c", title: body.gift.title } }, { status: 201 });
+      return jsonResponse({ offer_id: "offr_a", gift: { ...guide, state: body.gift.status === "inactive" ? "off" : "ready" } });
+    });
+
+    let stdout = captureStream();
+    assert.equal(await run(["offers", "show", "offr_a"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, [
+      "Offer: Audit (offr_a)",
+      "GIFT ID\tSTATE\tTITLE\tSEND LINK\tWHO IT HELPS",
+      "ogft_a\tready\tPipeline guide\thttps://example.com/guide.pdf\tHelps sales leaders.",
+      "ogft_b\tneeds a link\tCold research\t-\t-",
+      "INSIGHT ID\tSTATUS\tINSIGHT\tSOURCE",
+      "7\ton\t27.5% of requests were accepted.\thttps://example.com/research",
+      ""
+    ].join("\n"));
+
+    const file = join(root, "checklist.txt");
+    await writeFile(file, "step one");
+    stdout = captureStream();
+    assert.equal(await run(["offers", "add-gift", "offr_a", "--title", "Checklist", "--summary", "Helps ops leads.", "--file", file], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /^Added gift Checklist \(ogft_c\) to offer offr_a\.\n/);
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "update-gift", "offr_a", "ogft_b", "--send-url", "https://example.com/research.pdf"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /^Updated gift Pipeline guide \(ogft_a\)\.\n/);
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "update-gift", "offr_a", "ogft_a", "--remove-file"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /^Updated gift Pipeline guide \(ogft_a\)\.\n/);
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "turn-off-gift", "offr_a", "ogft_a"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Turned off gift Pipeline guide (ogft_a).\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "turn-on-gift", "offr_a", "ogft_a", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).gift.state, "ready");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "update-insight", "offr_a", "7", "--content", "27.5% were accepted.", "--status", "off"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Updated insight 7.\nINSIGHT ID\tSTATUS\tINSIGHT\tSOURCE\n7\toff\t27.5% were accepted.\thttps://example.com/research\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "turn-off-insight", "offr_a", "7"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Turned off insight 7.\n");
+
+    stdout = captureStream();
+    assert.equal(await run(["offers", "turn-on-insight", "offr_a", "7"], { env, fetch, stdout }), 0);
+    assert.equal(stdout.output, "Turned on insight 7.\n");
+
+    assert.deepEqual(requests, [
+      ["GET", `${CATALOG_BASE}/offers/offr_a.json`, undefined],
+      ["POST", `${CATALOG_BASE}/offers/offr_a/gifts.json`, { gift: { title: "Checklist", summary: "Helps ops leads.", file: { filename: "checklist.txt", data: Buffer.from("step one").toString("base64") } } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/gifts/ogft_b.json`, { gift: { send_url: "https://example.com/research.pdf" } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/gifts/ogft_a.json`, { gift: { remove_file: true } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/gifts/ogft_a.json`, { gift: { status: "inactive" } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/gifts/ogft_a.json`, { gift: { status: "active" } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/insights/7.json`, { insight: { content: "27.5% were accepted.", status: "inactive" } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/insights/7.json`, { insight: { status: "inactive" } }],
+      ["PATCH", `${CATALOG_BASE}/offers/offr_a/insights/7.json`, { insight: { status: "active" } }]
+    ]);
+  });
+});
+
+test("motions create and update send the chosen gift and print it", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const requests = [];
+    const fetch = catalogFetch(requests, (url, options) => {
+      const body = JSON.parse(options.body).motion;
+      const offerGift = body.offer_gift_id ? { id: 4, prefix_id: body.offer_gift_id, title: "Pipeline guide", ready: true } : null;
+      return jsonResponse({ prefix_id: "motn_a", name: "Gift motion", status: "draft", kind: "outbound", offer: { name: "Audit", prefix_id: "offr_a" }, offer_gift: offerGift });
+    });
+
+    const payloadFile = join(root, "motion.json");
+    await writeFile(payloadFile, JSON.stringify({ name: "Gift motion", premise: "Find buyers.", offer_id: "offr_a" }));
+    let stdout = captureStream();
+    assert.equal(await run(["motions", "create", "--payload", payloadFile, "--gift", "ogft_a"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /\nOffer: Audit \(offr_a\)\nGift: Pipeline guide \(ogft_a\)\n/);
+
+    stdout = captureStream();
+    assert.equal(await run(["motions", "update", "motn_a", "--gift", "none"], { env, fetch, stdout }), 0);
+    assert.doesNotMatch(stdout.output, /Gift:/);
+
+    stdout = captureStream();
+    assert.equal(await run(["motions", "update", "motn_a", "--gift", "ogft_a", "--json"], { env, fetch, stdout }), 0);
+    assert.equal(JSON.parse(stdout.output).offer_gift.prefix_id, "ogft_a");
+
+    assert.deepEqual(requests, [
+      ["POST", `${CATALOG_BASE}/motions.json`, { motion: { name: "Gift motion", premise: "Find buyers.", offer_id: "offr_a", offer_gift_id: "ogft_a" } }],
+      ["PATCH", `${CATALOG_BASE}/motions/motn_a.json`, { motion: { offer_gift_id: null } }],
+      ["PATCH", `${CATALOG_BASE}/motions/motn_a.json`, { motion: { offer_gift_id: "ogft_a" } }]
+    ]);
+  });
+});
+
 test("tasks update and bulk-update send only given fields and resolve me", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one", accountUserId: "42" }, { env });
@@ -13383,6 +13491,17 @@ test("catalog commands reject invalid usage without calling the API", async () =
       [["offers", "add-artifacts", "offr_a"], /Usage: audienti offers add-artifacts/],
       [["offers", "add-artifacts", "offr_a", join(root, "missing.pdf")], /Cannot read .*missing\.pdf/],
       [["offers", "remove-artifact", "offr_a"], /Usage: audienti offers remove-artifact/],
+      [["offers", "add-gift", "offr_a"], /Usage: audienti offers add-gift/],
+      [["offers", "add-gift", "offr_a", "--title", "Guide", "--file", join(root, "missing.pdf")], /Cannot read .*missing\.pdf/],
+      [["offers", "update-gift", "offr_a", "ogft_a"], /Usage: audienti offers update-gift/],
+      [["offers", "update-gift", "offr_a", "ogft_a", "--status", "sideways"], /--status must be on or off/],
+      [["offers", "update-gift", "offr_a", "ogft_a", "--file", "x.pdf", "--remove-file"], /Use --file or --remove-file, not both/],
+      [["offers", "turn-off-gift", "offr_a"], /Usage: audienti offers turn-off-gift/],
+      [["offers", "turn-on-gift", "offr_a"], /Usage: audienti offers turn-on-gift/],
+      [["offers", "update-insight", "offr_a", "7"], /Usage: audienti offers update-insight/],
+      [["offers", "turn-off-insight", "offr_a"], /Usage: audienti offers turn-off-insight/],
+      [["offers", "turn-on-insight", "offr_a"], /Usage: audienti offers turn-on-insight/],
+      [["motions", "update", "motn_a", "--gift", " "], /--gift needs a gift id or none/],
       [["tasks", "update", "ptsk_a"], /Usage: audienti tasks update/],
       [["tasks", "update", "ptsk_a", "--prospect", "prsp_a", "--list", "list_a"], /Use either --prospect or --list, not both\./],
       [["tasks", "bulk-update", "--action", "explode", "ptsk_a"], /Usage: audienti tasks bulk-update/],
@@ -13412,6 +13531,13 @@ test("catalog help topics describe the API routes", async () => {
     [["lists", "export"], /GET \/api\/v1\/accounts\/:account_id\/lists\/:id\/export/],
     [["icps", "prospects"], /GET \/api\/v1\/accounts\/:account_id\/icps\/:id\/prospects/],
     [["offers", "add-artifacts"], /POST \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/artifacts/],
+    [["offers", "add-gift"], /POST \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/gifts/],
+    [["offers", "update-gift"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/gifts\/:id/],
+    [["offers", "turn-off-gift"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/gifts\/:id/],
+    [["offers", "turn-on-gift"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/gifts\/:id/],
+    [["offers", "update-insight"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/insights\/:id/],
+    [["offers", "turn-off-insight"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/insights\/:id/],
+    [["offers", "turn-on-insight"], /PATCH \/api\/v1\/accounts\/:account_id\/offers\/:offer_id\/insights\/:id/],
     [["tasks", "bulk-update"], /PATCH \/api\/v1\/accounts\/:account_id\/tasks\/bulk_update/],
     [["tools", "linkedin-strategy-review", "list"], /GET \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\.json/],
     [["tools", "linkedin-strategy-review", "create"], /POST \/api\/v1\/accounts\/:account_id\/tools\/linkedin-strategy-review\/reports\.json/],

@@ -4,6 +4,15 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.89] - 2026-10-01
+
+### Added
+
+- `offers show` lists the offer's gifts and insights. A gift is a free, useful thing the offer already has; it is ready once it has a send link or a file.
+- `offers add-gift`, `offers update-gift`, `offers turn-off-gift`, and `offers turn-on-gift` manage an offer's gifts. `offers update-gift --remove-file` takes the attached file off a gift.
+- `offers update-insight`, `offers turn-off-insight`, and `offers turn-on-insight` edit an offer's insights.
+- `motions create` and `motions update` accept `--gift <gift_id|none>` to choose a ready gift from the motion's own offer. Motion output shows the gift.
+
 ## [0.1.88] - 2026-10-01
 
 ### Changed

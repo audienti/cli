@@ -1,6 +1,6 @@
 {
   "name": "audienti-cli",
-  "version": "0.1.88",
+  "version": "0.1.89",
   "description": "Use the Audienti production API through a local, agent-first CLI and app-hosted MCP bridge for Claude Code.",
   "author": {
     "name": "Audienti",

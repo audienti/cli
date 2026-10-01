@@ -188,6 +188,27 @@ export class AudientiClient {
     });
   }
 
+  createOfferGift(accountId, offerId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "gifts"]), {
+      method: "POST",
+      body
+    });
+  }
+
+  updateOfferGift(accountId, offerId, giftId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "gifts", giftId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
+  updateOfferInsight(accountId, offerId, insightId, body) {
+    return this.requestJson(accountPath(accountId, ["offers", offerId, "insights", insightId]), {
+      method: "PATCH",
+      body
+    });
+  }
+
   icps(accountId, query = {}) {
     return this.requestJson(accountPath(accountId, ["icps"], query));
   }
