@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.88] - 2026-10-01
+
+### Changed
+
+- Company lookups by LinkedIn username return faster on the server. Commands and output are unchanged.
+
 ## [0.1.87] - 2026-09-30
 
 ### Removed
