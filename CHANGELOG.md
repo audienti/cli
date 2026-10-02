@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.90] - 2026-10-02
+
+### Changed
+
+- The server reads the Operator queue only from its maintained cards; the unused parity-proof path is gone (#2527). Commands and output are unchanged.
+
 ## [0.1.89] - 2026-10-01
 
 ### Added
