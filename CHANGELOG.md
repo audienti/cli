@@ -4,6 +4,14 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.96] - 2026-10-03
+
+### Added
+
+- `PATCH /api/v1/accounts/:account_id/quick_start/:id` changes one card of a ready setup draft (`section` is `icp`, `offer` or `signals`) and returns the same JSON as the draft read. New job titles bring new example people in the response (#2551).
+- The draft preview now includes `icp.company_sizes`, `icp.company_types` and `signals`.
+- Reading a ready draft whose job titles were changed on the setup page makes its example people first, so `example_people` is never left empty by an edit.
+
 ## [0.1.95] - 2026-10-03
 
 ### Changed
