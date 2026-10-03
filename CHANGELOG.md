@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.91] - 2026-10-03
+
+### Added
+
+- Social account details include a `browser_bandwidth` summary of recorded browser estimates for the last 30 calendar days. Missing measurements stay unknown; existing commands and proxy setup are unchanged.
+
 ## [0.1.90] - 2026-10-02
 
 ### Changed
