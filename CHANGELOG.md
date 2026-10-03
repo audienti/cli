@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.93] - 2026-10-03
+
+### Added
+
+- `social-cookies show <scok_id> --json` includes `computer_usage`: separate measured Computer and browser-container bandwidth, running time, measurement coverage and timestamps. Missing usage stays unknown; the earlier browser estimate remains separate (#2578).
+
 ## [0.1.92] - 2026-10-03
 
 ### Added

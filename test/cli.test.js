@@ -13605,3 +13605,25 @@ test("catalog help topics describe the API routes", async () => {
     assert.match(stdout.output, pattern, args.join(" "));
   }
 });
+
+
+test("social-cookies show JSON preserves measured Computer scopes and missing usage", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const usage = {
+      coverage: "Partial measurements",
+      scopes: {
+        computer: { total_bytes: 1250000000, measured_active_seconds: 5400 },
+        browser_container: { total_bytes: null, measured_active_seconds: null }
+      }
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/social_cookies/scok_one.json");
+      return jsonResponse({ social_cookie: { prefix_id: "scok_one", computer_usage: usage } });
+    });
+    const exitCode = await run(["social-cookies", "show", "scok_one", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output).social_cookie.computer_usage, usage);
+  });
+});
