@@ -12992,6 +12992,59 @@ test("brand-profile commands call the account brand profile endpoint", async () 
   });
 });
 
+test("payment commands show the payment state and use a signup code", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+
+    const needed = { state: "payment_needed", admitted: false, admitted_via: null, starting_usage: null, price: { amount: 500, currency: "usd" }, card_usage: { amount: 2000, unit: "usd_cents" }, payment_url: "https://app.audienti.com/account-payment" };
+    const running = { ...needed, state: "running", admitted: true, admitted_via: "code", starting_usage: { amount: 2000, unit: "usd_cents" } };
+    const requests = [];
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      requests.push([options.method, url.toString(), options.body ? JSON.parse(options.body) : undefined]);
+      return jsonResponse(options.method === "POST" ? running : needed);
+    });
+
+    let stdout = captureStream();
+    let exitCode = await run(["payment", "show"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Payment needed: pay $5 by card or use a signup code. The card charge gets you $20 of credits.\nCard: open https://app.audienti.com/account-payment\nCode: audienti payment code <signup_code>\n");
+
+    stdout = captureStream();
+    exitCode = await run(["payment", "code", "ABCD-EFGH-JKLM-NPQR-STUV"], { env, fetch, stdout });
+    assert.equal(exitCode, 0);
+    assert.equal(stdout.output, "Code accepted. No card needed.\nState: running\nLet in by: code\nStarting usage: 2000 usd_cents\n");
+
+    assert.deepEqual(requests, [
+      ["GET", "https://app.audienti.com/api/v1/accounts/acct_one/admission.json", undefined],
+      ["POST", "https://app.audienti.com/api/v1/accounts/acct_one/admission.json", { code: "ABCD-EFGH-JKLM-NPQR-STUV" }]
+    ]);
+
+    const refused = createFetch(() => jsonResponse({ error: "That code did not work. Check it and try again.", code: "code_refused" }, { status: 422 }));
+    const stderr = captureStream();
+    exitCode = await run(["payment", "code", "WRONG"], { env, fetch: refused, stderr });
+    assert.equal(exitCode, 1);
+    assert.match(stderr.output, /That code did not work\. Check it and try again\./);
+
+    const unpaid = createFetch(() => jsonResponse({ error: "Payment is needed before this account can run.", code: "payment_needed" }, { status: 402 }));
+    const blocked = captureStream();
+    exitCode = await run(["brand-profile", "show"], { env, fetch: unpaid, stderr: blocked });
+    assert.equal(exitCode, 1);
+    assert.match(blocked.output, /has not paid or used a signup code yet\. Run `audienti payment show`\./);
+
+    const limited = createFetch(() => jsonResponse({ error: "Too many tries. Wait a few minutes, then try again.", code: "too_many_tries" }, { status: 429 }));
+    const waited = captureStream();
+    exitCode = await run(["payment", "code", "WRONG"], { env, fetch: limited, stderr: waited });
+    assert.equal(exitCode, 1);
+    assert.match(waited.output, /Too many tries\. Wait a few minutes, then try again\./);
+
+    const usage = captureStream();
+    exitCode = await run(["payment", "code", "--json"], { env, fetch: refused, stderr: usage });
+    assert.equal(exitCode, 1);
+    assert.match(usage.output, /Usage: audienti payment code <signup_code>/);
+  });
+});
+
 test("settings commands surface API errors", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
@@ -13051,7 +13104,8 @@ test("settings command help topics describe the API routes", async () => {
     [["hubspot", "list-syncs", "help"], /POST \/api\/v1\/accounts\/:account_id\/hubspot_integration\/list_syncs\/:id\/sync_now\.json/],
     [["webhooks", "rotate", "help"], /POST \/api\/v1\/accounts\/:account_id\/prospect_webhook_endpoints\/:id\/rotate\.json/],
     [["reply-alerts", "help"], /PATCH \/api\/v1\/me\/reply_alerts\.json/],
-    [["brand-profile", "update", "help"], /PATCH \/api\/v1\/accounts\/:account_id\/brand_profile\.json/]
+    [["brand-profile", "update", "help"], /PATCH \/api\/v1\/accounts\/:account_id\/brand_profile\.json/],
+    [["payment", "code", "help"], /POST \/api\/v1\/accounts\/:account_id\/admission\.json/]
   ]) {
     const stdout = captureStream();
     const exitCode = await run(args, { stdout });

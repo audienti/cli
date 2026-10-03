@@ -136,6 +136,8 @@ const WEBHOOKS_ROTATE_USAGE = "Usage: audienti webhooks rotate <endpoint_id> [--
 const WEBHOOKS_REMOVE_USAGE = "Usage: audienti webhooks remove <endpoint_id> [--json] [--account <acct_id>]";
 const REPLY_ALERTS_SHOW_USAGE = "Usage: audienti reply-alerts show [--json]";
 const REPLY_ALERTS_UPDATE_USAGE = "Usage: audienti reply-alerts update [--phone <number|none>] [--sms <true|false>] [--slack <true|false>] [--json]";
+const PAYMENT_SHOW_USAGE = "Usage: audienti payment show [--json] [--account <acct_id>]";
+const PAYMENT_CODE_USAGE = "Usage: audienti payment code <signup_code> [--json] [--account <acct_id>]";
 const BRAND_PROFILE_SHOW_USAGE = "Usage: audienti brand-profile show [--json] [--account <acct_id>]";
 const BRAND_PROFILE_UPDATE_USAGE = "Usage: audienti brand-profile update [--voice <text>] [--style <text>] [--do-not-use <text>] [--json] [--account <acct_id>]";
 const ACCOUNTS_SHOW_USAGE = "Usage: audienti accounts show [<acct_id>] [--json] [--account <acct_id>]";
@@ -395,6 +397,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "webhooks") return webhooksCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "reply-alerts") return replyAlertsCommand(action, rest, context);
   if (normalizedResource === "brand-profile") return brandProfileCommand(action, rest, context, { accountOverride });
+  if (normalizedResource === "payment") return paymentCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
   if (normalizedResource === "tasks" && ["list", "manage"].includes(action)) return tasksList(rest, context, { accountOverride });
@@ -2634,6 +2637,57 @@ async function replyAlertsCommand(action, args, context) {
 function writeReplyAlerts(alerts, context) {
   writeLine(context.stdout, `SMS: ${alerts?.sms_enabled ? "on" : "off"} | Phone: ${display(alerts?.phone_number, "-")} | Active: ${alerts?.sms_active ? "yes" : "no"}`);
   writeLine(context.stdout, `Slack: ${alerts?.slack_enabled ? "on" : "off"} | Connected: ${alerts?.slack_connected ? "yes" : "no"} | Channel: ${display(alerts?.slack_channel, "-")}`);
+}
+
+async function paymentCommand(action, args, context, { accountOverride } = {}) {
+  if (action === "show") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length > 0) throw new CommandError(PAYMENT_SHOW_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.accountPayment(accountId);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeAccountPayment(payload, context);
+    return;
+  }
+
+  if (action === "code") {
+    const { values, positionals } = parseCommandArgs(args, jsonOptions());
+    if (positionals.length !== 1) throw new CommandError(PAYMENT_CODE_USAGE);
+
+    const { client, accountId } = await requireAccountContext(context, { accountOverride });
+    const payload = await client.redeemSignupCode(accountId, positionals[0]);
+    if (values.json) return writeJson(context.stdout, payload);
+
+    writeLine(context.stdout, "Code accepted. No card needed.");
+    writeAccountPayment(payload, context);
+    return;
+  }
+
+  throw new CommandError(`Unknown payment command "${display(action, "")}". Run \`audienti payment --help\`.`);
+}
+
+function writeAccountPayment(payment, context) {
+  const state = payment?.state;
+  if (state === "payment_needed") {
+    const price = payment?.price?.amount ? `$${payment.price.amount / 100}` : "the starting charge";
+    const credits = payment?.card_usage?.unit === "usd_cents" && payment.card_usage.amount ? ` The card charge gets you $${payment.card_usage.amount / 100} of credits.` : "";
+    writeLine(context.stdout, `Payment needed: pay ${price} by card or use a signup code.${credits}`);
+    writeLine(context.stdout, `Card: open ${display(payment?.payment_url, "-")}`);
+    writeLine(context.stdout, "Code: audienti payment code <signup_code>");
+    return;
+  }
+
+  if (state === "payment_stopped") {
+    writeLine(context.stdout, "Stopped: the payment for this account was returned. Nothing runs.");
+    return;
+  }
+
+  writeLine(context.stdout, `State: ${display(state, "-")}`);
+  writeLine(context.stdout, `Let in by: ${display(payment?.admitted_via, "-")}`);
+  const usage = payment?.starting_usage;
+  if (usage) writeLine(context.stdout, `Starting usage: ${usage.amount} ${usage.unit}`);
 }
 
 async function brandProfileCommand(action, args, context, { accountOverride } = {}) {
@@ -10142,6 +10196,8 @@ const HELP_TOPICS = new Map([
     "    audienti hubspot show",
     "    audienti webhooks list",
     "    audienti brand-profile show",
+    "    audienti payment show",
+    "    audienti payment code <signup_code>",
     "    audienti reply-alerts show",
     "",
     "  Writer",
@@ -11346,6 +11402,42 @@ const HELP_TOPICS = new Map([
     "",
     "API:",
     "  PATCH /api/v1/me/reply_alerts.json"
+  ].join("\n")],
+
+  ["payment", [
+    "Usage:",
+    `  ${PAYMENT_SHOW_USAGE.slice("Usage: ".length)}`,
+    `  ${PAYMENT_CODE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  A new account runs after one card charge or a signup code. Show the state, or use a code.",
+    "  The card step needs a browser; `payment show` prints the address. Account admins only for `code`.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/admission.json",
+    "  POST /api/v1/accounts/:account_id/admission.json"
+  ].join("\n")],
+
+  ["payment show", [
+    "Usage:",
+    `  ${PAYMENT_SHOW_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/admission.json"
+  ].join("\n")],
+
+  ["payment code", [
+    "Usage:",
+    `  ${PAYMENT_CODE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/admission.json"
   ].join("\n")],
 
   ["brand-profile", [

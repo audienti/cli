@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.92] - 2026-10-03
+
+### Added
+
+- `audienti payment show` tells whether an account still needs the $5 card step or a signup code, and prints the pay page address. `audienti payment code <signup_code>` uses a code (#2551).
+- A command against an account that has not paid or used a code now says so and points to `audienti payment show`.
+
 ## [0.1.91] - 2026-10-03
 
 ### Added

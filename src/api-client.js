@@ -437,6 +437,17 @@ export class AudientiClient {
     });
   }
 
+  accountPayment(accountId) {
+    return this.requestJson(accountPath(accountId, ["admission"]));
+  }
+
+  redeemSignupCode(accountId, code) {
+    return this.requestJson(accountPath(accountId, ["admission"]), {
+      method: "POST",
+      body: { code }
+    });
+  }
+
   brandProfile(accountId) {
     return this.requestJson(accountPath(accountId, ["brand_profile"]));
   }
@@ -1381,6 +1392,13 @@ function errorMessage(status, body) {
     return "Authentication failed. Run `audienti auth token <token>` with a valid API token.";
   }
 
+  if (status === 402) {
+    if (body?.code === "payment_needed") {
+      return "This account has not paid or used a signup code yet. Run `audienti payment show`.";
+    }
+    return body?.error || "Audienti stopped this account for a payment reason.";
+  }
+
   if (status === 403) {
     return "The API token is not allowed to access that Audienti resource.";
   }
@@ -1397,6 +1415,10 @@ function errorMessage(status, body) {
     const reasons = [body?.errors, body?.details].find(Array.isArray);
     const details = reasons?.length > 0 ? reasons.join(", ") : body?.message || body?.error;
     return details ? `Audienti rejected the request: ${details}` : "Audienti rejected the request.";
+  }
+
+  if (status === 429 && body?.error) {
+    return body.error;
   }
 
   return `Audienti API request failed with HTTP ${status}.`;
