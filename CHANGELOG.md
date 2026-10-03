@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.94] - 2026-10-03
+
+### Added
+
+- `motions quick-start` takes `--city`, `--state` and `--country`. Setup needs them once, before the first draft; the place also sets your time zone. Without them a person with no saved place gets "Pick your country." (#2551).
+- `motions setup-state` shows which setup step you are on, what is needed next, and how many people your setup experiment has found (#2551).
+
 ## [0.1.93] - 2026-10-03
 
 ### Added

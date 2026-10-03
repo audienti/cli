@@ -836,6 +836,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["quick_start", draftId]));
   }
 
+  setupState(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["quick_start", "setup_state"], query));
+  }
+
   confirmQuickStart(accountId, draftId, body = {}) {
     return this.requestJson(accountPath(accountId, ["quick_start", draftId, "confirm"]), {
       method: "POST",

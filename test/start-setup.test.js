@@ -70,7 +70,8 @@ const READY_DRAFT = {
     product_or_service: "Close automation",
     icp: { name: "Finance leaders", job_titles: ["VP Finance", "Controller"] },
     offer: { title: "Close audit", description: "Find the slow steps in month-end close." },
-    premise: "Companies hiring controllers are feeling close pressure."
+    premise: "Companies hiring controllers are feeling close pressure.",
+    example_people: [{ name: "Dana Ruiz", job_title: "VP Finance", company: "Northwind", location: "Denver, CO" }]
   }
 };
 
@@ -302,6 +303,7 @@ test("setup asks three questions, reads the draft back, and creates it on yes", 
     assert.match(stdout.output, /Who you'll reach: Finance leaders \(VP Finance, Controller\)/);
     assert.match(stdout.output, /Your offer: Close audit - Find the slow steps in month-end close\./);
     assert.match(stdout.output, /The ask: A 20-minute call about their close/);
+    assert.match(stdout.output, /Example people with these job titles \(a sample to check the audience, not your prospects\):\n {4}- Dana Ruiz, VP Finance at Northwind, Denver, CO/);
     assert.match(stdout.output, /Create this\? \[y\/N\]/);
     assert.match(stdout.output, /Created your first motion: Acme first motion \(motn_first\)\./);
     assert.match(stdout.output, /Connect it here: https:\/\/app\.audienti\.com\/user\/social_cookies/);

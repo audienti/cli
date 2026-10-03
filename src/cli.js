@@ -181,7 +181,8 @@ const MOTIONS_DELETE_USAGE = "Usage: audienti motions delete <motn_id> --confirm
 const MOTIONS_CLONE_USAGE = "Usage: audienti motions clone <motn_id> --name <text> [--json] [--account <acct_id>]";
 const MOTIONS_MOVE_PROSPECTS_USAGE = "Usage: audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...] [--json] [--account <acct_id>]";
 const MOTIONS_RUN_DISCOVERY_USAGE = "Usage: audienti motions run-discovery <motn_id> [--target-count <n>] [--json] [--account <acct_id>]";
-const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <company_url> [--principal <account_user_id|me>] [--feedback <text>] [--offer-type <type>] [--force] [--confirm] [--wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--json] [--account <acct_id>]";
+const MOTIONS_SETUP_STATE_USAGE = "Usage: audienti motions setup-state [--principal <account_user_id|me>] [--json] [--account <acct_id>]";
+const MOTIONS_QUICK_START_USAGE = "Usage: audienti motions quick-start --url <company_url> [--city <city> --state <code> --country <code>] [--principal <account_user_id|me>] [--feedback <text>] [--offer-type <type>] [--force] [--confirm] [--wait] [--timeout-seconds <n>] [--poll-interval-seconds <n>] [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_LIST_USAGE = "Usage: audienti motions abm-companies <motn_id> list [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_ADD_USAGE = "Usage: audienti motions abm-companies <motn_id> add (<domain_or_linkedin_url>... | --file <txt|json>) [--json] [--account <acct_id>]";
 const MOTIONS_ABM_COMPANIES_REMOVE_USAGE = "Usage: audienti motions abm-companies <motn_id> remove <row_id> [--json] [--account <acct_id>]";
@@ -438,6 +439,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "move-prospects") return motionsMoveProspects(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "run-discovery") return motionsRunDiscovery(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "quick-start") return motionsQuickStart(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "setup-state") return motionsSetupState(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "programs") return contentPrograms(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "plan") return contentPlan(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "show") return contentShow(rest, context, { accountOverride });
@@ -1165,6 +1167,13 @@ function renderSetupDraft(draft, { ask }, say) {
   say(`  Your offer: ${[offer.title, offer.description].filter(Boolean).join(" - ") || "drafted from your website"}`);
   say(`  The ask: ${ask || "not set; the writer will suggest one"}`);
   if (preview.premise) say(`  Why now: ${preview.premise}`);
+  const examples = Array.isArray(preview.example_people) ? preview.example_people : [];
+  if (examples.length) {
+    say("  Example people with these job titles (a sample to check the audience, not your prospects):");
+    for (const person of examples) {
+      say(`    - ${[person.name, [person.job_title, person.company].filter(Boolean).join(" at "), person.location].filter(Boolean).join(", ")}`);
+    }
+  }
   say();
 }
 
@@ -3298,6 +3307,9 @@ async function motionsQuickStart(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     url: { type: "string" },
+    city: { type: "string" },
+    state: { type: "string" },
+    country: { type: "string" },
     principal: { type: "string" },
     feedback: { type: "string" },
     "offer-type": { type: "string" },
@@ -3315,6 +3327,9 @@ async function motionsQuickStart(args, context, { accountOverride } = {}) {
   const requestBody = {
     quick_start: compactObject({
       company_url: values.url,
+      city: values.city,
+      state_code: values.state,
+      country_code: values.country,
       principal_account_user_id: values.principal,
       feedback: values.feedback,
       offer_type: values["offer-type"],
@@ -3341,6 +3356,31 @@ async function motionsQuickStart(args, context, { accountOverride } = {}) {
 
   if (values.json) return writeJson(context.stdout, draft);
   renderQuickStartDraft(draft, context);
+}
+
+async function motionsSetupState(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    principal: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(MOTIONS_SETUP_STATE_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const query = values.principal ? { "quick_start[principal_account_user_id]": values.principal } : {};
+  const state = await client.setupState(accountId, query);
+  if (values.json) return writeJson(context.stdout, state);
+
+  const stepNames = { company: "Your company", targeting: "Verify your targeting", go_live: "Go live" };
+  if (state.step === "live") {
+    writeLine(context.stdout, "Setup: done. LinkedIn is connected and you are live.");
+  } else {
+    writeLine(context.stdout, `Setup: step ${state.step_number} of 3, ${stepNames[state.step] || state.step}`);
+  }
+  if (state.blocker) writeLine(context.stdout, `Next: ${state.blocker}`);
+  if (state.motion) {
+    writeLine(context.stdout, `Experiment: ${state.motion.name} (${state.motion.prefix_id})`);
+    writeLine(context.stdout, `Prospects: ${state.people_found}${state.finding_people ? " (looking for your signals; the first ones can take a day)" : ""}`);
+  }
 }
 
 async function motionsAnalytics(args, context, { accountOverride } = {}) {
@@ -12430,6 +12470,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions status <motn_id> [--json]",
     "  audienti motions run-discovery <motn_id> [--target-count <n>] [--json]",
     "  audienti motions quick-start --url <company_url> [--confirm] [--wait] [--json]",
+    "  audienti motions setup-state [--json]",
     "  audienti motions analytics <motn_id> [--window 30d] [--json]",
     "  audienti motions prospects <motn_id> [--json]",
     "  audienti motions add-prospects <motn_id> <prsp_id> [prsp_id...] [--json]",
@@ -12680,6 +12721,9 @@ const HELP_TOPICS = new Map([
     "",
     "Options:",
     "  --url <company_url>       Public HTTP(S) URL used by the quick-start drafter.",
+    "  --city <city>             Your city. Needed once, before your first draft; it also sets your time zone.",
+    "  --state <code>            Your state or province code, such as TX or ON. Leave out where the country has none.",
+    "  --country <code>          Your two-letter country code, such as US or CA.",
     "  --principal <user>        Account user id or me. Defaults to the authenticated token user.",
     "  --feedback <text>         Optional operator guidance for the draft.",
     "  --offer-type <type>       Optional supported offer type hint.",
@@ -12697,6 +12741,22 @@ const HELP_TOPICS = new Map([
     "  POST /api/v1/accounts/:account_id/quick_start.json",
     "  GET /api/v1/accounts/:account_id/quick_start/:draft_id.json",
     "  POST /api/v1/accounts/:account_id/quick_start/:draft_id/confirm.json"
+  ].join("\n")],
+
+  ["motions setup-state", [
+    "Usage:",
+    `  ${MOTIONS_SETUP_STATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Show which setup step you are on, what is needed next, and how many people your setup experiment has found.",
+    "",
+    "Options:",
+    "  --principal <user>        Account user id or me. Defaults to the authenticated token user.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/quick_start/setup_state.json"
   ].join("\n")],
 
   ["motions prospects", [

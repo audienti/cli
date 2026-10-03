@@ -4297,6 +4297,68 @@ test("motions quick-start waits for a ready draft and confirms launch", async ()
   });
 });
 
+test("motions quick-start sends the city, state and country for setup step 1", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    let body;
+    const fetch = createFetch(async (url, init) => {
+      body = JSON.parse(init.body);
+      return jsonResponse({ id: 42, status: "generating", ready: false, normalized_url: "https://www.example.com" }, { status: 202 });
+    });
+
+    await run(["motions", "quick-start", "--url", "https://www.example.com", "--city", "Toronto", "--state", "ON", "--country", "CA"], { env, fetch, stdout, stderr });
+
+    assert.deepEqual(body.quick_start, {
+      company_url: "https://www.example.com",
+      city: "Toronto",
+      state_code: "ON",
+      country_code: "CA"
+    });
+  });
+});
+
+test("motions setup-state prints the setup step and prospects found", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const stderr = captureStream();
+    let requestedUrl;
+    const fetch = createFetch(async (url) => {
+      requestedUrl = String(url);
+      return jsonResponse({
+        step: "go_live",
+        step_number: 3,
+        blocker: "Connect LinkedIn to start.",
+        linkedin_connected: false,
+        finding_people: true,
+        people_found: 4,
+        motion: { id: 7, prefix_id: "motn_7", name: "Finance leaders", status: "preparing" }
+      });
+    });
+
+    await run(["motions", "setup-state", "--principal", "me"], { env, fetch, stdout, stderr });
+
+    assert.match(requestedUrl, /\/api\/v1\/accounts\/acct_one\/quick_start\/setup_state\.json\?quick_start%5Bprincipal_account_user_id%5D=me/);
+    assert.match(stdout.output, /Setup: step 3 of 3, Go live/);
+    assert.match(stdout.output, /Next: Connect LinkedIn to start\./);
+    assert.match(stdout.output, /Prospects: 4 \(looking for your signals; the first ones can take a day\)/);
+  });
+});
+
 test("motions quick-start rejects confirm before draft readiness without wait", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
