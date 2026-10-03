@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.95] - 2026-10-03
+
+### Changed
+
+- API error messages and MCP tool titles say "experiment" instead of "motion". Command names, API paths and JSON keys are unchanged (#2551).
+
 ## [0.1.94] - 2026-10-03
 
 ### Added
