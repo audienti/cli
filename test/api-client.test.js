@@ -17,6 +17,7 @@ test("syncSocialCookieMessages posts the account, cookie, folder, and retry inte
     assert.equal(options.method, "POST");
     assert.equal(options.headers.Authorization, "Bearer saved-token");
     assert.equal(options.headers["Content-Type"], "application/json");
+    assert.equal(options.headers["X-Audienti-Client"], "cli");
     assert.deepEqual(JSON.parse(options.body), {folder: "Sent Items", retry: true});
     return jsonResponse(responseBody, {status: 202});
   });

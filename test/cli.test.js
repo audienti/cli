@@ -7146,10 +7146,13 @@ test("tools list supports json output", async () => {
 
   assert.equal(exitCode, 0);
   const payload = JSON.parse(stdout.output);
-  assert.deepEqual(payload.tools.map((tool) => tool.id), ["get-email", "get-phone", "humanize", "linkedin-review"]);
-  assert.equal(payload.tools[3].reports_command, "audienti tools linkedin-review reports");
-  assert.equal(payload.tools[3].status_command, "audienti tools linkedin-review status <rprt_id>");
-  assert.equal(payload.tools[3].show_command, "audienti tools linkedin-review show <rprt_id>");
+  assert.deepEqual(payload.tools.map((tool) => tool.id),
+    ["get-email", "get-phone", "humanize", "email-find", "linkedin-enrich", "signals-find", "write", "network", "linkedin-review"]);
+  const review = payload.tools.find((tool) => tool.id === "linkedin-review");
+  assert.equal(review.reports_command, "audienti tools linkedin-review reports");
+  assert.equal(review.status_command, "audienti tools linkedin-review status <rprt_id>");
+  assert.equal(review.show_command, "audienti tools linkedin-review show <rprt_id>");
+  assert.equal(payload.tools.find((tool) => tool.id === "email-find").status_command, "audienti tools runs show <trun_id>");
 });
 
 test("tools humanize help documents file input and the account API", async () => {

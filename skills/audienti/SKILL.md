@@ -171,6 +171,14 @@ audienti analytics visibility --window 24h --user me --json
 audienti analytics content --window week --json
 audienti tools list --json
 audienti tools humanize --file draft.txt --tone professional --json
+audienti tools email-find --first-name Ada --last-name Lovelace --company-domain example.com --wait --json
+audienti tools email-find --linkedin-url https://www.linkedin.com/in/example --wait --json
+audienti tools linkedin-enrich --url https://www.linkedin.com/in/example --wait --json
+audienti tools signals-find --icp "<ICP description>" --question "<signal question>" --wait --json
+audienti tools write --purpose "<goal>" --audience "<who>" --fact "<fact>" --channel email --wait --json
+audienti tools runs show <trun_id> --json
+audienti tools runs results <trun_id> --json
+audienti network list --cookie <scok_id> --kind connection --json
 audienti tools linkedin-review --url https://www.linkedin.com/in/example --icp <icp_id> --json
 audienti tools linkedin-review reports --json
 audienti tools linkedin-review show <rprt_id> --json
@@ -281,3 +289,10 @@ drafting every message with `--mode report` or one selected row with
 `--timeout-seconds <n>` for longer waits, or `--no-wait` to launch and return
 immediately. Use `writer test-run show` with the report id to fetch the
 completed report later.
+
+## Standalone Tools Versus Prospect Tools
+
+- For an email lookup with no prospect, use `audienti tools email-find`. `audienti tools get email` imports a prospect into the account; use it only when that is wanted.
+- `tools email-find`, `linkedin-enrich`, `signals-find` and `write` return a run id immediately. Pass `--wait --json` to get results in one call, or poll `tools runs show <trun_id>` and read `tools runs results <trun_id>`. Nothing is sent and no prospects or experiments are created.
+- Pass `--request-key <key>` when retrying a submission; the same key and input return the same run.
+- `audienti network list|export` reads only the requester's own connected account's saved network. A 404 means the requester is not that account's owner. Coverage `unsupported_capture` or `not_yet_observed` is not zero.

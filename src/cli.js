@@ -214,7 +214,14 @@ const ANALYTICS_METRICS_USAGE = "Usage: audienti analytics metrics [--cohort-sta
 const ANALYTICS_STAGES_USAGE = "Usage: audienti analytics stages [--interval weekly|monthly] [--cohort-start YYYY-MM-DD --cohort-end YYYY-MM-DD] [--play-tag <tag>] [--motion <motn_id>] [--list <list_id>] [--offer <offr_id>] [--icp <icp_id>] [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-list --name <text> --start YYYY-MM-DD --end YYYY-MM-DD [--event connection_request_sent] [--user <account_user_id|email|name|me>] [--note-mode <any|with_note|blank>] [--motion <motn_id>] [--offer <offr_id>] [--icp <icp_id>] [--play-tag <tag>] [--json] [--account <acct_id>]";
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
-const TOOLS_HUMANIZE_USAGE = "Usage: audienti tools humanize --file <path> [--tone <professional|academic|blog|casual|creative|scientific|technical>] [--language <language>] [--json] [--account <acct_id>]";
+const TOOLS_HUMANIZE_USAGE = "Usage: audienti tools humanize --file <path> [--tone <professional|academic|blog|casual|creative|scientific|technical>] [--language <language>] [--async [--wait]] [--json] [--account <acct_id>]";
+const TOOL_RUN_FLAGS_USAGE = "[--request-key <key>] [--wait [--timeout-seconds <n>] [--poll-interval-seconds <n>]] [--json] [--account <acct_id>]";
+const TOOLS_EMAIL_FIND_USAGE = `Usage: audienti tools email-find (--first-name <name> --last-name <name> --company-domain <domain> | --linkedin-url <url> | --file <csv|jsonl|json>) ${TOOL_RUN_FLAGS_USAGE}`;
+const TOOLS_LINKEDIN_ENRICH_USAGE = `Usage: audienti tools linkedin-enrich (--url <linkedin_url> [--kind <person|company>] | --file <csv|jsonl|json>) ${TOOL_RUN_FLAGS_USAGE}`;
+const TOOLS_SIGNALS_FIND_USAGE = `Usage: audienti tools signals-find --icp <text> --question <text> [--count <1-10>] [--date-window-days <n>] ${TOOL_RUN_FLAGS_USAGE}`;
+const TOOLS_WRITE_USAGE = `Usage: audienti tools write --purpose <text> --audience <text> --fact <text> [--fact <text> ...] --channel <channel> [--tone <tone>] [--subject|--no-subject] [--prospect <prsp_id>] ${TOOL_RUN_FLAGS_USAGE}`;
+const TOOLS_RUNS_USAGE = "Usage: audienti tools runs (list [--tool <tool>] [--status <status>] [--limit <n>] [--cursor <id>] | show <trun_id> | results <trun_id> [--limit <n>] [--cursor <n>] | export <trun_id> [--format <csv|json>] [--output <path>]) [--json] [--account <acct_id>]";
+const NETWORK_USAGE = "Usage: audienti network (list|export) --cookie <scok_id> [--platform <linkedin|twitter>] [--kind <connection|follow>] [--direction <incoming|outgoing>] [--query <text>] [--limit <n>] [--cursor <n>] [--format <csv|json>] [--output <path>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_SHOW_USAGE = "Usage: audienti tools linkedin-review show <rprt_id> [--json] [--account <acct_id>]";
@@ -480,6 +487,12 @@ async function dispatch(argv, context) {
   if (normalizedResource === "tools" && action === "list") return toolsList(rest, context);
   if (normalizedResource === "tools" && action === "get") return toolsGet(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "humanize") return toolsHumanize(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "email-find") return toolsEmailFind(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "linkedin-enrich") return toolsLinkedinEnrich(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "signals-find") return toolsSignalsFind(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "write") return toolsWrite(rest, context, { accountOverride });
+  if (normalizedResource === "tools" && action === "runs") return toolsRuns(rest, context, { accountOverride });
+  if (normalizedResource === "network") return networkCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "linkedin-review") return toolsLinkedinReview(rest, context, { accountOverride });
   if (normalizedResource === "tools" && action === "linkedin-strategy-review") return toolsLinkedinStrategyReview(rest, context, { accountOverride });
   if (normalizedResource === "operator" && action === "failed-drafts") return operatorFailedDrafts(rest, context, { accountOverride });
@@ -4822,16 +4835,21 @@ async function toolsList(args, context) {
 async function toolsHumanize(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
+    ...TOOL_RUN_WAIT_OPTIONS,
     file: { type: "string" },
     tone: { type: "string" },
-    language: { type: "string" }
+    language: { type: "string" },
+    async: { type: "boolean" }
   });
 
-  if (positionals.length > 0 || !values.file) {
+  if (positionals.length > 0 || !values.file || (values.wait && !values.async)) {
     throw new CommandError(TOOLS_HUMANIZE_USAGE);
   }
 
   const text = await readHumanizerFile(values.file);
+  if (values.async) {
+    return submitToolRun("humanize", compactObject({ text, tone: values.tone, language: values.language }), values, context, { accountOverride });
+  }
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
   const payload = await client.humanizeText(accountId, {
     text,
@@ -8559,6 +8577,41 @@ function availableTools() {
       id: "humanize",
       command: "audienti tools humanize --file <path> [--tone <tone>] [--language <language>]",
       description: "Humanize arbitrary text from a UTF-8 file and print the transformed result.",
+      reports_command: null,
+      status_command: null
+    },
+    {
+      id: "email-find",
+      command: "audienti tools email-find --first-name <name> --last-name <name> --company-domain <domain> | --linkedin-url <url> | --file <path>",
+      description: "Find work emails without creating prospects. Returns a run id; add --wait for results.",
+      reports_command: "audienti tools runs list --tool email-find",
+      status_command: "audienti tools runs show <trun_id>"
+    },
+    {
+      id: "linkedin-enrich",
+      command: "audienti tools linkedin-enrich --url <linkedin_url> [--kind person|company] | --file <path>",
+      description: "Enrich LinkedIn person or company URLs without creating prospects.",
+      reports_command: "audienti tools runs list --tool linkedin-enrich",
+      status_command: "audienti tools runs show <trun_id>"
+    },
+    {
+      id: "signals-find",
+      command: "audienti tools signals-find --icp <text> --question <text> [--count <n>]",
+      description: "Find companies matching an ICP and a signal question, with source links.",
+      reports_command: "audienti tools runs list --tool signals-find",
+      status_command: "audienti tools runs show <trun_id>"
+    },
+    {
+      id: "write",
+      command: "audienti tools write --purpose <text> --audience <text> --fact <text> --channel <channel>",
+      description: "Write one draft from a brief. Nothing is sent.",
+      reports_command: "audienti tools runs list --tool write",
+      status_command: "audienti tools runs show <trun_id>"
+    },
+    {
+      id: "network",
+      command: "audienti network list --cookie <scok_id> [--kind connection|follow]",
+      description: "List or export your saved connections, followers and following (owner only).",
       reports_command: null,
       status_command: null
     },
@@ -13828,7 +13881,13 @@ const HELP_TOPICS = new Map([
     "Usage:",
     "  audienti tools list [--json]",
     "  audienti tools get <email|phone> --url <linkedin_url> [--json]",
-    "  audienti tools humanize --file <path> [--tone <tone>] [--language <language>] [--json]",
+    "  audienti tools humanize --file <path> [--tone <tone>] [--language <language>] [--async [--wait]] [--json]",
+    "  audienti tools email-find --first-name <name> --last-name <name> --company-domain <domain> [--wait] [--json]",
+    "  audienti tools email-find --linkedin-url <url> | --file <csv|jsonl|json> [--wait] [--json]",
+    "  audienti tools linkedin-enrich --url <linkedin_url> [--kind <person|company>] | --file <path> [--wait] [--json]",
+    "  audienti tools signals-find --icp <text> --question <text> [--count <n>] [--date-window-days <n>] [--wait] [--json]",
+    "  audienti tools write --purpose <text> --audience <text> --fact <text> --channel <channel> [--wait] [--json]",
+    "  audienti tools runs list|show <trun_id>|results <trun_id>|export <trun_id> [--json]",
     "  audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json]",
     "  audienti tools linkedin-review reports [--limit <n>] [--json]",
     "  audienti tools linkedin-review show <rprt_id> [--json]",
@@ -13844,6 +13903,11 @@ const HELP_TOPICS = new Map([
     "  audienti tools list             Show available CLI tools and the report commands they support.",
     "  audienti tools get              Run a LinkedIn URL through the existing import and contact-enrichment pipeline, then return the first selected email or phone.",
     "  audienti tools humanize         Humanize arbitrary UTF-8 text and print the result.",
+    "  audienti tools email-find       Find work emails without creating prospects (returns a run id).",
+    "  audienti tools linkedin-enrich  Enrich LinkedIn person or company URLs without creating prospects.",
+    "  audienti tools signals-find     Find companies matching an ICP and a signal question, with sources.",
+    "  audienti tools write            Write one draft from a brief. Nothing is sent.",
+    "  audienti tools runs             List tool runs and read their status, results and exports.",
     "  audienti tools linkedin-review  Queue a LinkedIn personal profile authority review and ICP-fit positioning blueprint.",
     "  audienti tools linkedin-review reports  List recent LinkedIn Review reports for the active account.",
     "  audienti tools linkedin-review show     View the completed report content in the terminal.",
@@ -13908,12 +13972,15 @@ const HELP_TOPICS = new Map([
     "  --tone <professional|academic|blog|casual|creative|scientific|technical>",
     "  --language <name>   Optional language hint, for example English",
     "",
+    "  --async             Submit as a tool run and print the run id instead (add --wait to poll for the result)",
+    "",
     "Output:",
     "  Plain text: only the humanized text, suitable for redirecting to a file",
-    "  JSON: { humanized_text, id, input_words }",
+    "  JSON: { humanized_text, id, input_words, run_id }",
     "",
     "API:",
-    "  POST /api/v1/accounts/:account_id/tools/humanize.json"
+    "  POST /api/v1/accounts/:account_id/tools/humanize.json",
+    "  POST /api/v1/accounts/:account_id/tools/runs.json (--async)"
   ].join("\n")],
 
   ["tools linkedin-review", [
@@ -15507,3 +15574,476 @@ async function runParityActionCommand(topic, args, context, { accountOverride } 
 
   writeLine(context.stdout, spec.done(positionals, payload));
 }
+
+// ---------------------------------------------------------------------------
+// Standalone account tools and saved network (#2554). Thin client of the
+// tools/runs and social_cookies/:id/network APIs: submit returns a run id
+// immediately; --wait polls the run, then prints its results.
+// ---------------------------------------------------------------------------
+
+const TOOL_RUN_WAIT_OPTIONS = {
+  "request-key": { type: "string" },
+  wait: { type: "boolean" },
+  "timeout-seconds": { type: "string" },
+  "poll-interval-seconds": { type: "string" }
+};
+const DEFAULT_TOOL_RUN_TIMEOUT_SECONDS = 300;
+const DEFAULT_TOOL_RUN_POLL_INTERVAL_SECONDS = 2;
+const TOOL_RUN_FINISHED_STATUSES = ["completed", "failed"];
+
+async function toolsEmailFind(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    ...TOOL_RUN_WAIT_OPTIONS,
+    "first-name": { type: "string" },
+    "last-name": { type: "string" },
+    "company-domain": { type: "string" },
+    "linkedin-url": { type: "string" },
+    file: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(TOOLS_EMAIL_FIND_USAGE);
+
+  const single = compactObject({
+    first_name: values["first-name"],
+    last_name: values["last-name"],
+    company_domain: values["company-domain"],
+    linkedin_url: values["linkedin-url"]
+  });
+  const items = values.file
+    ? await readToolItemsFile(values.file, ["client_item_id", "first_name", "last_name", "company_domain", "linkedin_url"])
+    : [single];
+  if (values.file && Object.keys(single).length > 0) throw new CommandError("Use either --file or the single-lookup flags, not both.");
+  if (!values.file && !single.linkedin_url && !(single.first_name && single.last_name && single.company_domain)) {
+    throw new CommandError(TOOLS_EMAIL_FIND_USAGE);
+  }
+
+  return submitToolRun("email_find", { items }, values, context, { accountOverride });
+}
+
+async function toolsLinkedinEnrich(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    ...TOOL_RUN_WAIT_OPTIONS,
+    url: { type: "string" },
+    kind: { type: "string" },
+    file: { type: "string" }
+  });
+  if (positionals.length > 0 || (!values.url && !values.file) || (values.url && values.file)) {
+    throw new CommandError(TOOLS_LINKEDIN_ENRICH_USAGE);
+  }
+  if (values.kind && !["person", "company"].includes(values.kind)) throw new CommandError("--kind must be person or company.");
+
+  const items = values.file
+    ? await readToolItemsFile(values.file, ["client_item_id", "linkedin_url", "kind"], { aliases: { url: "linkedin_url" } })
+    : [compactObject({ linkedin_url: values.url, kind: values.kind })];
+  return submitToolRun("linkedin_enrich", { items }, values, context, { accountOverride });
+}
+
+async function toolsSignalsFind(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    ...TOOL_RUN_WAIT_OPTIONS,
+    icp: { type: "string" },
+    question: { type: "string" },
+    count: { type: "string" },
+    "date-window-days": { type: "string" }
+  });
+  if (positionals.length > 0 || !values.icp || !values.question) throw new CommandError(TOOLS_SIGNALS_FIND_USAGE);
+
+  const input = compactObject({
+    icp_description: values.icp,
+    question: values.question,
+    count: normalizeOptionalPositiveInteger(values.count, "--count"),
+    date_window_days: normalizeOptionalPositiveInteger(values["date-window-days"], "--date-window-days")
+  });
+  return submitToolRun("signals_find", input, values, context, { accountOverride });
+}
+
+async function toolsWrite(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    ...TOOL_RUN_WAIT_OPTIONS,
+    purpose: { type: "string" },
+    audience: { type: "string" },
+    fact: { type: "string", multiple: true },
+    channel: { type: "string" },
+    tone: { type: "string" },
+    subject: { type: "boolean" },
+    "no-subject": { type: "boolean" },
+    prospect: { type: "string" }
+  });
+  const facts = (values.fact || []).map((fact) => fact.trim()).filter(Boolean);
+  if (positionals.length > 0 || !values.purpose || !values.audience || !values.channel || facts.length === 0) {
+    throw new CommandError(TOOLS_WRITE_USAGE);
+  }
+  if (values.subject && values["no-subject"]) throw new CommandError("Choose either --subject or --no-subject.");
+
+  const input = compactObject({
+    purpose: values.purpose,
+    audience: values.audience,
+    facts,
+    channel: values.channel,
+    tone: values.tone,
+    prospect_id: values.prospect,
+    subject: values.subject ? true : (values["no-subject"] ? false : undefined)
+  });
+  return submitToolRun("write", input, values, context, { accountOverride });
+}
+
+async function submitToolRun(tool, input, values, context, { accountOverride } = {}) {
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const run = await client.createToolRun(accountId, compactObject({ tool, input, request_key: values["request-key"] }));
+  if (!values.wait) {
+    if (values.json) return writeJson(context.stdout, run);
+
+    writeLine(context.stdout, `${run?.replayed ? "Existing" : "Queued"} run ${display(run?.id)} (${tool}, ${display(run?.item_count, 0)} item(s)).`);
+    writeLine(context.stdout, `Check it with: audienti tools runs show ${display(run?.id)}`);
+    return 0;
+  }
+
+  return finishWaitedRun(client, accountId, run, values, context);
+}
+
+async function finishWaitedRun(client, accountId, run, values, context) {
+  const finished = await waitForToolRun(client, accountId, run, {
+    timeoutSeconds: normalizeOptionalPositiveInteger(values["timeout-seconds"], "--timeout-seconds") || DEFAULT_TOOL_RUN_TIMEOUT_SECONDS,
+    pollIntervalSeconds: normalizeOptionalPositiveInteger(values["poll-interval-seconds"], "--poll-interval-seconds") || DEFAULT_TOOL_RUN_POLL_INTERVAL_SECONDS,
+    sleepImpl: context.sleep
+  });
+  const items = await fetchAllToolRunItems(client, accountId, finished.id);
+  if (values.json) {
+    writeJson(context.stdout, { run: finished, items });
+  } else {
+    renderToolRun(finished, context);
+    renderToolRunItems(finished.tool, items, context);
+  }
+  return finished.status === "failed" ? 1 : 0;
+}
+
+async function waitForToolRun(client, accountId, run, { timeoutSeconds, pollIntervalSeconds, sleepImpl = sleep }) {
+  if (!run?.id) throw new CommandError("The tool run response did not include a run id.");
+  if (TOOL_RUN_FINISHED_STATUSES.includes(run.status)) return run;
+
+  const timeoutAt = Date.now() + (timeoutSeconds * 1000);
+  let latest = run;
+  while (Date.now() < timeoutAt) {
+    await sleepImpl(pollIntervalSeconds * 1000);
+    latest = await client.toolRun(accountId, run.id);
+    if (TOOL_RUN_FINISHED_STATUSES.includes(latest?.status)) return latest;
+  }
+
+  throw new CommandError(`Timed out after ${timeoutSeconds} seconds waiting for run ${run.id}. It keeps running; check it with: audienti tools runs show ${run.id}`);
+}
+
+async function fetchAllToolRunItems(client, accountId, runId) {
+  const items = [];
+  let cursor;
+  for (let page = 0; page < 100; page += 1) {
+    const payload = await client.toolRunResults(accountId, runId, compactObject({ limit: 200, cursor }));
+    items.push(...(Array.isArray(payload?.items) ? payload.items : []));
+    cursor = payload?.next_cursor;
+    if (!cursor) break;
+  }
+  return items;
+}
+
+async function toolsRuns(args, context, { accountOverride } = {}) {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "list") return toolsRunsList(rest, context, { accountOverride });
+  if (subcommand === "show") return toolsRunsShow(rest, context, { accountOverride });
+  if (subcommand === "results") return toolsRunsResults(rest, context, { accountOverride });
+  if (subcommand === "export") return toolsRunsExport(rest, context, { accountOverride });
+
+  throw new CommandError(TOOLS_RUNS_USAGE);
+}
+
+async function toolsRunsList(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    tool: { type: "string" },
+    status: { type: "string" },
+    limit: { type: "string" },
+    cursor: { type: "string" }
+  });
+  if (positionals.length > 0) throw new CommandError(TOOLS_RUNS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.toolRuns(accountId, compactObject({
+    tool: values.tool ? values.tool.replaceAll("-", "_") : undefined,
+    status: values.status,
+    limit: normalizeOptionalPositiveInteger(values.limit, "--limit"),
+    cursor: values.cursor
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  const runs = Array.isArray(payload?.runs) ? payload.runs : [];
+  if (runs.length === 0) return writeLine(context.stdout, "No tool runs.");
+  writeAlignedTable(context, ["ID", "TOOL", "STATUS", "ITEMS", "CREATED"],
+    runs.map((run) => [run.id, run.tool, run.details_expired ? `${run.status} (details expired)` : run.status, run.item_count, run.created_at]));
+  if (payload?.next_cursor) writeLine(context.stdout, `More runs: audienti tools runs list --cursor ${payload.next_cursor}`);
+}
+
+async function toolsRunsShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(TOOLS_RUNS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const run = await client.toolRun(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, run);
+
+  renderToolRun(run, context);
+  return run?.status === "failed" ? 1 : 0;
+}
+
+async function toolsRunsResults(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    limit: { type: "string" },
+    cursor: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(TOOLS_RUNS_USAGE);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.toolRunResults(accountId, positionals[0], compactObject({
+    limit: normalizeOptionalPositiveInteger(values.limit, "--limit"),
+    cursor: values.cursor
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  if (payload?.details_expired) return writeLine(context.stdout, "This run's details expired after 90 days; only its summary remains.");
+  renderToolRunItems(payload?.run?.tool, Array.isArray(payload?.items) ? payload.items : [], context);
+  if (payload?.next_cursor) writeLine(context.stdout, `More results: audienti tools runs results ${positionals[0]} --cursor ${payload.next_cursor}`);
+}
+
+async function toolsRunsExport(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    format: { type: "string" },
+    output: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(TOOLS_RUNS_USAGE);
+  const format = exportFormat(values.format);
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.toolRunExport(accountId, positionals[0], format === "json" ? { export_format: "json" } : {});
+  return writeExportPayload(payload, format, values.output, context);
+}
+
+async function networkCommand(action, args, context, { accountOverride } = {}) {
+  if (!["list", "export"].includes(action)) throw new CommandError(NETWORK_USAGE);
+
+  const { values, positionals } = parseCommandArgs(args, {
+    ...(action === "list" ? jsonOptions() : {}),
+    cookie: { type: "string" },
+    platform: { type: "string" },
+    kind: { type: "string" },
+    direction: { type: "string" },
+    query: { type: "string" },
+    ...(action === "list" ? { limit: { type: "string" }, cursor: { type: "string" } } : { format: { type: "string" }, output: { type: "string" } })
+  });
+  if (positionals.length > 0 || !values.cookie) throw new CommandError(NETWORK_USAGE);
+
+  const query = compactObject({
+    platform: values.platform || "linkedin",
+    kind: values.kind || "connection",
+    direction: values.direction,
+    network_query: values.query
+  });
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+
+  if (action === "export") {
+    const format = exportFormat(values.format);
+    const payload = await client.socialCookieNetworkExport(accountId, values.cookie, format === "json" ? { ...query, export_format: "json" } : query);
+    return writeExportPayload(payload, format, values.output, context);
+  }
+
+  const payload = await client.socialCookieNetwork(accountId, values.cookie, compactObject({
+    ...query,
+    limit: normalizeOptionalPositiveInteger(values.limit, "--limit"),
+    cursor: values.cursor
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderNetworkCoverage(payload?.coverage, context);
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+  if (rows.length > 0) {
+    writeAlignedTable(context, ["NAME", "USERNAME", "ID", "LAST SEEN"],
+      rows.map((row) => [row.display_name, row.alias_key, row.stable_id, row.last_observed_at]));
+  }
+  if (payload?.next_cursor) writeLine(context.stdout, `More rows: audienti network list --cookie ${values.cookie} --cursor ${payload.next_cursor}`);
+}
+
+function renderNetworkCoverage(coverage, context) {
+  if (!coverage) return;
+
+  const state = {
+    unsupported_capture: "capture not supported yet (not zero)",
+    not_yet_observed: "not yet observed",
+    partial: "partial (only what normal work has seen)",
+    complete: "complete"
+  }[coverage.state] || display(coverage.state);
+  writeLine(context.stdout, `${display(coverage.platform)} ${display(coverage.kind)} ${display(coverage.direction)}: ${state}` +
+    (coverage.last_observed_at ? `, last seen ${coverage.last_observed_at}` : ""));
+}
+
+function exportFormat(value) {
+  const format = String(value || "csv").toLowerCase();
+  if (!["csv", "json"].includes(format)) throw new CommandError("--format must be csv or json.");
+  return format;
+}
+
+async function writeExportPayload(payload, format, outputPath, context) {
+  const text = format === "json" ? `${JSON.stringify(payload, null, 2)}\n` : String(payload ?? "");
+  if (outputPath) {
+    await writeFile(outputPath, text);
+    return writeLine(context.stderr, `Wrote ${Buffer.byteLength(text)} bytes to ${outputPath}`);
+  }
+  context.stdout.write(text);
+}
+
+function renderToolRun(run, context) {
+  writeLine(context.stdout, `Run ${display(run?.id)} (${display(run?.tool)}): ${display(run?.status)}`);
+  writeLine(context.stdout, `Items: ${display(run?.item_count, 0)} total, ${display(run?.completed_item_count, 0)} completed, ${display(run?.failed_item_count, 0)} failed`);
+  const outcomes = run?.summary?.outcomes || {};
+  if (Object.keys(outcomes).length > 0) {
+    writeLine(context.stdout, `Outcomes: ${Object.entries(outcomes).map(([outcome, count]) => `${outcome} ${count}`).join(", ")}`);
+  }
+  if (run?.error_code) writeLine(context.stdout, `Error: ${run.error_code}`);
+  if (run?.details_expired) writeLine(context.stdout, "Details expired after 90 days; only this summary remains.");
+}
+
+function renderToolRunItems(tool, items, context) {
+  if (items.length === 0) return writeLine(context.stdout, "No results yet.");
+
+  writeAlignedTable(context, ["#", "ITEM", "OUTCOME", "RESULT"],
+    items.map((item) => [item.position, item.client_item_id, item.outcome || item.status, toolItemSummary(tool, item)]));
+}
+
+function toolItemSummary(tool, item) {
+  const result = item?.result || {};
+  if (item?.error_message && item.outcome !== "success") return item.error_message;
+  if (tool === "email_find") return result.email || "";
+  if (tool === "linkedin_enrich") return [result.display_name || result.name, result.headline || result.domain].filter(Boolean).join(" - ");
+  if (tool === "signals_find") return (result.companies || []).map((company) => company.name).join(", ");
+  if (tool === "write") return singleLine([result.subject, result.text].filter(Boolean).join(" | "));
+  if (tool === "humanize") return singleLine(result.humanized_text);
+  if (tool === "network_export") return `${display(result.exported_row_count, 0)} row(s)`;
+  return Object.keys(result).length > 0 ? JSON.stringify(result) : "";
+}
+
+// Reads tool items from CSV (header row), JSONL, a JSON array or {items: [...]}.
+async function readToolItemsFile(filePath, fields, { aliases = {} } = {}) {
+  let contents;
+  try {
+    contents = await readFile(filePath, "utf8");
+  } catch (error) {
+    throw new CommandError(`Could not read items file ${filePath}: ${error.message}`);
+  }
+  const trimmed = String(contents || "").trim();
+  if (!trimmed) throw new CommandError(`Items file ${filePath} is empty.`);
+
+  let rows;
+  let whole;
+  try {
+    whole = JSON.parse(trimmed);
+  } catch {
+    whole = undefined;
+  }
+  if (whole !== undefined) {
+    rows = Array.isArray(whole) ? whole : (Array.isArray(whole?.items) ? whole.items : [whole]);
+  } else {
+    const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines[0].startsWith("{") || lines[0].startsWith("[")) {
+      rows = lines.map((line, index) => {
+        try {
+          return JSON.parse(line);
+        } catch (error) {
+          throw new CommandError(`Invalid JSON or JSONL row ${index + 1} in ${filePath}: ${error.message}`);
+        }
+      });
+    } else {
+      // CSV: one row per line; quoted commas allowed, no line breaks inside fields.
+      const headers = parseCsvLine(lines[0]).map((header) => header.trim());
+      rows = lines.slice(1).map((line) => {
+        const values = parseCsvLine(line);
+        return Object.fromEntries(headers.map((header, index) => [header, values[index] || ""]));
+      });
+    }
+  }
+
+  return rows.map((row) => {
+    const normalized = {};
+    for (const [rawKey, value] of Object.entries(row || {})) {
+      const key = rawKey.trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+      const field = aliases[key] || key;
+      if (fields.includes(field) && value !== undefined && value !== null) normalized[field] = String(value);
+    }
+    return compactObject(normalized);
+  });
+}
+
+const TOOL_RUN_HELP_FOOTER = [
+  "",
+  "Behavior:",
+  "  Returns a run id immediately; the work runs on the server. Nothing is sent and no prospects are created.",
+  "  --wait polls `audienti tools runs show` until the run finishes, then prints its results.",
+  "  If the CLI exits early, read the run later with `audienti tools runs show|results <trun_id>`.",
+  "  --request-key makes a retry safe: the same key and input return the same run.",
+  "",
+  "Files (--file):",
+  "  JSON (an array or {\"items\": [...]}, any formatting), JSONL (one object per line) or CSV with a header row.",
+  "  CSV is one row per line; quoted commas are allowed, line breaks inside fields are not.",
+  "",
+  "Exit codes:",
+  "  1 on an API error, a --wait timeout or an aborted (failed) run; otherwise 0.",
+  "  Per-item outcomes such as no_match or invalid_input do not change the exit code; read them in the results.",
+  "",
+  "API:",
+  "  POST /api/v1/accounts/:account_id/tools/runs.json",
+  "  GET  /api/v1/accounts/:account_id/tools/runs/:id.json",
+  "  GET  /api/v1/accounts/:account_id/tools/runs/:id/results.json"
+];
+
+for (const [topic, usage, purpose] of [
+  ["tools email-find", TOOLS_EMAIL_FIND_USAGE, "Finds work emails from a name and company domain, or from a LinkedIn URL. Prefer this over `tools get email` when you do not want a prospect created."],
+  ["tools linkedin-enrich", TOOLS_LINKEDIN_ENRICH_USAGE, "Reads public LinkedIn person or company details through API providers. Never uses your connected LinkedIn account."],
+  ["tools signals-find", TOOLS_SIGNALS_FIND_USAGE, "Finds companies that match an ICP description and a signal question, each with a source link. Returns fewer companies, or no match, when proof is weak."],
+  ["tools write", TOOLS_WRITE_USAGE, "Writes one draft from your brief using only the facts you give. --prospect adds the existing prospect's name, title and company as read-only context."]
+]) {
+  HELP_TOPICS.set(topic, ["Usage:", `  ${usage.slice("Usage: ".length)}`, "", "Status: implemented", "", "Purpose:", `  ${purpose}`, ...TOOL_RUN_HELP_FOOTER].join("\n"));
+}
+
+HELP_TOPICS.set("tools runs", [
+  "Usage:",
+  `  ${TOOLS_RUNS_USAGE.slice("Usage: ".length)}`,
+  "",
+  "Status: implemented",
+  "",
+  "Purpose:",
+  "  Lists tool runs and reads one run's status, per-item results and export. Details expire after 90 days; the summary remains.",
+  "  Saved-network runs show their results only to the connected account's owner.",
+  "",
+  "API:",
+  "  GET /api/v1/accounts/:account_id/tools/runs.json",
+  "  GET /api/v1/accounts/:account_id/tools/runs/:id.json",
+  "  GET /api/v1/accounts/:account_id/tools/runs/:id/results.json",
+  "  GET /api/v1/accounts/:account_id/tools/runs/:id/export.json"
+].join("\n"));
+
+HELP_TOPICS.set("network", [
+  "Usage:",
+  `  ${NETWORK_USAGE.slice("Usage: ".length)}`,
+  "",
+  "Status: implemented",
+  "",
+  "Purpose:",
+  "  Lists, searches or exports the saved connections, followers and following of one connected account.",
+  "  Only that account's owner can read it. It shows what normal work has already seen; it never visits LinkedIn or X.",
+  "  Coverage says partial, not yet observed, or capture not supported yet; none of these mean zero.",
+  "",
+  "Defaults:",
+  "  --platform linkedin  --kind connection  (follows need --direction incoming|outgoing)",
+  "",
+  "API:",
+  "  GET /api/v1/accounts/:account_id/social_cookies/:social_cookie_id/network.json",
+  "  GET /api/v1/accounts/:account_id/social_cookies/:social_cookie_id/network/export.json"
+].join("\n"));

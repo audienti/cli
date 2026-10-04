@@ -1195,6 +1195,37 @@ export class AudientiClient {
     });
   }
 
+  // Standalone account tool runs (#2554).
+  createToolRun(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs"]), { method: "POST", body });
+  }
+
+  toolRuns(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs"], query));
+  }
+
+  toolRun(accountId, runId) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs", runId]));
+  }
+
+  toolRunResults(accountId, runId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs", runId, "results"], query));
+  }
+
+  // CSV text by default; export_format=json returns an object.
+  toolRunExport(accountId, runId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs", runId, "export"], query));
+  }
+
+  // Saved network of one connected account (owner-only).
+  socialCookieNetwork(accountId, socialCookieId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "network"], query));
+  }
+
+  socialCookieNetworkExport(accountId, socialCookieId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "network", "export"], query));
+  }
+
   humanizeText(accountId, body) {
     return this.requestJson(accountPath(accountId, ["tools", "humanize"]), {
       method: "POST",
@@ -1342,7 +1373,8 @@ export class AudientiClient {
 
   headers(body) {
     const headers = {
-      Accept: "application/json"
+      Accept: "application/json",
+      "X-Audienti-Client": "cli"
     };
 
     if (this.token) {
@@ -1421,7 +1453,7 @@ function errorMessage(status, body) {
     return details ? `Audienti rejected the request: ${details}` : "Audienti rejected the request.";
   }
 
-  if (status === 429 && body?.error) {
+  if ((status === 429 || status === 503) && body?.error) {
     return body.error;
   }
 

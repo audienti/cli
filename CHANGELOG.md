@@ -4,6 +4,20 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.97] - 2026-10-04
+
+### Added
+
+- `tools email-find`, `tools linkedin-enrich`, `tools signals-find` and `tools write` run standalone account tools without creating prospects or experiments (#2554). Each returns a run id at once; `--wait` polls until the run finishes and prints the results, and `--request-key` makes a retry return the same run.
+- `tools runs list|show|results|export` read tool runs after the CLI exits. Details expire after 90 days; the summary stays.
+- `tools humanize --async` submits the humanizer as a tool run. Plain `tools humanize` is unchanged.
+- `network list|export --cookie <scok_id>` reads the saved connections, followers and following of your own connected account, with coverage. It never visits LinkedIn or X.
+- Requests now send `X-Audienti-Client: cli`, so runs show where they came from.
+
+### Changed
+
+- API errors with HTTP 429 or 503 show the server's message.
+
 ## [0.1.96] - 2026-10-03
 
 ### Added

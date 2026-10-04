@@ -231,6 +231,47 @@ audienti tools humanize --file draft.txt --tone professional > revised.txt
 audienti tools humanize --file draft.txt --language English --json
 ```
 
+### Standalone account tools
+
+These run without creating prospects or experiments. Each command returns a run
+id at once and keeps working on the server; `--wait` polls until the run
+finishes and prints the results. If the CLI exits, read the run later with
+`tools runs show|results`. Details expire after 90 days; the summary stays.
+
+```bash
+audienti tools email-find --first-name Ada --last-name Lovelace --company-domain example.com --wait
+audienti tools email-find --file people.csv --request-key batch-2026-10-03   # csv, jsonl or json
+audienti tools linkedin-enrich --url https://www.linkedin.com/in/example --wait --json
+audienti tools signals-find --icp "Mid-size US logistics companies" --question "Who announced warehouse automation?" --count 5
+audienti tools write --purpose "Book a call" --audience "Finance leads" --fact "Approvals take 2 days" --channel email
+audienti tools humanize --file draft.txt --async --wait
+audienti tools runs list --tool email-find
+audienti tools runs results <trun_id> --json
+audienti tools runs export <trun_id> --format csv --output results.csv
+```
+
+`--file` takes JSON (an array or `{"items": [...]}`), JSONL, or CSV with a
+header row. CSV is one row per line; quoted commas are allowed, line breaks
+inside fields are not. With `--wait`, the exit code is 1 on an API error, a
+timeout or an aborted (failed) run; per-item outcomes such as `no_match` do
+not change it.
+
+Prefer `tools email-find` for an email lookup. `tools get email` still runs the
+prospect import pipeline and creates a prospect.
+
+### Saved network
+
+Your own connected account's saved connections and following, from what
+normal work has already seen. Only the account's owner can read it, and it
+never visits LinkedIn or X. Coverage says partial, not yet observed, or
+capture not supported yet; none of these mean zero.
+
+```bash
+audienti network list --cookie <scok_id> --kind connection --query acme
+audienti network list --cookie <scok_id> --kind follow --direction outgoing --json
+audienti network export --cookie <scok_id> --kind connection --format csv --output connections.csv
+```
+
 To let an agent or operator check whether the local CLI is behind the latest
 published package:
 
