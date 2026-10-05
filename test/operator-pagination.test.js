@@ -42,9 +42,32 @@ for (const command of readCommands) {
     });
   });
 
-  test(`${command.join(" ")} continues an empty scanned page instead of declaring no work`, { skip: command[0] === "inbox-ops" && "inbox-ops queue follows every page itself; see cli.test.js" }, async () => {
+  test(`${command.join(" ")} continues an empty scanned page instead of declaring no work`, async () => {
     await withOperatorConfig(async (env) => {
       const stdout = captureStream();
+      if (command[0] === "inbox-ops") {
+        const fetch = createFetch((url, options, calls) => {
+          assert.equal(url.pathname, "/api/v1/accounts/acct_two/operator.json");
+          assert.equal(url.searchParams.get("opportunity_kind"), "inbox");
+          assert.equal(options.method || "GET", "GET");
+          if (calls.length === 1) {
+            return jsonResponse({ decision_queue: [], next_move: null, operator_page: 1,
+              next_page: 2, has_more: true, metrics: { next_offset: 0 } });
+          }
+          assert.equal(calls.length, 2, "must stop after the completed second page");
+          assert.equal(url.searchParams.get("operator_page"), "2");
+          assert.equal(url.searchParams.get("operator_offset"), "0");
+          return jsonResponse({ decision_queue: [{ id: "inbox_ops_message_later", opportunity_kind: "inbox",
+            inbox_ops: { sender: "later@example.com", domain: "example.com", subject: "Later inbox row",
+              connected_account: "owner@example.com", state: "needs_action" } }], has_more: false });
+        });
+        assert.equal(await run([...command, "--account", "acct_two"], { env, fetch, stdout }), 0);
+        assert.equal(fetch.calls.length, 2);
+        assert.match(stdout.output, /inbox_ops_message_later/);
+        assert.match(stdout.output, /later@example\.com/);
+        assert.doesNotMatch(stdout.output, /No Inbox Ops rows found/);
+        return;
+      }
       const fetch = createFetch(() => jsonResponse({
         decision_queue: [], next_move: null, operator_page: 1, next_page: 2, has_more: true,
         metrics: { next_offset: 0 }
