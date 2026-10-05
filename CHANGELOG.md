@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.100] - 2026-10-05
+
+### Changed
+
+- The setup state returned by the API now includes `linkedin_sign_in` (not_started, signing_in, code_needed, approval_needed, connected, failed or needs_attention) and `linkedin_account_id`.
+- A LinkedIn social account can be created with only its sign-in email and password; the profile handle is read after sign-in.
+
 ## [0.1.99] - 2026-10-05
 
 - List user-owned content plans and read scripts with `content plans` and `content plan --report`.
