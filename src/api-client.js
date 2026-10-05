@@ -699,6 +699,18 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId]));
   }
 
+  contentTrackedPosts(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "tracked_posts"], query));
+  }
+
+  contentTrackPost(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "tracked_posts"]), { method: "POST", body });
+  }
+
+  contentTrackedPost(accountId, workItemId) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "tracked_posts", workItemId]));
+  }
+
   contentFeedback(accountId, workItemId, body) {
     return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId, "feedback"]), { method: "POST", body });
   }

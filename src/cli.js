@@ -168,6 +168,9 @@ const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--statu
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
 const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
+const CONTENT_POSTS_USAGE = "Usage: audienti content posts [--user <account_user_id|email|name|me>] [--page <n>] [--json] [--account <acct_id>]";
+const CONTENT_TRACK_USAGE = "Usage: audienti content track <linkedin_post_url> [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
+const CONTENT_ENGAGEMENT_USAGE = "Usage: audienti content engagement <cpwi_id> [--json] [--account <acct_id>]";
 const CONTENT_FEEDBACK_USAGE = "Usage: audienti content feedback <cpwi_id> (--message <text> | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_APPROVE_USAGE = "Usage: audienti content approve <cpwi_id> [--json] [--account <acct_id>]";
 const CONTENT_SCHEDULE_USAGE = "Usage: audienti content schedule <cpwi_id> --at <time> [--json] [--account <acct_id>]";
@@ -450,6 +453,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "content" && action === "programs") return contentPrograms(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "plan") return contentPlan(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "show") return contentShow(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "posts") return contentPosts(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "track") return contentTrack(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "engagement") return contentEngagement(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "feedback") return contentFeedback(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "approve") return contentApprove(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "schedule") return contentSchedule(rest, context, { accountOverride });
@@ -3875,6 +3881,47 @@ async function contentShow(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, item);
 
   renderContentWorkItem(item, context);
+}
+
+async function contentPosts(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), user: { type: "string" }, page: { type: "string" } });
+  if (positionals.length) throw new CommandError(CONTENT_POSTS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.contentTrackedPosts(accountId, { ...(values.user ? { user: values.user } : {}), ...(values.page ? { page: values.page } : {}) });
+  if (values.json) return writeJson(context.stdout, payload);
+  for (const post of payload.posts || []) context.stdout.write(`${post.prefix_id}  ${post.status}  ${post.published_at || "Publication time unavailable"}  ${post.url}\n`);
+  if (payload.next_page) context.stdout.write(`More posts: content posts --page ${payload.next_page}\n`);
+}
+
+async function contentTrack(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), user: { type: "string" } });
+  if (positionals.length !== 1) throw new CommandError(CONTENT_TRACK_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const post = await client.contentTrackPost(accountId, { url: positionals[0], ...(values.user ? { user: values.user } : {}) });
+  if (values.json) return writeJson(context.stdout, post);
+  context.stdout.write(`Tracking ${post.prefix_id}: ${post.status}\n${post.url}\n`);
+}
+
+async function contentEngagement(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CONTENT_ENGAGEMENT_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const post = await client.contentTrackedPost(accountId, positionals[0]);
+  if (values.json) return writeJson(context.stdout, post);
+  context.stdout.write(`${post.title || "LinkedIn post"}: ${post.status}\n${post.url}\n`);
+  if (post.error) context.stdout.write(`Tracking error: ${post.error}\n`);
+  context.stdout.write(`Reposts reported: ${post.repost_count ?? "unavailable"}; reposter identities unavailable\n`);
+  for (const category of ["comments", "reactions"]) {
+    const state = post.categories?.[category] || {};
+    context.stdout.write(`${category}: ${state.status || "pending"}, ${state.collected_count ?? 0} collected\n`);
+    if (state.error) context.stdout.write(`  ${state.error}\n`);
+    for (const engagement of post[category] || []) {
+      const person = engagement.profile || {};
+      context.stdout.write(`  ${person.name || "Unknown person"} | ${person.title || "Title unavailable"} | ${person.company || "Company unavailable"} | ${person.url || "Profile unavailable"}\n`);
+      if (engagement.text) context.stdout.write(`  ${engagement.commented_at || "Time unavailable"}: ${engagement.text}\n`);
+      if (engagement.task?.id) context.stdout.write(`  Reply task: ${engagement.task.id} (${engagement.task.delivery_state || engagement.task.status})\n`);
+    }
+  }
 }
 
 async function contentFeedback(args, context, { accountOverride } = {}) {
@@ -10216,6 +10263,9 @@ const HELP_TOPICS = new Map([
     "    audienti content programs",
     "    audienti content plan <cprg_id>",
     "    audienti content show <cpwi_id>",
+    "    audienti content track <linkedin_post_url>",
+    "    audienti content posts",
+    "    audienti content engagement <cpwi_id>",
     "    audienti content feedback <cpwi_id> --message <text>",
     "    audienti content approve <cpwi_id>",
     "    audienti content publish <cpwi_id> --url <permalink>",
@@ -12558,6 +12608,9 @@ const HELP_TOPICS = new Map([
     "  audienti content programs [--user <account_user_id|email|name|me>] [--json]",
     "  audienti content plan <cprg_id> [--week <n>] [--due] [--json]",
     "  audienti content show <cpwi_id> [--json]",
+    "  audienti content track <linkedin_post_url> [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti content posts [--user <account_user_id|email|name|me>] [--json]",
+    "  audienti content engagement <cpwi_id> [--json]",
     "  audienti content feedback <cpwi_id> --message <text> [--json]",
     "  audienti content approve <cpwi_id> [--json]",
     "  audienti content schedule <cpwi_id> --at <time> [--json]",
@@ -12573,6 +12626,9 @@ const HELP_TOPICS = new Map([
   ["content programs", [CONTENT_PROGRAMS_USAGE].join("\n")],
   ["content plan", [CONTENT_PLAN_USAGE].join("\n")],
   ["content show", [CONTENT_SHOW_USAGE].join("\n")],
+  ["content posts", [CONTENT_POSTS_USAGE].join("\n")],
+  ["content track", [CONTENT_TRACK_USAGE].join("\n")],
+  ["content engagement", [CONTENT_ENGAGEMENT_USAGE].join("\n")],
   ["content feedback", [CONTENT_FEEDBACK_USAGE].join("\n")],
   ["content approve", [CONTENT_APPROVE_USAGE].join("\n")],
   ["content schedule", [CONTENT_SCHEDULE_USAGE].join("\n")],

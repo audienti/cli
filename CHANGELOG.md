@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.98] - 2026-10-04
+
+### Added
+
+- `content track <url>` submits an owned LinkedIn post for tracking. `content posts` lists tracked posts, and `content engagement <cpwi_id>` reads collected comments and reactions.
+
 ## [0.1.97] - 2026-10-04
 
 ### Added

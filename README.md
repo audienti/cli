@@ -185,6 +185,9 @@ audienti motions update <motn_id> --payload motion-signals.json
 audienti motions activate <motn_id>
 audienti motions delete <motn_id> --confirm yes
 audienti content programs
+audienti content track <linkedin_post_url>
+audienti content posts
+audienti content engagement <cpwi_id> --json
 audienti content plan <cprg_id>
 audienti content approve <cpwi_id>
 audienti content comments
