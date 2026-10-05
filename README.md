@@ -189,6 +189,14 @@ audienti content track <linkedin_post_url>
 audienti content posts
 audienti content engagement <cpwi_id> --json
 audienti content plan <cprg_id>
+audienti content plans --user me
+audienti content plan <rprt_id> --report --user me
+audienti content plan-update <rprt_id> --day 1 --payload edits.json
+audienti content plan-approve <rprt_id> --day 1
+audienti content plan-research <rprt_id> --day 1
+audienti content plan-draft <rprt_id> --day 1 --feedback "Revise the opening"
+audienti content plan-visuals <rprt_id> --day 1 --style <id>
+audienti content post-reply <cpwi_id> --comment <task_id> --body "Approved reply"
 audienti content approve <cpwi_id>
 audienti content comments
 audienti social-cookies sync-messages <scok_id> [--folder <folder>] [--retry] --json

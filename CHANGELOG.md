@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.99] - 2026-10-05
+
+- List user-owned content plans and read scripts with `content plans` and `content plan --report`.
+- Edit, approve, research, draft and generate visuals for a plan piece through the existing production services.
+- Approve an explicit comment reply through the tracked post endpoint with `content post-reply`.
+
 ## [0.1.98] - 2026-10-04
 
 ### Added

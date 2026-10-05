@@ -166,7 +166,9 @@ const WRITER_TEST_RUN_SHOW_USAGE = "Usage: audienti writer test-run show <prsp_i
 const MOTIONS_ANALYTICS_USAGE = "Usage: audienti motions analytics <motn_id> [--window 30d] [--json] [--account <acct_id>]";
 const MOTIONS_UPDATE_USAGE = "Usage: audienti motions update <motn_id> ([--status <draft|preparing|active|closing|paused|archived>] [--tags <tag[,tag...]>] [--own-post-engagement <true|false>] [--start-date <YYYY-MM-DD|none>] [--end-date <YYYY-MM-DD|none>] [--maximum-company-count <n|none>] [--approach <text>] [--gift <gift_id|none>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const CONTENT_PROGRAMS_USAGE = "Usage: audienti content programs [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
-const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id> [--week <n>] [--due] [--json] [--account <acct_id>]";
+const CONTENT_PLAN_USAGE = "Usage: audienti content plan <cprg_id|rprt_id> [--report] [--user <id|me>] [--week <n>] [--due] [--json] [--account <acct_id>]";
+const CONTENT_PLANS_USAGE = "Usage: audienti content plans [--user <id|me>] [--page <n>] [--json] [--account <acct_id>]";
+const CONTENT_POST_REPLY_USAGE = "Usage: audienti content post-reply <cpwi_id> --comment <cctk_id> --body <text> [--user <id|me>] [--json] [--account <acct_id>]";
 const CONTENT_SHOW_USAGE = "Usage: audienti content show <cpwi_id> [--json] [--account <acct_id>]";
 const CONTENT_POSTS_USAGE = "Usage: audienti content posts [--user <account_user_id|email|name|me>] [--page <n>] [--json] [--account <acct_id>]";
 const CONTENT_TRACK_USAGE = "Usage: audienti content track <linkedin_post_url> [--user <account_user_id|email|name|me>] [--json] [--account <acct_id>]";
@@ -451,6 +453,9 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "quick-start") return motionsQuickStart(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "setup-state") return motionsSetupState(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "programs") return contentPrograms(rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "plans") return contentPlans(rest, context, { accountOverride });
+  if (normalizedResource === "content" && ["plan-update", "plan-approve", "plan-research", "plan-draft", "plan-visuals"].includes(action)) return contentPlanAction(action, rest, context, { accountOverride });
+  if (normalizedResource === "content" && action === "post-reply") return contentPostReply(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "plan") return contentPlan(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "show") return contentShow(rest, context, { accountOverride });
   if (normalizedResource === "content" && action === "posts") return contentPosts(rest, context, { accountOverride });
@@ -3853,18 +3858,71 @@ async function contentPrograms(args, context, { accountOverride } = {}) {
   renderContentPrograms(programs, context);
 }
 
+async function contentPlans(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), user: { type: "string" }, page: { type: "string" } });
+  if (positionals.length) throw new CommandError(CONTENT_PLANS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.contentPlans(accountId, compactObject({ user: values.user, page: values.page }));
+  if (values.json) return writeJson(context.stdout, payload);
+  for (const plan of payload.plans || []) context.stdout.write(`${plan.prefix_id}  ${plan.channel}  ${plan.status}  ${plan.title}\n`);
+  context.stdout.write("Open a plan: content plan <rprt_id> --report\n");
+  if (payload.next_page) context.stdout.write(`More plans: content plans --page ${payload.next_page}\n`);
+}
+
+async function contentPlanAction(action, args, context, { accountOverride } = {}) {
+  const usage = `Usage: audienti content ${action} <rprt_id> --day <n> [--user <id|me>] [--payload <file.json>] [--feedback <text>] [--style <id>] [--aspect-ratio <w:h>] [--json] [--account <acct_id>]`;
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), day: { type: "string" }, user: { type: "string" }, payload: { type: "string" }, feedback: { type: "string" }, style: { type: "string" }, "aspect-ratio": { type: "string" } });
+  const day = Number(values.day);
+  if (positionals.length !== 1 || !Number.isInteger(day) || day < 1 || (action === "plan-update" && !values.payload)) throw new CommandError(usage);
+  if (values["aspect-ratio"] && !/^\d+:\d+$/.test(values["aspect-ratio"])) throw new CommandError("Aspect ratio must be w:h.");
+  const body = compactObject({ user: values.user });
+  if (action === "plan-update") {
+    body.item = await readJsonPayload(values.payload);
+    if (!body.item || typeof body.item !== "object" || Array.isArray(body.item)) throw new CommandError("Plan update payload must be a JSON object.");
+  }
+  if (action === "plan-draft") body.draft_feedback = values.feedback || "";
+  if (action === "plan-visuals") body.visual_generation = compactObject({ ad_style_id: values.style, aspect_ratio_option: values["aspect-ratio"] });
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  let result;
+  if (action === "plan-update") result = await client.contentPlanUpdate(accountId, positionals[0], day, body);
+  else if (action === "plan-approve") result = await client.contentPlanApprove(accountId, positionals[0], day, body);
+  else if (action === "plan-research") result = await client.contentPlanResearch(accountId, positionals[0], day, body);
+  else if (action === "plan-draft") result = await client.contentPlanDraft(accountId, positionals[0], day, body);
+  else result = await client.contentPlanVisuals(accountId, positionals[0], day, body);
+  if (values.json) return writeJson(context.stdout, result);
+  context.stdout.write(`${result.title || "Content plan"}: ${result.status}\n`);
+}
+
+async function contentPostReply(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), comment: { type: "string" }, body: { type: "string" }, user: { type: "string" } });
+  if (positionals.length !== 1 || !values.comment || !values.body?.trim()) throw new CommandError(CONTENT_POST_REPLY_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const result = await client.contentPostReply(accountId, positionals[0], values.comment, compactObject({ reply_body: values.body, user: values.user }));
+  if (values.json) return writeJson(context.stdout, result);
+  context.stdout.write(`Reply approved for post ${result.prefix_id}; check engagement for delivery status.\n`);
+}
+
 async function contentPlan(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     week: { type: "string" },
-    due: { type: "boolean" }
+    due: { type: "boolean" },
+    report: { type: "boolean" },
+    user: { type: "string" }
   });
   if (positionals.length !== 1) throw new CommandError(CONTENT_PLAN_USAGE);
 
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.contentPlan(accountId, positionals[0]);
+  const payload = values.report
+    ? await client.contentPlanReport(accountId, positionals[0], compactObject({ user: values.user }))
+    : await client.contentPlan(accountId, positionals[0]);
   if (values.json) return writeJson(context.stdout, payload);
 
+  if (values.report) {
+    context.stdout.write(`${payload.title || "Content plan"}: ${payload.status}\n`);
+    for (const row of payload.content_plan || []) context.stdout.write(`Day ${row.day_number}  ${row.channel}  ${row.title}  ${row.execution?.workflow_phase || "Not started"}\n${row.finalized_content || ""}\n`);
+    return;
+  }
   const week = values.week ? Number.parseInt(values.week, 10) : null;
   let rows = Array.isArray(payload?.rows) ? payload.rows : [];
   if (week) rows = rows.filter((row) => Number(row.week_number) === week);
@@ -12625,6 +12683,9 @@ const HELP_TOPICS = new Map([
 
   ["content programs", [CONTENT_PROGRAMS_USAGE].join("\n")],
   ["content plan", [CONTENT_PLAN_USAGE].join("\n")],
+  ["content plans", CONTENT_PLANS_USAGE],
+  ["content post-reply", CONTENT_POST_REPLY_USAGE],
+  ...["plan-update", "plan-approve", "plan-research", "plan-draft", "plan-visuals"].map((action) => [`content ${action}`, `Usage: audienti content ${action} <rprt_id> --day <n> [--user <id|me>] [--payload <file.json>] [--feedback <text>] [--style <id>] [--aspect-ratio <w:h>] [--json] [--account <acct_id>]`]),
   ["content show", [CONTENT_SHOW_USAGE].join("\n")],
   ["content posts", [CONTENT_POSTS_USAGE].join("\n")],
   ["content track", [CONTENT_TRACK_USAGE].join("\n")],

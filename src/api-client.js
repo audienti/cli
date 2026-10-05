@@ -695,6 +695,38 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["content_ops", "programs", programId, "plan"], query));
   }
 
+  contentPlans(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans"], query));
+  }
+
+  contentPlanReport(accountId, reportId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId], query));
+  }
+
+  contentPlanUpdate(accountId, reportId, day, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId, "items", day]), { method: "PATCH", body });
+  }
+
+  contentPlanApprove(accountId, reportId, day, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId, "items", day, "approve"]), { method: "POST", body });
+  }
+
+  contentPlanResearch(accountId, reportId, day, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId, "items", day, "research"]), { method: "POST", body });
+  }
+
+  contentPlanDraft(accountId, reportId, day, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId, "items", day, "draft"]), { method: "POST", body });
+  }
+
+  contentPlanVisuals(accountId, reportId, day, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "plans", reportId, "items", day, "visuals"]), { method: "POST", body });
+  }
+
+  contentPostReply(accountId, workItemId, taskId, body = {}) {
+    return this.requestJson(accountPath(accountId, ["content_ops", "tracked_posts", workItemId, "comments", taskId, "reply"]), { method: "POST", body });
+  }
+
   contentWorkItem(accountId, workItemId) {
     return this.requestJson(accountPath(accountId, ["content_ops", "work_items", workItemId]));
   }
