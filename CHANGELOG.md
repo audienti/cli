@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.101] - 2026-10-05
+
+### Changed
+
+- `POST quick_starts` accepts `page_url` to read one page, such as a product or landing page, for a new experiment. Each read makes a fresh result and leaves the account's company website unchanged. Only the person asking can read a page; nobody reads one for someone else.
+- Card edits on the API keep the same fields as before; the list now lives in one place shared with the web.
+
 ## [0.1.100] - 2026-10-05
 
 ### Changed
