@@ -7996,8 +7996,6 @@ function renderProspectReplan(payload, context) {
     writeLine(context.stdout, "The request was recorded, but the Planner could not apply it. Review the reason before retrying.");
   } else if (payload?.status === "evaluation_error") {
     writeLine(context.stdout, "Planner evaluation failed. Fix the evaluation error and rerun with --apply.");
-  } else if (payload?.status === "unsupported_plan_version") {
-    writeLine(context.stdout, "This membership uses an unsupported Planner version. Migrate it before retrying.");
   } else if (payload?.status === "not_applied") {
     writeLine(context.stdout, "The plan was not persisted. Review the reason before retrying.");
   }
@@ -8065,8 +8063,7 @@ const REPLAN_STATUS_LABELS = Object.freeze({
   pending: "pending",
   busy: "busy",
   failed: "failed",
-  evaluation_error: "evaluation error",
-  unsupported_plan_version: "unsupported plan version"
+  evaluation_error: "evaluation error"
 });
 
 function replanStatusLabel(payload) {

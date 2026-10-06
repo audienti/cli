@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.102] - 2026-10-06
+
+### Removed
+
+- The `unsupported_plan_version` planner status. Every prospect plan now uses the current planner version, so the API no longer returns that status and the CLI no longer labels it.
+
 ## [0.1.101] - 2026-10-05
 
 ### Changed

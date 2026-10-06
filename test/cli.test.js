@@ -6645,12 +6645,6 @@ test("prospects replan renders canonical non-applied statuses and refresh reason
       guidance: /evaluation failed/
     },
     {
-      status: "unsupported_plan_version",
-      label: "unsupported plan version",
-      reason: "unsupported_plan_version",
-      guidance: /unsupported Planner version/
-    },
-    {
       status: "not_applied",
       label: "not applied",
       reason: "legacy",
