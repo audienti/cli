@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.104] - 2026-10-07
+
+### Changed
+
+- `POST quick_starts` with `page_url` takes `principal_account_user_id` from anyone in the account, as the experiment form does (#2705). The chosen person owns the page result, the experiment and its prospects. Anyone in the account can open a page result. Setup quick starts for another person still need an admin.
+
 ## [0.1.103] - 2026-10-06
 
 ### Changed
