@@ -25,8 +25,9 @@ const DEFAULT_AUTH_LOGIN_TIMEOUT_SECONDS = 180;
 // Start covers signup plus email confirmation, which takes longer than a sign-in.
 const DEFAULT_START_LOGIN_TIMEOUT_SECONDS = 900;
 const DEFAULT_SETUP_TIMEOUT_SECONDS = 300;
+const DEFAULT_PAYMENT_POLL_INTERVAL_SECONDS = 3;
 const START_USAGE = "Usage: audienti start [--host https://app.audienti.com] [--no-open] [--json]";
-const SETUP_USAGE = "Usage: audienti setup [--url <company_url>] [--sell-to <who you sell to>] [--ask <what the prospect says yes to>] [--yes] [--json]";
+const SETUP_USAGE = "Usage: audienti setup [--url <company_url>] [--city <city> --state <code> --country <code>] [--sell-to <who you sell to>] [--ask <what the prospect says yes to>] [--yes] [--json]";
 const SETUP_FLAGS_EXAMPLE = "audienti setup --url https://acme.com --sell-to \"<who you sell to>\" --ask \"<what they say yes to>\" --yes";
 const DEFAULT_WRITER_TEST_RUN_TIMEOUT_SECONDS = 180;
 const DEFAULT_WRITER_TEST_RUN_POLL_INTERVAL_SECONDS = 2;
@@ -744,9 +745,10 @@ async function start(args, context) {
   const host = normalizeHost(values.host || config.host || DEFAULT_HOST);
 
   say("Welcome to Audienti.");
-  say("Audienti finds the people who fit your business, spots when they're ready to talk, and drafts the outreach.");
-  say("Nothing sends without your approval.");
   say();
+  // The first two intro screens of the web signup. The third names the
+  // price, so it is shown at the pay step, where the price is known.
+  START_INTRO.slice(0, 2).forEach((screen, index) => writeIntroPoint(say, index + 1, screen));
 
   let session = await savedSession(config, context);
   if (!session && !interactive) {
@@ -813,35 +815,170 @@ async function start(args, context) {
         ? "audienti users select <account_user_id|email|name|me>"
         : interactive ? "audienti setup" : SETUP_FLAGS_EXAMPLE;
 
+    // Payment comes before setup, as on the web: unpaid accounts run nothing.
+    const payment = status === "ready" ? await session.client.accountPayment(account.prefix_id) : null;
+    const paymentNeeded = payment?.state === "payment_needed";
+    const startStatus = paymentNeeded ? "payment_required" : status;
+    const startNext = paymentNeeded ? "audienti payment code <signup_code>" : nextCommand;
+
     if (values.json) {
       return writeJson(context.stdout, {
         kind: "start",
-        status,
+        status: startStatus,
         signed_in: true,
         host: session.client.host,
         user: session.label,
         account: account ? { id: account.prefix_id, name: account.name } : null,
         account_user: accountUser ? { id: accountUser.id, name: accountUser.name || null, email: accountUser.email || null } : null,
-        next_command: nextCommand
+        ...(paymentNeeded ? { payment_url: payment.payment_url || null } : {}),
+        next_command: startNext
       });
     }
 
+    if (payment?.state === "payment_stopped") throw new CommandError(PAYMENT_STOPPED_MESSAGE);
+
     if (status !== "ready" || !interactive) {
-      say(`Next: ${nextCommand}`);
+      if (paymentNeeded) writeAccountPayment(payment, context);
+      say(`Next: ${startNext}`);
       return 0;
     }
 
-    say();
-    if (await askYesNo(prompter, "Set up your first motion now? [Y/n] ", { defaultYes: true })) {
+    if (paymentNeeded) {
       say();
-      return setupWizard([], context, { prompter });
+      await startPayStep(session.client, account.prefix_id, payment, { prompter, say, context, open: !values["no-open"] });
     }
 
-    say("No problem. When you're ready, run: audienti setup");
-    return 0;
+    return startSetupStep(session.client, account, context, { prompter, say });
   } finally {
     prompter.close();
   }
+}
+
+// The three intro screens of the web signup (Users::SignupIntro), word for word.
+const START_INTRO = [
+  {
+    title: "See who's ready to buy from you this week.",
+    body: "Give us your website. In a few minutes you'll see your ideal buyer, your offer in plain words, and real people showing signs they're ready right now."
+  },
+  {
+    title: "We warm them up in your name, like a person would.",
+    body: "We view, follow and like their posts on LinkedIn, weekdays 9 to 5 your time, at a normal human pace. By the time you reach out, they've already seen your name."
+  },
+  {
+    title: "Get {credits} of credits for {price}.",
+    body: "A free trial would only show you a demo. Your {price} gets you {credits} of credits that do real work: real buyers found and warmed up on your profile, with messages written and waiting for your OK. Nothing goes out unless you approve it."
+  }
+];
+
+const PAYMENT_STOPPED_MESSAGE = "The payment for this account was returned, so nothing runs. Contact Audienti support to start again.";
+
+function writeIntroPoint(say, number, screen, values = {}) {
+  const fill = (text) => text.replace(/\{(\w+)\}/g, (_, key) => values[key] ?? "");
+  say(`${number}. ${fill(screen.title)}`);
+  say(`   ${fill(screen.body)}`);
+  say();
+}
+
+// Same as Accounts::Admission.usage_label for dollars: $5, or $5.50.
+function dollarLabel(cents) {
+  const amount = Number(cents) || 0;
+  return amount % 100 === 0 ? `$${amount / 100}` : `$${(amount / 100).toFixed(2)}`;
+}
+
+// Pay by card in the browser, or type a signup code here. The card form needs
+// a browser; the terminal waits until the account shows as paid.
+async function startPayStep(client, accountId, payment, { prompter, say, context, open }) {
+  const usage = payment?.card_usage?.unit === "usd_cents" ? dollarLabel(payment.card_usage.amount) : "starting";
+  writeIntroPoint(say, 3, START_INTRO[2], { price: dollarLabel(payment?.price?.amount), credits: usage });
+
+  for (;;) {
+    const answer = await prompter.ask("Press Enter to pay by card in your browser, or type a signup code: ");
+    if (!answer) break;
+
+    try {
+      await client.redeemSignupCode(accountId, answer);
+      say("Code accepted. No card needed.");
+      say();
+      return;
+    } catch (error) {
+      if (!(error instanceof ApiError) || ![403, 422, 429].includes(error.status)) throw error;
+      say(typeof error.body?.error === "string" ? error.body.error : "That code didn't work.");
+    }
+  }
+
+  say("Opening the pay page in your browser. If it doesn't open, visit:");
+  say(`  ${payment.payment_url}`);
+  if (open) openBrowser(payment.payment_url, context);
+  say("Waiting for your payment...");
+
+  const deadline = context.now().getTime() + DEFAULT_START_LOGIN_TIMEOUT_SECONDS * 1000;
+  let current = payment;
+  while (current?.state === "payment_needed") {
+    if (context.now().getTime() >= deadline) {
+      throw new CommandError("We haven't seen your payment yet. Finish on the pay page, then run `audienti start` again.");
+    }
+    await context.sleep(DEFAULT_PAYMENT_POLL_INTERVAL_SECONDS * 1000);
+    current = await client.accountPayment(accountId);
+  }
+  if (current?.state === "payment_stopped") throw new CommandError(PAYMENT_STOPPED_MESSAGE);
+
+  say("Payment received. Thank you.");
+  say();
+}
+
+// Lands on the setup step the person is on, as the web does after a return.
+async function startSetupStep(client, account, context, { prompter, say }) {
+  const accountId = account.prefix_id;
+  const goLiveAccount = { id: accountId, name: account.name };
+  const state = await client.setupState(accountId);
+  if (state?.step === "live") {
+    say("Setup is done. LinkedIn is connected and your experiment is live.");
+    say("Next: audienti operator next");
+    return 0;
+  }
+  if (state?.step === "go_live") {
+    writeGoLiveStep(client.host, say, { state, account: goLiveAccount });
+    return 0;
+  }
+  if (state?.step === "targeting" && state.draft_id) {
+    // Read the saved draft as it is. Generating again could replace a draft
+    // the person already edited.
+    say("Your draft is ready. Let's check it.");
+    say();
+    return setupWizard([], context, { prompter, resumeDraftId: state.draft_id });
+  }
+
+  say();
+  if (await askYesNo(prompter, "Set up your first experiment now? [Y/n] ", { defaultYes: true })) {
+    say();
+    return setupWizard([], context, { prompter });
+  }
+
+  say("No problem. When you're ready, run: audienti setup");
+  return 0;
+}
+
+function goLiveUrl(host) {
+  return new URL("/quick_start/go_live", host).toString();
+}
+
+// Step 3. LinkedIn sign-in has no terminal prompt yet, so the person
+// finishes it on the setup page, which grants the LinkedIn account to the
+// browser's current account only. The page has no account in its URL, so
+// name the account the terminal set up and send the person to switch first.
+function writeGoLiveStep(host, say, { state = null, account = null } = {}) {
+  if (state?.motion) say(`Your experiment: ${display(state.motion.name)} (${display(state.motion.prefix_id)}).`);
+  say("Last step: connect LinkedIn to go live.");
+  say("Connecting starts outreach: we view, follow and like the people we find, weekdays, 9 to 5 your time. Connection requests and messages wait for your OK.");
+  say("The terminal can't connect LinkedIn yet. Finish this step on the web.");
+  if (account?.id) {
+    const label = account.name ? `${account.name} (${account.id})` : account.id;
+    say(`First make sure the browser is on the account ${label}. If it shows another account, switch here:`);
+    say(`  ${new URL("/accounts", host).toString()}`);
+    say("Then open:");
+  }
+  say(`  ${goLiveUrl(host)}`);
+  say("Audienti keeps finding people in the meantime. Check where setup stands with: audienti motions setup-state");
 }
 
 async function savedSession(config, context) {
@@ -1001,10 +1138,14 @@ const SETUP_QUESTIONS = [
   }
 ];
 
-async function setupWizard(args, context, { accountOverride, prompter: sharedPrompter } = {}) {
+async function setupWizard(args, context, { accountOverride, prompter: sharedPrompter, resumeDraftId = null } = {}) {
+  const resume = Boolean(resumeDraftId);
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     url: { type: "string" },
+    city: { type: "string" },
+    state: { type: "string" },
+    country: { type: "string" },
     "sell-to": { type: "string" },
     ask: { type: "string" },
     yes: { type: "boolean" }
@@ -1038,8 +1179,8 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
 
   try {
     const answers = { url: values.url, "sell-to": values["sell-to"], ask: values.ask };
-    if (interactive) {
-      say("Let's set up your first motion. Three quick questions.");
+    if (interactive && !resume) {
+      say("Step 1 of 3: Your company. Three quick questions.");
       for (const [index, question] of SETUP_QUESTIONS.entries()) {
         if (answers[question.key] !== undefined) continue;
 
@@ -1055,19 +1196,33 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
 
     const sellTo = cleanSentence(answers["sell-to"]);
     const ask = cleanSentence(answers.ask);
-    const requestBody = {
+    let place = { city: values.city, state_code: values.state, country_code: values.country };
+    const requestBody = () => ({
       quick_start: compactObject({
         company_url: String(answers.url || "").trim() || undefined,
+        ...place,
         feedback: setupFeedback({ sellTo, ask })
       })
-    };
+    });
 
-    say("Reading your website and drafting your first motion. This usually takes a minute or two.");
-    let draft;
-    try {
-      draft = await client.createQuickStart(accountId, requestBody);
-    } catch (error) {
-      throw setupCreateError(error);
+    let draft = resume ? await client.quickStart(accountId, resumeDraftId) : null;
+    if (!resume) say("Reading your website and drafting your first experiment. This usually takes a minute or two.");
+    while (!draft) {
+      try {
+        draft = await client.createQuickStart(accountId, requestBody());
+        break;
+      } catch (error) {
+        // Step 1 needs the person's place before the first draft. The API
+        // names the field; ask for it here and send again.
+        if (!(error instanceof ApiError && error.body?.field === "location")) throw setupCreateError(error);
+        const reason = cleanSentence(typeof error.body?.error === "string" ? error.body.error : "We need your city, state or province, and country");
+        if (!interactive) {
+          throw new CommandError(`${reason}. Pass --city, --state and --country, for example --city Denver --state CO --country US.`);
+        }
+        say(`${reason}.`);
+        place = await askSetupPlace(prompter, place);
+        say();
+      }
     }
 
     let polls = 0;
@@ -1085,10 +1240,13 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
       throw new CommandError("The draft is taking longer than usual. Nothing was created. Run `audienti setup` again in a few minutes.");
     }
 
-    renderSetupDraft(draft, { ask }, say);
-
     let confirmed = Boolean(values.yes);
-    if (!confirmed && interactive) confirmed = await askYesNo(prompter, "Create this? [y/N] ");
+    if (!confirmed && interactive) {
+      say("Step 2 of 3: Verify your targeting.");
+      ({ draft, confirmed } = await reviewSetupDraft(client, accountId, draft, { ask, prompter, say }));
+    } else {
+      renderSetupDraft(draft, { ask }, say);
+    }
 
     if (!confirmed) {
       const payload = {
@@ -1108,7 +1266,7 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
     }
 
     const confirmation = await client.confirmQuickStart(accountId, draft.id, {});
-    const connectUrl = new URL("/user/social_cookies", client.host).toString();
+    const connectUrl = goLiveUrl(client.host);
     if (values.json) {
       return writeJson(context.stdout, {
         kind: "setup",
@@ -1125,11 +1283,14 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
     }
 
     const motion = confirmation?.motion || {};
-    say(`Created your first motion: ${display(motion.name)} (${display(motion.prefix_id)}).`);
+    say(`Created your first experiment: ${display(motion.name)} (${display(motion.prefix_id)}). Finding people now.`);
     say();
-    say("Next: connect your LinkedIn account so Audienti can reach people for you.");
-    say(`  Connect it here: ${connectUrl}`);
-    say("  Then check it with: audienti setup play preflight");
+    say("Step 3 of 3: Go live.");
+    const goLiveAccount = {
+      id: accountId,
+      name: accountId === config.accountId ? config.accountName : undefined
+    };
+    writeGoLiveStep(client.host, say, { account: goLiveAccount });
     say("Nothing is sent until LinkedIn is connected, and nothing sends without your approval.");
     return 0;
   } finally {
@@ -1174,7 +1335,7 @@ function setupCreateError(error) {
 
 function setupDraftFailedError(reason) {
   const detail = reason ? ` (${cleanSentence(reason)})` : "";
-  return new CommandError(`We couldn't draft a motion from that website${detail}. Nothing was created. Run \`audienti setup\` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.`);
+  return new CommandError(`We couldn't draft an experiment from that website${detail}. Nothing was created. Run \`audienti setup\` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.`);
 }
 
 function renderSetupDraft(draft, { ask }, say) {
@@ -1189,6 +1350,8 @@ function renderSetupDraft(draft, { ask }, say) {
   }
   say(`  Who you'll reach: ${display(icp.name, "people who fit your website")}${titles}`);
   say(`  Your offer: ${[offer.title, offer.description].filter(Boolean).join(" - ") || "drafted from your website"}`);
+  const signals = Array.isArray(preview.signals) ? preview.signals : [];
+  if (signals.length) say(`  Signals: ${signals.map((signal) => signal.signal_text || signal.name).filter(Boolean).join(" · ")}`);
   say(`  The ask: ${ask || "not set; the writer will suggest one"}`);
   if (preview.premise) say(`  Why now: ${preview.premise}`);
   const examples = Array.isArray(preview.example_people) ? preview.example_people : [];
@@ -1199,6 +1362,88 @@ function renderSetupDraft(draft, { ask }, say) {
     }
   }
   say();
+}
+
+async function askSetupPlace(prompter, place) {
+  const city = await askKeeping(prompter, "City", place.city);
+  const stateCode = await askKeeping(prompter, "State or province code, like CO or ON", place.state_code);
+  const country = await askKeeping(prompter, "Country code", place.country_code || "US");
+  return { city, state_code: stateCode, country_code: country };
+}
+
+// Asks one question; Enter keeps the value shown in brackets.
+async function askKeeping(prompter, label, current) {
+  const shown = current ? ` [${current}]` : "";
+  const answer = await prompter.ask(`${label}${shown}: `);
+  return answer || current || undefined;
+}
+
+const SETUP_DRAFT_CHOICES = "Press Enter to create this experiment, or type a to change the audience, o the offer, s the signals, or n to stop: ";
+
+// Step 2: show the cards, let the person change one card at a time through
+// the same editor as the setup page, then create on Enter.
+async function reviewSetupDraft(client, accountId, initialDraft, { ask, prompter, say }) {
+  let draft = initialDraft;
+  for (;;) {
+    renderSetupDraft(draft, { ask }, say);
+    const answer = (await prompter.ask(SETUP_DRAFT_CHOICES)).toLowerCase();
+    if (!answer || /^y(es)?$/.test(answer)) return { draft, confirmed: true };
+    if (/^no?$/.test(answer)) return { draft, confirmed: false };
+
+    const section = { a: "icp", audience: "icp", o: "offer", offer: "offer", s: "signals", signals: "signals" }[answer];
+    if (!section) {
+      say("Press Enter, or type a, o, s or n.");
+      continue;
+    }
+    draft = await editSetupDraftCard(client, accountId, draft, section, { prompter, say });
+    say();
+  }
+}
+
+async function editSetupDraftCard(client, accountId, draft, section, { prompter, say }) {
+  const preview = draft?.preview || {};
+  let values;
+  if (section === "icp") {
+    const icp = preview.icp || {};
+    const name = await askKeeping(prompter, "Who you'll reach, in one line", icp.name);
+    const titles = await askKeeping(prompter, "Job titles, separated by commas", (icp.job_titles || []).join(", "));
+    values = { name, job_titles: String(titles || "").split(",").map((title) => title.trim()).filter(Boolean) };
+  } else if (section === "offer") {
+    const offer = preview.offer || {};
+    values = {
+      title: await askKeeping(prompter, "Offer name", offer.title),
+      description: await askKeeping(prompter, "Offer in one or two sentences", offer.description)
+    };
+  } else {
+    const signals = Array.isArray(preview.signals) ? preview.signals : [];
+    if (!signals.length) {
+      say("This draft has no signals to change.");
+      return draft;
+    }
+    const rows = [];
+    for (const [index, signal] of signals.entries()) {
+      const before = signal.signal_text || signal.name;
+      const text = await askKeeping(prompter, `Signal ${index + 1}`, before);
+      // The name stays only while the text is the same; a new text names itself.
+      rows.push(compactObject({
+        index,
+        name: text === before ? signal.name : undefined,
+        signal_text: text,
+        company_signal_category: signal.company_signal_category
+      }));
+    }
+    values = { signals: rows };
+  }
+
+  try {
+    const updated = await client.updateQuickStart(accountId, draft.id, { section, draft: values });
+    say("Saved.");
+    return updated;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 422) throw error;
+    say(`That change wasn't saved: ${cleanSentence(error.body?.error || "it was rejected")}.`);
+    return draft;
+  }
 }
 
 async function createAuthCallbackServer({ state, context }) {
@@ -10268,8 +10513,8 @@ const HELP_TOPICS = new Map([
     "  audienti <command> [options]",
     "",
     "Start:",
-    "  audienti start                      Guided first run: sign in, pick your account",
-    "  audienti setup                      Guided setup of your first motion",
+    "  audienti start                      Guided first run: sign in, pay, set up your first experiment",
+    "  audienti setup                      Guided setup of your first experiment",
     "  audienti auth login                 Sign in through the browser",
     "  audienti auth token <token>         Save an API token",
     "  audienti accounts list             See accounts available to this token",
@@ -10744,15 +10989,26 @@ const HELP_TOPICS = new Map([
     "Status: implemented",
     "",
     "Purpose:",
-    "  Guided first run. Signs you in (or sends you to create an account) through the browser,",
-    "  picks your account and account user, then offers to run `audienti setup`.",
+    "  Guided first run, the same path as the web. Prints the intro, signs you in (or sends you to",
+    "  create an account) through the browser, and picks your account and account user. An unpaid",
+    "  account pays by card on the web pay page (opened for you; the terminal waits) or types a",
+    "  signup code here. Then setup runs in the terminal from the step you are on: your company,",
+    "  verify your targeting (change the audience, offer or signals card), and create the experiment.",
+    "  Connecting LinkedIn is finished on the web; the command prints the page address.",
     "  Running `audienti` with no arguments and no saved login starts here.",
     "",
     "Without a terminal:",
-    "  Never asks questions. Prints the sign-in command and the next step; `--json` returns them.",
+    "  Never asks questions. Prints the sign-in command, the pay page when payment is needed, and",
+    "  the next step; `--json` returns them (status payment_required with payment_url when unpaid).",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/admission.json",
+    "  POST /api/v1/accounts/:account_id/admission.json",
+    "  GET /api/v1/accounts/:account_id/quick_start/setup_state.json",
     "",
     "Effect:",
-    "  Saves the login, accountId and accountUserId in local CLI config. Sends nothing."
+    "  Saves the login, accountId and accountUserId in local CLI config. A signup code is used only",
+    "  when you type one. Creates an experiment only when you say so. Sends nothing."
   ].join("\n")],
 
   ["setup", [
@@ -10764,20 +11020,25 @@ const HELP_TOPICS = new Map([
     "",
     "Purpose:",
     "  `audienti setup` asks three questions (company website, who you sell to, what the prospect",
-    "  should say yes to), drafts an ICP, offer and motion with Quick Start, reads the draft back,",
-    "  and creates it only when you say yes. Nothing sends until LinkedIn is connected and approved.",
+    "  should say yes to), and your city, state or province, and country when the account needs them.",
+    "  It drafts an audience, offer and signals with Quick Start and shows the cards. Type a, o or s",
+    "  to change one card (the same editor as the web setup page), or press Enter to create the",
+    "  experiment. Then it prints the web page where you connect LinkedIn to go live.",
+    "  Nothing sends until LinkedIn is connected and approved.",
     "  Preflight account setup before an agent creates or activates an Audienti play.",
     "",
     "Without a terminal:",
-    "  Pass --url (required) and optionally --sell-to and --ask. Add --yes to create the draft.",
+    "  Pass --url (required) and optionally --sell-to, --ask, and --city/--state/--country.",
+    "  Add --yes to create the draft.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/quick_start.json",
     "  GET /api/v1/accounts/:account_id/quick_start/:draft_id.json",
+    "  PATCH /api/v1/accounts/:account_id/quick_start/:draft_id.json",
     "  POST /api/v1/accounts/:account_id/quick_start/:draft_id/confirm.json",
     "",
     "Commands:",
-    "  audienti setup                 Guided setup of your first motion",
+    "  audienti setup                 Guided setup of your first experiment",
     "  audienti setup play preflight  Check connected-account readiness and direct setup URLs"
   ].join("\n")],
 

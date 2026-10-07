@@ -36,21 +36,36 @@ audienti start
 audienti setup
 ```
 
-`audienti start` opens Audienti in your browser so you can sign in or create an
-account, then picks your account and account user (automatically when there is
-only one) and offers to run setup.
+`audienti start` walks you through the same path as the web:
 
-`audienti setup` asks for your company website, who you sell to, and what you
-want prospects to say yes to. It drafts your first motion, shows the draft, and
-asks `Create this?` before saving anything. Next, connect LinkedIn. Nothing is
-sent without your approval.
+1. It prints the intro: what Audienti does and how it warms people up.
+2. It opens Audienti in your browser so you can sign in or create an account,
+   then picks your account and account user (automatically when there is only
+   one).
+3. If the account has not paid, it shows the price and credits. Press Enter to
+   pay by card on the pay page (it opens in your browser and the address is
+   printed; the terminal waits until the payment shows), or type a signup code.
+4. It runs setup in the terminal from the step you are on. Step 1, your
+   company: website, who you sell to, what they should say yes to, and your
+   city, state or province, and country when the account needs them. Step 2,
+   verify your targeting: the audience, offer and signals cards. Type `a`, `o`
+   or `s` to change one card, or press Enter to create the experiment.
+5. Step 3, go live: connecting LinkedIn is not in the terminal yet. The command
+   prints the web page where you finish it.
 
-Without a terminal, `audienti start` never prompts and reports what to do next,
-and `setup` takes flags:
+`audienti setup` runs steps 1 and 2 on their own. Nothing is sent without your
+approval.
+
+Without a terminal, `audienti start` never prompts and reports what to do next
+(`payment_required` with the pay page when the account has not paid), and
+`setup` takes flags:
 
 ```bash
 audienti setup --url https://acme.com --sell-to "<who you sell to>" --ask "<what they say yes to>" --yes --json
 ```
+
+Add `--city <city> --state <code> --country <code>` when setup says it needs
+your place.
 
 Without `--yes`, a non-interactive setup drafts but creates nothing. Running
 `audienti` with no saved login starts `audienti start`; `audienti --help` still

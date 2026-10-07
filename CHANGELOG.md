@@ -4,6 +4,15 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.103] - 2026-10-06
+
+### Changed
+
+- `audienti start` now walks a new person through the same path as the web (#2551). It prints the intro, shows the price and opens the pay page for an unpaid account (the terminal waits until the payment shows), or takes a signup code. Then it runs setup from the step the person is on; a ready draft is read back as saved, with its edits, and never drafted again. Connecting LinkedIn is finished on the web; the command names the account to switch the browser to, then prints the page.
+- `audienti setup` shows the audience, offer and signals cards. Type `a`, `o` or `s` to change one card through the same editor as the web setup page, or press Enter to create the experiment. It asks for the city, state or province, and country when the account needs them; without a terminal pass `--city`, `--state` and `--country`.
+- `audienti start --json` reports `payment_required` with `payment_url` for an unpaid account.
+- Setup now says "experiment" and points to the web go-live page instead of the social accounts list.
+
 ## [0.1.102] - 2026-10-06
 
 ### Removed

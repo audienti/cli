@@ -39,16 +39,21 @@ audienti start
 audienti setup
 ```
 
-`audienti start` signs in through the browser (or creates an account) and picks
-the account. `audienti start --json` never prompts; it reports
-`sign_in_required` or `ready`. Browser login alone is:
+`audienti start` signs in through the browser (or creates an account), picks
+the account, hands an unpaid account to the web pay page (or takes a signup
+code), and runs setup in the terminal. `audienti start --json` never prompts; it
+reports `sign_in_required`, `payment_required` (with `payment_url`) or `ready`.
+Never pay or enter a signup code for the user. LinkedIn connect is finished on
+the web setup page (`/quick_start/go_live`); that page acts on the browser's current
+account, so tell the user to switch the browser to the CLI account first. Browser login alone is:
 
 ```bash
 audienti auth login
 ```
 
 `audienti setup --url <company_url> --sell-to "<who they sell to>" --ask "<what
-prospects say yes to>" --json` drafts a first motion without creating it. Show
+prospects say yes to>" --json` drafts a first experiment without creating it.
+Add `--city`, `--state` and `--country` when setup says it needs the place. Show
 the draft to the user and add `--yes` only after they approve creating it.
 
 Use `audienti auth token` only after the user supplies a token through an

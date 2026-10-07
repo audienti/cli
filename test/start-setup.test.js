@@ -75,6 +75,10 @@ const READY_DRAFT = {
   }
 };
 
+const PAID = { state: "running", admitted: true, admitted_via: "card", starting_usage: null, price: { amount: 500, currency: "usd" }, card_usage: { amount: 2000, unit: "usd_cents" }, payment_url: `${HOST}/account-payment` };
+const UNPAID = { ...PAID, state: "payment_needed", admitted: false, admitted_via: null };
+const STEP_COMPANY = { step: "company", step_number: 1, blocker: null, linkedin_connected: false, linkedin_sign_in: "not_started", people_found: 0, motion: null };
+
 const CONFIRMED = {
   reused: false,
   motion: { id: 7, prefix_id: "motn_first", name: "Acme first motion", kind: "outbound", status: "preparing" },
@@ -86,7 +90,9 @@ test("start signs a new person in through the browser, picks the only account an
     const { fetch, requests } = recordingFetch({
       [`GET ${HOST}/api/v1/me.json`]: jsonResponse({ name: "New Person", email: "new@example.test" }),
       [`GET ${HOST}/api/v1/accounts.json`]: jsonResponse([{ prefix_id: "acct_new", name: "New Co" }]),
-      [`GET ${HOST}/api/v1/accounts/acct_new/users.json`]: jsonResponse([{ id: 11, name: "New Person", email: "new@example.test", current: true }])
+      [`GET ${HOST}/api/v1/accounts/acct_new/users.json`]: jsonResponse([{ id: 11, name: "New Person", email: "new@example.test", current: true }]),
+      [`GET ${HOST}/api/v1/accounts/acct_new/admission.json`]: jsonResponse(PAID),
+      [`GET ${HOST}/api/v1/accounts/acct_new/quick_start/setup_state.json`]: jsonResponse(STEP_COMPANY)
     });
     const stdout = browserCallbackStdout({ token: "browser-token", accountId: "acct_new", accountName: "New Co" });
     const stderr = captureStream();
@@ -95,18 +101,23 @@ test("start signs a new person in through the browser, picks the only account an
 
     assert.equal(exitCode, 0, stderr.output);
     assert.match(stdout.output, /Welcome to Audienti\./);
-    assert.match(stdout.output, /Nothing sends without your approval\./);
+    assert.match(stdout.output, /1\. See who's ready to buy from you this week\.\n {3}Give us your website\./);
+    assert.match(stdout.output, /2\. We warm them up in your name, like a person would\./);
+    assert.doesNotMatch(stdout.output, /3\. Get/);
     assert.match(stdout.output, /First, sign in or create an account\./);
     assert.match(stdout.output, /New here\? Choose "sign up for an account"/);
     assert.match(stdout.output, /Signed in as New Person\./);
     assert.match(stdout.output, /Using account New Co \(acct_new\)\./);
     assert.match(stdout.output, /Working as New Person \(11\)\./);
-    assert.match(stdout.output, /Set up your first motion now\? \[Y\/n\]/);
+    assert.match(stdout.output, /Set up your first experiment now\? \[Y\/n\]/);
     assert.match(stdout.output, /When you're ready, run: audienti setup/);
+    assert.doesNotMatch(stdout.output, /motion/i);
     assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), [
       `GET ${HOST}/api/v1/me.json`,
       `GET ${HOST}/api/v1/accounts.json`,
-      `GET ${HOST}/api/v1/accounts/acct_new/users.json`
+      `GET ${HOST}/api/v1/accounts/acct_new/users.json`,
+      `GET ${HOST}/api/v1/accounts/acct_new/admission.json`,
+      `GET ${HOST}/api/v1/accounts/acct_new/quick_start/setup_state.json`
     ]);
 
     const config = await readConfig({ env });
@@ -129,7 +140,9 @@ test("start with a saved login skips sign-in and asks which account when there a
       [`GET ${HOST}/api/v1/accounts/acct_one/users.json`]: jsonResponse([
         { id: 21, name: "Teammate", email: "mate@example.test", current: false },
         { id: 22, name: "Saved Person", email: "saved@example.test", current: true }
-      ])
+      ]),
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(PAID),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse(STEP_COMPANY)
     });
     const stdout = captureStream();
 
@@ -143,7 +156,7 @@ test("start with a saved login skips sign-in and asks which account when there a
     assert.match(stdout.output, /Type a number from 1 to 2\./);
     assert.match(stdout.output, /Using account One \(acct_one\)\./);
     assert.match(stdout.output, /Working as Saved Person \(22\)\./);
-    assert.equal(requests.length, 3);
+    assert.equal(requests.length, 5);
 
     const config = await readConfig({ env });
     assert.equal(config.accountId, "acct_one");
@@ -223,7 +236,8 @@ test("start without a terminal picks the only account and prints the flag-driven
     const { fetch } = recordingFetch({
       [`GET ${HOST}/api/v1/me.json`]: jsonResponse({ name: "Solo" }),
       [`GET ${HOST}/api/v1/accounts.json`]: jsonResponse([{ prefix_id: "acct_solo", name: "Solo Co" }]),
-      [`GET ${HOST}/api/v1/accounts/acct_solo/users.json`]: jsonResponse([{ id: 5, name: "Solo", current: true }])
+      [`GET ${HOST}/api/v1/accounts/acct_solo/users.json`]: jsonResponse([{ id: 5, name: "Solo", current: true }]),
+      [`GET ${HOST}/api/v1/accounts/acct_solo/admission.json`]: jsonResponse(PAID)
     });
     const stdout = captureStream();
 
@@ -298,15 +312,18 @@ test("setup asks three questions, reads the draft back, and creates it on yes", 
     assert.match(stdout.output, /1\/3 {2}What's your company website\?\n {5}Good: https:\/\/acme\.com\n {5}Bad: {2}acme/);
     assert.match(stdout.output, /2\/3 {2}Who do you sell to\? One sentence\./);
     assert.match(stdout.output, /3\/3 {2}What do you want the prospect to say yes to\?/);
-    assert.match(stdout.output, /Reading your website and drafting your first motion\./);
+    assert.match(stdout.output, /Step 1 of 3: Your company\./);
+    assert.match(stdout.output, /Reading your website and drafting your first experiment\./);
+    assert.match(stdout.output, /Step 2 of 3: Verify your targeting\./);
     assert.match(stdout.output, /Reading your website\.\.\./);
     assert.match(stdout.output, /Who you'll reach: Finance leaders \(VP Finance, Controller\)/);
     assert.match(stdout.output, /Your offer: Close audit - Find the slow steps in month-end close\./);
     assert.match(stdout.output, /The ask: A 20-minute call about their close/);
     assert.match(stdout.output, /Example people with these job titles \(a sample to check the audience, not your prospects\):\n {4}- Dana Ruiz, VP Finance at Northwind, Denver, CO/);
-    assert.match(stdout.output, /Create this\? \[y\/N\]/);
-    assert.match(stdout.output, /Created your first motion: Acme first motion \(motn_first\)\./);
-    assert.match(stdout.output, /Connect it here: https:\/\/app\.audienti\.com\/user\/social_cookies/);
+    assert.match(stdout.output, /Press Enter to create this experiment, or type a to change the audience, o the offer, s the signals, or n to stop:/);
+    assert.match(stdout.output, /Created your first experiment: Acme first motion \(motn_first\)\. Finding people now\./);
+    assert.match(stdout.output, /Step 3 of 3: Go live\./);
+    assert.match(stdout.output, /The terminal can't connect LinkedIn yet\. Finish this step on the web\.\nFirst make sure the browser is on the account One \(acct_one\)\. If it shows another account, switch here:\n {2}https:\/\/app\.audienti\.com\/accounts\nThen open:\n {2}https:\/\/app\.audienti\.com\/quick_start\/go_live/);
     assert.match(stdout.output, /Nothing is sent until LinkedIn is connected, and nothing sends without your approval\./);
 
     assert.deepEqual(requests.map((request) => `${request.method} ${request.url}`), [
@@ -361,7 +378,7 @@ test("setup explains a failed draft in plain words", async () => {
     assert.equal(exitCode, 1);
     assert.equal(
       stderr.output,
-      "Error: We couldn't draft a motion from that website (Website returned no readable text). Nothing was created. Run `audienti setup` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.\n"
+      "Error: We couldn't draft an experiment from that website (Website returned no readable text). Nothing was created. Run `audienti setup` again in a few minutes. If it keeps failing, check the address or add a sentence about who you sell to.\n"
     );
   });
 });
@@ -407,7 +424,7 @@ test("setup runs from flags without a terminal and returns JSON", async () => {
       motion: CONFIRMED.motion,
       reservation: CONFIRMED.reservation,
       next_step: {
-        connect_linkedin_url: `${HOST}/user/social_cookies`,
+        connect_linkedin_url: `${HOST}/quick_start/go_live`,
         check_command: "audienti setup play preflight"
       }
     });
@@ -471,6 +488,8 @@ test("start continues straight into setup when the person says yes", async () =>
       [`GET ${HOST}/api/v1/me.json`]: jsonResponse({ name: "Ready Person" }),
       [`GET ${HOST}/api/v1/accounts.json`]: jsonResponse([{ prefix_id: "acct_one", name: "One" }]),
       [`GET ${HOST}/api/v1/accounts/acct_one/users.json`]: jsonResponse([{ id: 3, name: "Ready Person", current: true }]),
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(PAID),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse(STEP_COMPANY),
       [`POST ${HOST}/api/v1/accounts/acct_one/quick_start.json`]: jsonResponse(READY_DRAFT)
     });
     const stdout = captureStream();
@@ -478,7 +497,7 @@ test("start continues straight into setup when the person says yes", async () =>
     const exitCode = await run(["start"], { env, fetch, stdout, stdin: terminalInput(["", "https://acme.com", "", "", "n"]) });
 
     assert.equal(exitCode, 0);
-    assert.match(stdout.output, /Let's set up your first motion\. Three quick questions\./);
+    assert.match(stdout.output, /Step 1 of 3: Your company\. Three quick questions\./);
     assert.match(stdout.output, /Nothing was created\./);
     assert.deepEqual(requests.at(-1).body, { quick_start: { company_url: "https://acme.com" } });
   });
@@ -495,5 +514,250 @@ test("setup play preflight is still its own command", async () => {
 
     assert.equal(exitCode, 0);
     assert.equal(requests.length, 1);
+  });
+});
+
+function savedStartRoutes(extra) {
+  return {
+    [`GET ${HOST}/api/v1/me.json`]: jsonResponse({ name: "Ready Person" }),
+    [`GET ${HOST}/api/v1/accounts.json`]: jsonResponse([{ prefix_id: "acct_one", name: "One" }]),
+    [`GET ${HOST}/api/v1/accounts/acct_one/users.json`]: jsonResponse([{ id: 3, name: "Ready Person", current: true }]),
+    ...extra
+  };
+}
+
+test("start on an unpaid account shows the price, hands off to the pay page and waits until it is paid", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one", accountName: "One" });
+    let reads = 0;
+    const { fetch, requests } = recordingFetch(savedStartRoutes({
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: () => {
+        reads += 1;
+        return jsonResponse(reads < 3 ? UNPAID : PAID);
+      },
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse(STEP_COMPANY)
+    }));
+    const stdout = captureStream();
+    const sleeps = [];
+
+    const exitCode = await run(["start", "--no-open"], {
+      env, fetch, stdout, stdin: terminalInput(["", "n"]), sleep: async (ms) => sleeps.push(ms)
+    });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /3\. Get \$20 of credits for \$5\.\n {3}A free trial would only show you a demo\. Your \$5 gets you \$20 of credits/);
+    assert.match(stdout.output, /Press Enter to pay by card in your browser, or type a signup code:/);
+    assert.match(stdout.output, /Opening the pay page in your browser\. If it doesn't open, visit:\n {2}https:\/\/app\.audienti\.com\/account-payment/);
+    assert.match(stdout.output, /Waiting for your payment\.\.\./);
+    assert.match(stdout.output, /Payment received\. Thank you\./);
+    assert.match(stdout.output, /Set up your first experiment now\?/);
+    assert.deepEqual(sleeps, [3000, 3000]);
+    assert.equal(requests.filter((request) => request.url.endsWith("/admission.json")).length, 3);
+    assert.equal(requests.filter((request) => request.method === "POST").length, 0);
+  });
+});
+
+test("start on an unpaid account takes a signup code in the terminal and asks again after a wrong one", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one", accountName: "One" });
+    const { fetch, requests } = recordingFetch(savedStartRoutes({
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(UNPAID),
+      [`POST ${HOST}/api/v1/accounts/acct_one/admission.json`]: ({ body }) => (body.code === "GOOD-CODE"
+        ? jsonResponse({ ...PAID, admitted_via: "code" })
+        : jsonResponse({ error: "That code didn't work.", code: "code_refused" }, { status: 422 })),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse(STEP_COMPANY)
+    }));
+    const stdout = captureStream();
+
+    const exitCode = await run(["start", "--no-open"], {
+      env,
+      fetch,
+      stdout,
+      stdin: terminalInput(["WRONG", "GOOD-CODE", "n"]),
+      sleep: async () => {
+        throw new Error("a code must not wait for a card");
+      }
+    });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /That code didn't work\.\nPress Enter to pay by card/);
+    assert.match(stdout.output, /Code accepted\. No card needed\./);
+    assert.doesNotMatch(stdout.output, /Opening the pay page/);
+    assert.deepEqual(requests.filter((request) => request.method === "POST").map((request) => request.body), [
+      { code: "WRONG" },
+      { code: "GOOD-CODE" }
+    ]);
+  });
+});
+
+test("start --json on an unpaid account returns the pay page and the code command", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one", accountName: "One" });
+    const { fetch } = recordingFetch(savedStartRoutes({
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(UNPAID)
+    }));
+    const stdout = captureStream();
+
+    const exitCode = await run(["start", "--json"], { env, fetch, stdout, stdin: pipedInput() });
+
+    assert.equal(exitCode, 0);
+    const payload = JSON.parse(stdout.output);
+    assert.equal(payload.status, "payment_required");
+    assert.equal(payload.payment_url, `${HOST}/account-payment`);
+    assert.equal(payload.next_command, "audienti payment code <signup_code>");
+  });
+});
+
+test("start after the experiment exists skips LinkedIn in the terminal and prints the web go-live page", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one", accountName: "One" });
+    const { fetch, requests } = recordingFetch(savedStartRoutes({
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(PAID),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse({
+        ...STEP_COMPANY, step: "go_live", step_number: 3, motion: { id: 7, prefix_id: "motn_first", name: "Acme first", status: "preparing" }
+      })
+    }));
+    const stdout = captureStream();
+
+    const exitCode = await run(["start", "--no-open"], { env, fetch, stdout, stdin: terminalInput([]) });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /Your experiment: Acme first \(motn_first\)\./);
+    assert.match(stdout.output, /Last step: connect LinkedIn to go live\./);
+    assert.match(stdout.output, /Connection requests and messages wait for your OK\./);
+    assert.match(stdout.output, /First make sure the browser is on the account One \(acct_one\)\. If it shows another account, switch here:\n {2}https:\/\/app\.audienti\.com\/accounts\nThen open:\n {2}https:\/\/app\.audienti\.com\/quick_start\/go_live/);
+    assert.doesNotMatch(stdout.output, /LinkedIn (login|password)/);
+    assert.equal(requests.filter((request) => request.method !== "GET").length, 0);
+  });
+});
+
+test("start with a ready draft reads that saved draft, keeps its edits and feedback, and never generates a new one", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one", accountName: "One" });
+    const editedDraft = {
+      ...READY_DRAFT,
+      id: 77,
+      feedback: "We sell to: finance teams at SaaS companies.",
+      preview: {
+        ...READY_DRAFT.preview,
+        icp: { name: "SaaS controllers", job_titles: ["Controller"] },
+        offer: { title: "Edited close audit", description: "Saved card edit." }
+      }
+    };
+    const { fetch, requests } = recordingFetch(savedStartRoutes({
+      [`GET ${HOST}/api/v1/accounts/acct_one/admission.json`]: jsonResponse(PAID),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/setup_state.json`]: jsonResponse({ ...STEP_COMPANY, step: "targeting", step_number: 2, draft_id: 77 }),
+      [`GET ${HOST}/api/v1/accounts/acct_one/quick_start/77.json`]: jsonResponse(editedDraft),
+      [`POST ${HOST}/api/v1/accounts/acct_one/quick_start.json`]: () => {
+        throw new Error("resume must not generate a new draft");
+      }
+    }));
+    const stdout = captureStream();
+
+    const exitCode = await run(["start", "--no-open"], { env, fetch, stdout, stdin: terminalInput(["n"]) });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /Your draft is ready\. Let's check it\./);
+    assert.doesNotMatch(stdout.output, /What's your company website\?/);
+    assert.doesNotMatch(stdout.output, /Reading your website/);
+    assert.match(stdout.output, /Step 2 of 3: Verify your targeting\./);
+    assert.match(stdout.output, /Who you'll reach: SaaS controllers \(Controller\)/);
+    assert.match(stdout.output, /Your offer: Edited close audit - Saved card edit\./);
+    assert.match(stdout.output, /Nothing was created\./);
+    assert.equal(requests.filter((request) => request.method !== "GET").length, 0);
+    assert.equal(requests.filter((request) => request.url.endsWith("/quick_start/77.json")).length, 1);
+  });
+});
+
+const EDITABLE_DRAFT = {
+  ...READY_DRAFT,
+  preview: {
+    ...READY_DRAFT.preview,
+    signals: [{ name: "Hiring finance", signal_text: "Hiring a controller", company_signal_category: "hiring" }]
+  }
+};
+
+test("setup edits the audience and signals cards through the draft editor, shows a refused edit, then creates", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one" });
+    const edited = {
+      ...EDITABLE_DRAFT,
+      preview: { ...EDITABLE_DRAFT.preview, icp: { name: "Finance leaders", job_titles: ["CFO", "Controller"] } }
+    };
+    const { fetch, requests } = recordingFetch({
+      [`POST ${HOST}/api/v1/accounts/acct_one/quick_start.json`]: jsonResponse(EDITABLE_DRAFT),
+      [`PATCH ${HOST}/api/v1/accounts/acct_one/quick_start/42.json`]: ({ body }) => (body.section === "offer"
+        ? jsonResponse({ error: "Name your offer.", errors: ["Name your offer."] }, { status: 422 })
+        : jsonResponse(edited)),
+      [`POST ${HOST}/api/v1/accounts/acct_one/quick_start/42/confirm.json`]: jsonResponse(CONFIRMED, { status: 201 })
+    });
+    const stdout = captureStream();
+
+    const exitCode = await run(["setup"], {
+      env,
+      fetch,
+      stdout,
+      stdin: terminalInput([
+        "https://acme.com", "", "",
+        "a", "", "CFO, Controller",
+        "s", "Raised a Series B",
+        "o", "nope", "",
+        ""
+      ]),
+      sleep: async () => {}
+    });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /Signals: Hiring a controller/);
+    assert.match(stdout.output, /Who you'll reach, in one line \[Finance leaders\]:/);
+    assert.match(stdout.output, /Job titles, separated by commas \[VP Finance, Controller\]:/);
+    assert.match(stdout.output, /Who you'll reach: Finance leaders \(CFO, Controller\)/);
+    assert.match(stdout.output, /Signal 1 \[Hiring a controller\]:/);
+    assert.match(stdout.output, /That change wasn't saved: Name your offer\./);
+    assert.match(stdout.output, /Created your first experiment/);
+
+    const patches = requests.filter((request) => request.method === "PATCH").map((request) => request.body);
+    assert.deepEqual(patches, [
+      { section: "icp", draft: { name: "Finance leaders", job_titles: ["CFO", "Controller"] } },
+      { section: "signals", draft: { signals: [{ index: 0, signal_text: "Raised a Series B", company_signal_category: "hiring" }] } },
+      { section: "offer", draft: { title: "nope", description: "Find the slow steps in month-end close." } }
+    ]);
+    assert.equal(requests.at(-1).url, `${HOST}/api/v1/accounts/acct_one/quick_start/42/confirm.json`);
+  });
+});
+
+test("setup asks for the place when the API needs it and sends it with the website", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one" });
+    const { fetch, requests } = recordingFetch({
+      [`POST ${HOST}/api/v1/accounts/acct_one/quick_start.json`]: ({ body }) => (body.quick_start.city
+        ? jsonResponse(READY_DRAFT)
+        : jsonResponse({ error: "Enter your city, state or province, and country.", field: "location", code: "missing" }, { status: 422 }))
+    });
+    const stdout = captureStream();
+
+    const exitCode = await run(["setup"], { env, fetch, stdout, stdin: terminalInput(["https://acme.com", "", "", "Denver", "CO", "", "n"]) });
+
+    assert.equal(exitCode, 0, stdout.output);
+    assert.match(stdout.output, /Enter your city, state or province, and country\.\nCity:/);
+    assert.match(stdout.output, /Country code \[US\]:/);
+    assert.deepEqual(requests.at(-1).body, {
+      quick_start: { company_url: "https://acme.com", city: "Denver", state_code: "CO", country_code: "US" }
+    });
+  });
+});
+
+test("setup without a terminal names the place flags when the API needs the place", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await signedIn(env, { accountId: "acct_one" });
+    const { fetch } = recordingFetch({
+      [`POST ${HOST}/api/v1/accounts/acct_one/quick_start.json`]: jsonResponse({ error: "Enter your city.", field: "location", code: "missing" }, { status: 422 })
+    });
+    const stderr = captureStream();
+
+    const exitCode = await run(["setup", "--url", "https://acme.com"], { env, fetch, stdout: captureStream(), stderr, stdin: pipedInput() });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stderr.output, "Error: Enter your city. Pass --city, --state and --country, for example --city Denver --state CO --country US.\n");
   });
 });
