@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.108] - 2026-10-08
+
+### Fixed
+
+- Import receipts resolve to the surviving person after compatible LinkedIn duplicate reconciliation. Account and list records are preserved; conflicting records remain available for identity review.
+
 ## [0.1.107] - 2026-10-08
 
 ### Added
