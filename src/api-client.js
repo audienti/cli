@@ -1210,6 +1210,13 @@ export class AudientiClient {
     });
   }
 
+  prospectImportBatch(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["prospect_imports", "batch"]), {
+      method: "POST",
+      body
+    });
+  }
+
   prospectImportStatus(accountId, importId) {
     return this.requestJson(accountPath(accountId, ["prospect_imports", importId]));
   }

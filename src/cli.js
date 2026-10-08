@@ -77,7 +77,7 @@ const PROSPECTS_RESTORE_USAGE = "Usage: audienti prospects restore <prsp_id> [--
 const PROSPECTS_LOCK_USAGE = "Usage: audienti prospects lock <prsp_id> [--note <text>] [--kind <protected_relationship|company_policy>] [--json] [--account <acct_id>]";
 const PROSPECTS_UNLOCK_USAGE = "Usage: audienti prospects unlock <prsp_id> [--json] [--account <acct_id>]";
 const PROSPECTS_CHECK_USAGE = "Usage: audienti prospects check [--json|--csv] [filters] [--account <acct_id>]";
-const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
+const PROSPECTS_IMPORT_BATCH_USAGE = "Usage: audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--new-list <name>] [--new-transition <name>] [--assigned-user <id|me>] [--json] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_USAGE = "Usage: audienti operator failed-drafts [--json] [filters] [--account <acct_id>]";
 const OPERATOR_FAILED_DRAFTS_REQUEUE_USAGE = "Usage: audienti operator failed-drafts requeue (--all | <row_id> [row_id...]) [--limit <n>] [--json] [filters] [--account <acct_id>]";
 const INBOX_OPS_QUEUE_USAGE = "Usage: audienti inbox-ops queue [--page <n>] [--offset <n>|--cursor <token>] [--group-by domain] [--json] [--account <acct_id>]";
@@ -5077,19 +5077,23 @@ async function prospectsImport(args, context, { accountOverride } = {}) {
     ...jsonOptions(),
     list: { type: "string" },
     motion: { type: "string" },
+    "new-list": { type: "string" },
+    "new-transition": { type: "string" },
     "assigned-user": { type: "string" }
   });
   if (positionals.length !== 1) {
-    throw new CommandError("Usage: audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--assigned-user <id|me>] [--json] [--account <acct_id>]");
+    throw new CommandError("Usage: audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--new-list <name>] [--new-transition <name>] [--assigned-user <id|me>] [--json] [--account <acct_id>]");
   }
 
   const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
-  const payload = await client.prospectImport(accountId, compactObject({
+  const payload = await client.prospectImport(accountId, compactObjectPreservingFields({
     linkedin_url: positionals[0],
     list_id: values.list,
     motion_id: values.motion,
+    new_list_name: values["new-list"],
+    new_transition_name: values["new-transition"],
     assigned_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride })
-  }));
+  }, ["new_list_name", "new_transition_name"]));
   if (values.json) return writeJson(context.stdout, payload);
 
   renderProspectImportStarted(payload, context);
@@ -5101,7 +5105,9 @@ async function prospectsImportBatch(args, context, { accountOverride } = {}) {
     file: { type: "string" },
     list: { type: "string" },
     motion: { type: "string" },
-    "assigned-user": { type: "string" }
+    "assigned-user": { type: "string" },
+    "new-list": { type: "string" },
+    "new-transition": { type: "string" }
   });
   if (positionals.length > 0 || !values.file) {
     throw new CommandError(PROSPECTS_IMPORT_BATCH_USAGE);
@@ -5111,40 +5117,16 @@ async function prospectsImportBatch(args, context, { accountOverride } = {}) {
   if (rows.length === 0) throw new CommandError("Import batch file did not contain any prospects.");
 
   const { client, accountId, config } = await requireAccountContext(context, { accountOverride });
-  const result = {
-    summary: {
-      total: rows.length,
-      started: 0,
-      failed: 0
-    },
-    imports: [],
-    failed: []
-  };
-
-  for (const row of rows) {
-    const body = compactObject({
-      linkedin_url: row.linkedin_url,
-      list_id: row.list_id || values.list,
-      motion_id: row.motion_id || values.motion,
-      assigned_user_id: resolveAccountUserId(row.assigned_user_id || values["assigned-user"], config, { accountOverride })
-    });
-
-    try {
-      const payload = await client.prospectImport(accountId, body);
-      result.imports.push(payload);
-      result.summary.started += 1;
-    } catch (error) {
-      if (!(error instanceof ApiError)) throw error;
-
-      result.failed.push({
-        row: row.row,
-        linkedin_url: row.linkedin_url,
-        status: error.status,
-        error: error.body?.error || error.message
-      });
-      result.summary.failed += 1;
-    }
-  }
+  const result = await client.prospectImportBatch(accountId, {
+    rows,
+    defaults: compactObjectPreservingFields({
+      list_id: values.list,
+      motion_id: values.motion,
+      new_list_name: values["new-list"],
+      new_transition_name: values["new-transition"],
+      assigned_user_id: resolveAccountUserId(values["assigned-user"], config, { accountOverride })
+    }, ["new_list_name", "new_transition_name"])
+  });
 
   if (values.json) {
     writeJson(context.stdout, result);
@@ -6714,6 +6696,16 @@ function compactObject(object) {
   );
 }
 
+function compactObjectPreservingFields(object, fields) {
+  const compacted = compactObject(object);
+  for (const field of fields) {
+    if (Object.prototype.hasOwnProperty.call(object, field) && object[field] !== undefined) {
+      compacted[field] = object[field];
+    }
+  }
+  return compacted;
+}
+
 async function readLocalPackageMetadata() {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   return {
@@ -7256,13 +7248,21 @@ function normalizeImportBatchRows(rows, filePath) {
     const linkedinUrl = normalized?.linkedin_url || normalized?.url;
     if (!linkedinUrl) throw new CommandError(`Missing linkedin_url on row ${rowNumber} in ${filePath}.`);
 
-    return compactObject({
+    const result = compactObject({
       row: rowNumber,
       linkedin_url: linkedinUrl,
       list_id: normalized.list_id,
       motion_id: normalized.motion_id,
+      new_list_name: normalized.new_list_name,
+      new_transition_name: normalized.new_transition_name,
       assigned_user_id: normalized.assigned_user_id || normalized.assigned_user
     });
+
+    for (const field of ["new_list_name", "new_transition_name"]) {
+      if (Object.prototype.hasOwnProperty.call(normalized, field)) result[field] = normalized[field];
+    }
+
+    return result;
   });
 }
 
@@ -13637,8 +13637,8 @@ const HELP_TOPICS = new Map([
     "  audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json]",
     "  audienti prospects sequence-preview <prsp_id> [--json]",
     "  audienti prospects sequence-export <prsp_id> [--csv]",
-    "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--json]",
-    "  audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--json]",
+    "  audienti prospects import <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--new-list <name>] [--new-transition <name>] [--json]",
+    "  audienti prospects import-batch --file <csv|jsonl|json> [--list <list_id>] [--motion <motn_id>] [--new-list <name>] [--new-transition <name>] [--json]",
     "  audienti prospects import-status <primp_id> [--json]",
     "",
     "Status: read commands, assignment, disposition, lock/unlock, per-prospect draft preview, sequence preview, and import implemented",
@@ -14324,13 +14324,15 @@ const HELP_TOPICS = new Map([
     "  file: CSV with linkedin_url/url header, JSON array, JSONL objects, or newline-delimited LinkedIn URLs",
     "  list_id: list_ prefix id | optional default for every row",
     "  motn_id: motn_ prefix id | optional default for every row",
+    "  new_list_name: list name | a row value creates that row's list; command default applies to rows without one",
+    "  new_transition_name: system transition name | a row value creates that row's transition; command default applies to rows without one",
     "  assigned_user_id: account user id or me | optional default for every row",
     "",
     "CSV columns:",
-    "  linkedin_url or url, list_id, motion_id, assigned_user_id",
+    "  linkedin_url or url, list_id, motion_id, new_list_name, new_transition_name, assigned_user_id",
     "",
     "Behavior:",
-    "  Starts one normal prospect import per row. Row-level list_id, motion_id, and assigned_user_id override command defaults.",
+    "  Starts one normal prospect import per row. Row-level destination names or IDs and assigned_user_id override command defaults.",
     "",
     "API:",
     "  POST /api/v1/accounts/:account_id/prospect_imports.json"
@@ -15650,19 +15652,30 @@ const PARITY_ACTION_COMMANDS = new Map([
     done: (_positionals, payload) => `Rejected ${payload?.rejected?.length ?? 0}; failed ${payload?.failed?.length ?? 0}.`
   }],
   ["prospects intake", {
-    usage: "audienti prospects intake --url <linkedin_url> [--list <list_id>] [--assign <account_user_id>] [--signal <custom_signal_id>]",
+    usage: "audienti prospects intake --url <linkedin_url> [--list <list_id>] [--motion <motn_id>] [--new-list <name>] [--new-transition <name>] [--assign <account_user_id>] [--signal <custom_signal_id>]",
     minPositionals: 0,
     maxPositionals: 0,
     purpose: "Add one LinkedIn person by URL, like Add prospect on the web.",
     api: "POST /api/v1/accounts/:account_id/prospects/intake.json",
-    options: { url: { type: "string" }, list: { type: "string" }, assign: { type: "string" }, signal: { type: "string" } },
+    options: {
+      url: { type: "string" },
+      list: { type: "string" },
+      motion: { type: "string" },
+      "new-list": { type: "string" },
+      "new-transition": { type: "string" },
+      assign: { type: "string" },
+      signal: { type: "string" }
+    },
     required: ["url"],
-    run: (client, accountId, _positionals, values) => client.intakeProspect(accountId, compactObject({
+    run: (client, accountId, _positionals, values) => client.intakeProspect(accountId, compactObjectPreservingFields({
       url: values.url,
       list_id: values.list,
+      motion_id: values.motion,
+      new_list_name: values["new-list"],
+      new_transition_name: values["new-transition"],
       assigned_to_account_user_id: values.assign,
       custom_signal_id: values.signal
-    })),
+    }, ["new_list_name", "new_transition_name"])),
     done: () => "Prospect intake queued."
   }],
   ["events retry", {

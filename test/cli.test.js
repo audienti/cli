@@ -1151,7 +1151,7 @@ test("help works as the final word at resource and nested command levels", async
     },
     {
       args: ["prospects", "import-batch", "help"],
-      expected: [/Usage:\n  audienti prospects import-batch --file <csv\|jsonl\|json>/, /POST \/api\/v1\/accounts\/:account_id\/prospect_imports\.json/]
+      expected: [/Usage:\n  audienti prospects import-batch --file <csv\|jsonl\|json>/, /row value creates that row's list/, /POST \/api\/v1\/accounts\/:account_id\/prospect_imports\.json/]
     },
     {
       args: ["prospects", "import-status", "help"],
@@ -5949,6 +5949,130 @@ test("prospects import sends motion and list ids when both are provided", async 
   });
 });
 
+test("prospects intake sends both named destinations and preserves the JSON receipt", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      status: "accepted",
+      prospect_import_id: "primp_intake_one",
+      prospect: {prefix_id: "prsp_intake_one", display_name: "Intake Prospect"}
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospects/intake.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), {
+        url: "https://www.linkedin.com/in/intake-prospect",
+        new_list_name: "Intake named list",
+        new_transition_name: "Intake named transition"
+      });
+      return jsonResponse(responseBody, {status: 202});
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "intake",
+      "--url", "https://www.linkedin.com/in/intake-prospect",
+      "--new-list", "Intake named list",
+      "--new-transition", "Intake named transition",
+      "--json"
+    ], {env, fetch, stdout});
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(JSON.parse(stdout.output), responseBody);
+  });
+});
+
+test("prospects named destination blanks stay on the wire for import, batch, and intake", async () => {
+  await withTempConfigHome(async ({root, env}) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, {env});
+    const importPath = join(root, "prospects.json");
+    await writeFile(importPath, JSON.stringify([{
+      linkedin_url: "https://www.linkedin.com/in/blank-batch",
+      list_id: "list_one",
+      motion_id: "motn_one",
+      new_list_name: "",
+      new_transition_name: ""
+    }]), "utf8");
+
+    const expected = [
+      ["/api/v1/accounts/acct_one/prospect_imports.json", {
+        linkedin_url: "https://www.linkedin.com/in/blank-import",
+        list_id: "list_one",
+        motion_id: "motn_one",
+        new_list_name: "",
+        new_transition_name: ""
+      }],
+      ["/api/v1/accounts/acct_one/prospect_imports/batch.json", {
+        rows: [{
+          row: 1,
+          linkedin_url: "https://www.linkedin.com/in/blank-batch",
+          list_id: "list_one",
+          motion_id: "motn_one",
+          new_list_name: "",
+          new_transition_name: ""
+        }],
+        defaults: {
+          list_id: "list_one",
+          motion_id: "motn_one",
+          new_list_name: "",
+          new_transition_name: ""
+        }
+      }],
+      ["/api/v1/accounts/acct_one/prospects/intake.json", {
+        url: "https://www.linkedin.com/in/blank-intake",
+        list_id: "list_one",
+        motion_id: "motn_one",
+        new_list_name: "",
+        new_transition_name: ""
+      }]
+    ];
+    let requestIndex = 0;
+    const fetch = createFetch((url, options) => {
+      const [path, body] = expected[requestIndex++];
+      assert.equal(url.pathname, path);
+      assert.deepEqual(JSON.parse(options.body), body);
+      return jsonResponse({error: "List name cannot be blank."}, {status: 422});
+    });
+
+    const runRejected = async (args) => {
+      const stderr = captureStream();
+      const exitCode = await run(args, {env, fetch, stderr});
+      assert.equal(exitCode, 1);
+      assert.match(stderr.output, /List name cannot be blank/);
+    };
+
+    await runRejected([
+      "prospects", "import", "https://www.linkedin.com/in/blank-import",
+      "--list", "list_one", "--motion", "motn_one",
+      "--new-list", "", "--new-transition", "", "--json"
+    ]);
+    await runRejected([
+      "prospects", "import-batch", "--file", importPath,
+      "--list", "list_one", "--motion", "motn_one",
+      "--new-list", "", "--new-transition", "", "--json"
+    ]);
+    await runRejected([
+      "prospects", "intake", "--url", "https://www.linkedin.com/in/blank-intake",
+      "--list", "list_one", "--motion", "motn_one",
+      "--new-list", "", "--new-transition", "", "--json"
+    ]);
+
+    assert.equal(requestIndex, expected.length);
+  });
+});
+
 test("prospects assign posts prospect ids and assignee", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
@@ -6987,34 +7111,25 @@ test("prospects import-batch imports jsonl rows with command defaults", async ()
     }, { env });
     const importPath = join(root, "prospects.jsonl");
     await writeFile(importPath, [
-      JSON.stringify({ linkedin_url: "https://www.linkedin.com/in/pat-prospect" }),
+      JSON.stringify({ linkedin_url: "https://www.linkedin.com/in/pat-prospect", new_list_name: "Row list", new_transition_name: "Row transition" }),
       JSON.stringify({ url: "https://www.linkedin.com/in/sam-prospect", assigned_user_id: "42" })
     ].join("\n"), "utf8");
 
     const stdout = captureStream();
-    const fetch = createFetch((url, options, calls) => {
-      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports.json");
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports/batch.json");
       assert.equal(options.method, "POST");
-      const bodies = [
-        {
-          linkedin_url: "https://www.linkedin.com/in/pat-prospect",
-          list_id: "list_one",
-          motion_id: "motn_one",
-          assigned_user_id: "me"
-        },
-        {
-          linkedin_url: "https://www.linkedin.com/in/sam-prospect",
-          list_id: "list_one",
-          motion_id: "motn_one",
-          assigned_user_id: "42"
-        }
-      ];
-      assert.deepEqual(JSON.parse(options.body), bodies[calls.length - 1]);
-      return jsonResponse({
-        prefix_id: `primp_${calls.length}`,
-        status: "running",
-        prospect: { prefix_id: `prsp_${calls.length}`, display_name: `Prospect ${calls.length}` }
-      }, { status: 201 });
+      assert.deepEqual(JSON.parse(options.body), {
+        rows: [
+          {row: 1, linkedin_url: "https://www.linkedin.com/in/pat-prospect", new_list_name: "Row list", new_transition_name: "Row transition"},
+          {row: 2, linkedin_url: "https://www.linkedin.com/in/sam-prospect", assigned_user_id: "42"}
+        ],
+        defaults: {list_id: "list_one", motion_id: "motn_one", assigned_user_id: "me"}
+      });
+      return jsonResponse({summary: {total: 2, started: 2, failed: 0}, imports: [
+        {prefix_id: "primp_1", status: "running", prospect: {prefix_id: "prsp_1", display_name: "Prospect 1"}},
+        {prefix_id: "primp_2", status: "running", prospect: {prefix_id: "prsp_2", display_name: "Prospect 2"}}
+      ], failed: []}, { status: 202 });
     });
 
     const exitCode = await run([
@@ -7037,6 +7152,87 @@ test("prospects import-batch imports jsonl rows with command defaults", async ()
   });
 });
 
+test("prospects import-batch preserves CSV destination names and blanks for the API", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const importPath = join(root, "prospects.csv");
+    await writeFile(importPath, [
+      "linkedin_url,new_list_name,new_transition_name",
+      "https://www.linkedin.com/in/row-named,Row CSV list,Row CSV transition",
+      "https://www.linkedin.com/in/row-blank,,"
+    ].join("\n"), "utf8");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports/batch.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        rows: [
+          {row: 1, linkedin_url: "https://www.linkedin.com/in/row-named", new_list_name: "Row CSV list", new_transition_name: "Row CSV transition"},
+          {row: 2, linkedin_url: "https://www.linkedin.com/in/row-blank", new_list_name: "", new_transition_name: ""}
+        ],
+        defaults: {new_list_name: "Command default list", new_transition_name: "Command default transition"}
+      });
+      return jsonResponse({summary: {total: 2, started: 1, failed: 1}, imports: [], failed: [{row: 2, error: "List name cannot be blank."}]}, {status: 202});
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "import-batch",
+      "--file",
+      importPath,
+      "--new-list", "Command default list",
+      "--new-transition", "Command default transition",
+      "--json"
+    ], {env, fetch, stdout});
+
+    assert.equal(exitCode, 1);
+    assert.equal(JSON.parse(stdout.output).summary.failed, 1);
+  });
+});
+
+test("prospects import-batch forwards JSON row destinations to the API", async () => {
+  await withTempConfigHome(async ({ root, env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+    const importPath = join(root, "prospects.json");
+    await writeFile(importPath, JSON.stringify([{
+      linkedin_url: "https://www.linkedin.com/in/json-row",
+      new_list_name: "JSON row list",
+      new_transition_name: "JSON row transition"
+    }]), "utf8");
+
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports/batch.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        rows: [{row: 1, linkedin_url: "https://www.linkedin.com/in/json-row", new_list_name: "JSON row list", new_transition_name: "JSON row transition"}],
+        defaults: {new_list_name: "Command default list", new_transition_name: "Command default transition"}
+      });
+      return jsonResponse({summary: {total: 1, started: 1, failed: 0}, imports: [], failed: []}, {status: 202});
+    });
+
+    const exitCode = await run([
+      "prospects",
+      "import-batch",
+      "--file", importPath,
+      "--new-list", "Command default list",
+      "--new-transition", "Command default transition",
+      "--json"
+    ], {env, fetch, stdout});
+
+    assert.equal(exitCode, 0);
+  });
+});
+
 test("prospects import-batch supports json output and keeps failed rows visible", async () => {
   await withTempConfigHome(async ({ root, env }) => {
     await writeConfig({
@@ -7049,17 +7245,12 @@ test("prospects import-batch supports json output and keeps failed rows visible"
     await writeFile(importPath, "linkedin_url,assigned_user_id\nhttps://www.linkedin.com/in/pat-prospect,me\nhttps://www.linkedin.com/in/bad-prospect,me\n", "utf8");
 
     const stdout = captureStream();
-    const fetch = createFetch((url, options, calls) => {
-      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports.json");
-      if (calls.length === 2) {
-        return jsonResponse({ error: "LinkedIn profile not found." }, { status: 422 });
-      }
-
-      return jsonResponse({
-        prefix_id: "primp_one",
-        status: "running",
-        prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" }
-      }, { status: 201 });
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports/batch.json");
+      assert.equal(options.method, "POST");
+      return jsonResponse({summary: {total: 2, started: 1, failed: 1}, imports: [{
+        prefix_id: "primp_one", status: "running", prospect: {prefix_id: "prsp_one", display_name: "Pat Prospect"}
+      }], failed: [{row: 2, linkedin_url: "https://www.linkedin.com/in/bad-prospect", status: 422, error: "LinkedIn profile not found."}]}, { status: 202 });
     });
 
     const exitCode = await run([
@@ -7098,12 +7289,22 @@ test("prospects import supports json output", async () => {
       prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" }
     };
     const stdout = captureStream();
-    const fetch = createFetch(() => jsonResponse(responseBody, { status: 201 }));
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_imports.json");
+      assert.deepEqual(JSON.parse(options.body), {
+        linkedin_url: "https://www.linkedin.com/in/pat-prospect",
+        new_list_name: "Named list",
+        new_transition_name: "Named transition"
+      });
+      return jsonResponse(responseBody, { status: 201 });
+    });
 
     const exitCode = await run([
       "prospects",
       "import",
       "https://www.linkedin.com/in/pat-prospect",
+      "--new-list", "Named list",
+      "--new-transition", "Named transition",
       "--json"
     ], { env, fetch, stdout });
 

@@ -839,14 +839,22 @@ audienti company-rules create --domain example.com --disposition not_fit --user 
 audienti company-rules apply --all
 ```
 
+The direct intake action supports the same destination names and optional experiment:
+
+```bash
+audienti prospects intake --url https://www.linkedin.com/in/example --new-list "Target list" --new-transition "Fit transition" --json
+```
+
+Use `--motion <motn_id>` for an existing experiment. Explicit new names, including blank names, are sent to the API for validation.
+
 To import multiple LinkedIn people through the same per-prospect import path:
 
 ```bash
-audienti prospects import-batch --file prospects.csv --motion <motn_id> --assigned-user me
+audienti prospects import-batch --file prospects.csv --new-list "Target list" --new-transition "Fit transition" --assigned-user me
 ```
 
 CSV files should include a `linkedin_url` or `url` header. Optional row columns
-`list_id`, `motion_id`, and `assigned_user_id` override command defaults.
+`list_id`, `motion_id`, `new_list_name`, `new_transition_name`, and `assigned_user_id` override command defaults. The command parses the file and sends one batch request; the API owns validation, destination creation, row outcomes, and queueing.
 
 ## Compatibility
 
@@ -867,3 +875,5 @@ credentials or silently authenticate an agent.
 ## License
 
 Copyright (c) 2026 OMALab, Inc. All rights reserved. See [LICENSE](LICENSE).
+
+Batch import accepts up to 50 rows per API request. Split larger files before importing. Row destination IDs or new names override batch defaults; failed rows stay visible in the response.

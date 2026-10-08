@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.107] - 2026-10-08
+
+### Added
+
+- `prospects import`, `prospects intake` and `prospects import-batch` can request a new list or system transition.
+- Batch imports submit parsed rows and defaults to the account API in one request; the CLI renders the server response. Explicit invalid names are forwarded for API validation.
+
 ## [0.1.106] - 2026-10-08
 
 ### Added
