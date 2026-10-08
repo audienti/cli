@@ -10,6 +10,37 @@ the production contract. The packaged `audienti-mcp` command is only a local
 stdio bridge for MCP hosts. Do not build a parallel wrapper or call
 undocumented API endpoints.
 
+Before creating, changing, or judging any experiment, read the complete
+[outbound methodology](references/methodology.md), also available through
+`audienti help methodology`. The customer owns the strategy. Record a written
+baseline, target and scheduled review date before starting; judge only matured
+cohorts. `experiments`, `experiment`, and `plays` are aliases for `motions`,
+including command help. CLI reminders are guidance; existing authorization and
+sending controls still apply.
+
+For website-only gift research, run `audienti tools gift-research --url <website>`
+and follow the returned skill using your own browsing tools. The command supplies
+instructions; it does not perform research or call the app. The bundled
+`audienti-gift-research` skill also works independently of this production
+workflow. Do not use offer scans or create gifts for this research exercise.
+
+Use `audienti skills list` and `audienti skills show <name>` to discover bundled
+skills or the Audienti marketplace snapshot. Marketplace entries provide source
+links and install commands, not bundled upstream implementations. Read the
+upstream README and applicable skill before use; its dependencies and permissions
+still apply. Installation requires a separate instruction from the user.
+
+Before using a social-network finder, inspect the local environment for available
+browser/search tools, connected MCP tools or apps, installed skills and CLIs,
+and existing secure credential configuration without printing secrets. Read their
+documentation and permissions to choose supported read-only access to that network.
+Do not assume Apify, a browser session or credentials are available. If suitable
+access is missing, report the missing capability and ask the owner; do not invent
+findings, install tools or silently switch networks. Read the environment check
+returned by `audienti skills show <finder>` before following its upstream skill.
+The full returned check applies. It does not authorize granting access, sending
+messages or posting comments to test access.
+
 Set `approach` in a Motion create/update payload, or use `motions update <id> --approach "..."`. A nonblank Approach automatically guides adaptive planning and writing; blank, nil, or whitespace keeps the existing sequence. The simple `--approach ""` flag explicitly clears the guidance and restores that sequence. There is no separate planning-mode selector, and existing sending controls still apply.
 
 To clear an Inbox Ops backlog, run `inbox-ops queue` first: it follows every page, numbers each row, and saves the numbered list locally for the selected account. Then use `inbox-ops ignore`, `filter-domain`, `filter-sender`, `allow-domain`, or `allow-sender` with numbers, ranges (`1-25,30`), row ids, `--domain`, or `--sender`. Always run `--dry-run` first when acting for a person, read the per-row planned/skipped/rejected results back, and only then re-run with `--yes`. Numbers stay valid until `inbox-ops queue` runs again; ignore hides one thread until a new reply, while filter and allow rules are durable across all of the owner's accounts. Rule verbs given only `--domain` or `--sender` write the keyed rule directly. Through MCP use `inbox_ops.queue`, then `inbox_ops.actions` with `{operation, row_ids, dry_run}`.

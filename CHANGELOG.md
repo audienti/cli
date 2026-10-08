@@ -4,6 +4,15 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.106] - 2026-10-08
+
+### Added
+
+- `help methodology` supplies Audienti's outbound experiment strategy. The agent skill requires it, motion help links it, and motion mutations print a short stderr reminder without changing JSON stdout.
+- `tools gift-research --url <website>` supplies a bundled website research skill for an agent to follow independently of the app; it does not crawl or save gifts.
+- `skills list` and `skills show <name>` expose bundled instructions and selected outbound marketplace source links and install commands without login or app calls. Social finders require a local tool and network-access check before research.
+- `experiments` and `experiment` alias `motions`, including help, while preserving `plays` (#2736).
+
 ## [0.1.105] - 2026-10-07
 
 ### Added

@@ -103,6 +103,50 @@ and `audienti prospects assign --assigned-user me`.
 
 ## Agent Workflows
 
+Before creating, changing or judging an experiment, read the strategy:
+
+```bash
+audienti help methodology
+```
+
+The guide explains premises, signals, informants, validating and gifting,
+cadence, mature-cohort verdicts, and accepted opportunities. Motion mutations
+print a short reminder to stderr; `--json` stdout remains machine-readable.
+`experiments`, `experiment` and `plays` are aliases for `motions`, including help.
+
+For gift research that stays outside the Audienti app:
+
+```bash
+audienti tools gift-research --url https://example.com
+audienti tools gift-research --url https://example.com --json
+```
+
+This prints a research skill and the website for the agent to investigate with
+its own browsing tools. It does not crawl the site, require login, scan through
+Audienti, save gifts or send outreach. The agent returns evidence-linked existing
+assets and clearly marked adaptations that someone would still need to build.
+
+Discover the bundled skills and the Audienti marketplace snapshot:
+
+```bash
+audienti skills list
+audienti skills show audienti-gift-research
+audienti skills show signal-prospect-research
+```
+
+Bundled skills print their instructions. Marketplace entries print source links
+and host-specific install commands; the CLI does not install or execute them.
+Upstream repositories own those skills, dependencies and updates. The snapshot's
+source commit is included in `skills list --json`; check the upstream catalog
+for later additions.
+
+The selected marketplace entries are the six social-network finders,
+`signal-prospect-research`, and `sales-sheet-builder`. Before using a social
+finder, agents must check their local browser/search tools, connectors, skills,
+CLIs and network access. `skills show <finder>` includes that environment check
+before the upstream instructions; JSON discovery includes it too. Missing access
+must be reported rather than assumed.
+
 Start with the built-in, production-safe workflow guide:
 
 ```bash

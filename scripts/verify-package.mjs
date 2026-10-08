@@ -71,6 +71,8 @@ await requireFile(".nojekyll");
 await requireFile("LICENSE");
 await requireFile("README.md");
 await requireFile("skills/audienti/SKILL.md");
+await requireFile("skills/audienti/references/methodology.md");
+await requireFile("skills/audienti-gift-research/SKILL.md");
 
 if (errors.length > 0) {
   for (const error of errors) console.error(`Error: ${error}`);

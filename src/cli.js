@@ -7,6 +7,7 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { ApiError, AudientiClient, DEFAULT_HOST, normalizeHost } from "./api-client.js";
 import { configDirectory, configPath, deleteConfig, maskToken, readConfig, writeConfig } from "./config.js";
+import { methodologyHelp, skillCatalog, skillDetails } from "./agent-skills.js";
 
 class CommandError extends Error {
   constructor(message, { exitCode = 1 } = {}) {
@@ -18,6 +19,12 @@ class CommandError extends Error {
 
 const MAX_ALL_PROSPECTS = 1000;
 const DEFAULT_LIST_LIMIT = 20;
+const MOTION_ALIASES = ["plays", "experiments", "experiment"];
+const MOTION_CHANGE_ACTIONS = new Set([
+  "create", "update", "update-premise", "clone", "activate", "pause", "archive",
+  "add-tag", "remove-tag", "bulk-add-tag", "bulk-remove-tag", "bulk-update-principal",
+  "bulk-update-status", "retire-strategy"
+]);
 const API_MAX_LIST_LIMIT = 100;
 const DEFAULT_LOOKUP_TIMEOUT_SECONDS = 60;
 const DEFAULT_LOOKUP_POLL_INTERVAL_SECONDS = 2;
@@ -345,6 +352,10 @@ async function dispatch(argv, context) {
 
   const [resource, action, ...rest] = args;
   const normalizedResource = normalizeResource(resource);
+  if (normalizedResource === "skills") return agentSkills(action, rest, context);
+  if (normalizedResource === "tools" && action === "gift-research") return giftResearch(rest, context);
+  const changesTargeting = ["abm-companies", "company-filters", "profile-signals"].includes(action) && ["add", "remove", "delete"].includes(rest[1]);
+  if (normalizedResource === "motions" && (MOTION_CHANGE_ACTIONS.has(action) || changesTargeting)) remindExperimentMethodology(context);
   const parityActionTopic = `${normalizedResource} ${action}`;
   if (PARITY_ACTION_COMMANDS.has(parityActionTopic)) return runParityActionCommand(parityActionTopic, rest, context, { accountOverride });
 
@@ -609,7 +620,7 @@ function usageCommandAllowsExactTopic(command, topic) {
 
 function normalizeTopicParts(parts) {
   if (parts[0] === "account") return ["accounts", ...parts.slice(1)];
-  if (parts[0] === "plays") return ["motions", ...parts.slice(1)];
+  if (normalizeResource(parts[0]) === "motions") return ["motions", ...parts.slice(1)];
   if (parts[0] === "principals") return ["users", ...parts.slice(1)];
   if (parts[0] === "writers") return ["writer", ...parts.slice(1)];
   return parts;
@@ -626,7 +637,50 @@ function normalizeResource(resource) {
   if (resource === "brand_profile") return "brand-profile";
   if (resource === "linkedin_lookups" || resource === "linkedin-lookups") return "linkedin-lookups";
   if (resource === "social_cookie" || resource === "social_cookies") return "social-cookies";
-  return resource === "plays" ? "motions" : resource;
+  return MOTION_ALIASES.includes(resource) ? "motions" : resource;
+}
+
+function remindExperimentMethodology(context) {
+  writeLine(context.stderr, "Experiment methodology: read `audienti help methodology`; record a baseline, target and review date before starting. A new trigger, ICP, offer or value chain means a new experiment. Sending controls still apply.");
+}
+
+async function giftResearch(args, context) {
+  const usage = "Usage: audienti tools gift-research --url <website> [--json]";
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), url: { type: "string" } });
+  if (positionals.length || !values.url) throw new CommandError(usage);
+  let website;
+  try {
+    website = new URL(values.url);
+  } catch {
+    throw new CommandError("--url must be an HTTP(S) website URL, for example https://example.com.");
+  }
+  if (!["http:", "https:"].includes(website.protocol) || website.username || website.password) {
+    throw new CommandError("--url must be an HTTP(S) website URL without embedded credentials.");
+  }
+  const skill = skillDetails("audienti-gift-research");
+  const brief = { kind: "agent_research_brief", skill: skill.name, website: website.href, execution: "agent", instructions: skill.instructions };
+  if (values.json) return writeJson(context.stdout, brief);
+  writeLine(context.stdout, `Website: ${brief.website}\nResearch instructions for the agent; research has not run.\n\n${brief.instructions}`);
+}
+
+async function agentSkills(action, args, context) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (action === "list" && positionals.length === 0) {
+    const catalog = skillCatalog();
+    if (values.json) return writeJson(context.stdout, catalog);
+    for (const skill of catalog.skills) writeLine(context.stdout, `${skill.name} [${skill.source}] — ${skill.description}`);
+    writeLine(context.stdout, `\nSelected marketplace skills (${catalog.marketplace.scope}): ${catalog.marketplace.url}/tree/${catalog.marketplace.commit}\nBefore using a social finder, check the local tools and network access available to this agent.\nUse audienti skills show <name> for instructions or upstream links and install commands.`);
+    return;
+  }
+  if (action !== "show" || positionals.length !== 1) throw new CommandError("Usage: audienti skills list [--json] | audienti skills show <name> [--json]");
+  const skill = skillDetails(positionals[0]);
+  if (!skill) throw new CommandError(`Unknown skill "${positionals[0]}". Run audienti skills list.`);
+  if (values.json) return writeJson(context.stdout, skill);
+  writeLine(context.stdout, `${skill.name} [${skill.source}]\n${skill.description}\n\n${skill.instructions}`);
+  if (skill.source === "marketplace") {
+    writeLine(context.stdout, `\nSource: ${skill.repository_url}\nREADME: ${skill.readme_url}`);
+    for (const [host, commands] of Object.entries(skill.install)) writeLine(context.stdout, `\n${host}:\n${commands.join("\n")}`);
+  }
 }
 
 async function authToken(args, context) {
@@ -1266,6 +1320,7 @@ async function setupWizard(args, context, { accountOverride, prompter: sharedPro
       return 0;
     }
 
+    remindExperimentMethodology(context);
     const confirmation = await client.confirmQuickStart(accountId, draft.id, {});
     const connectUrl = goLiveUrl(client.host);
     if (values.json) {
@@ -3630,6 +3685,7 @@ async function motionsQuickStart(args, context, { accountOverride } = {}) {
       throw new CommandError(`Quick-start draft ${display(draft?.id)} is ${display(draft?.status)}. Re-run with --wait or confirm after it is ready.`);
     }
 
+    remindExperimentMethodology(context);
     const payload = await client.confirmQuickStart(accountId, draft.id, {});
     if (values.json) return writeJson(context.stdout, payload);
 
@@ -10526,6 +10582,7 @@ function usage() {
 
 function helpFor(topicParts) {
   const topic = topicParts.join(" ").trim();
+  if (topic === "methodology") return methodologyHelp();
   const helpText = HELP_TOPICS.get(topic);
   if (!helpText) {
     throw new CommandError(`No help topic found for "${topic || "audienti"}". Run \`audienti --help\`.`);
@@ -10535,6 +10592,10 @@ function helpFor(topicParts) {
 }
 
 const HELP_TOPICS = new Map([
+  ["skills", "Usage:\n  audienti skills list [--json]\n  audienti skills show <name> [--json]\n\nList bundled agent skills and the Audienti marketplace snapshot. Show bundled instructions or upstream links and install commands. No login, app call or installation is performed."],
+  ["skills list", "Usage:\n  audienti skills list [--json]\n\nList bundled skills and marketplace discovery metadata without network or login."],
+  ["skills show", "Usage:\n  audienti skills show <name> [--json]\n\nPrint bundled skill instructions, or upstream source links and host-specific install commands. Read each upstream README for its dependencies. Installation is a separate action."],
+  ["tools gift-research", "Usage:\n  audienti tools gift-research --url <website> [--json]\n\nGive the agent the website-gift-research skill and the supplied HTTP(S) URL. The agent browses using its own tools. The CLI does not fetch the website, call Audienti, require login, create gifts or return research results.\n\nRead the skill without a website:\n  audienti skills show audienti-gift-research"],
   ["", [
     "Usage:",
     "  audienti <command> [options]",
@@ -10548,6 +10609,8 @@ const HELP_TOPICS = new Map([
     "  audienti accounts select <acct_id>  Use one account by default",
     "  audienti users select <user>        Use one account user by default",
     "  audienti help agent-workflows       Common agent/operator paths",
+    "  audienti help methodology           Outbound experiment strategy",
+    "  audienti skills list                Bundled skills and marketplace discovery",
     "",
     "Work areas:",
     "  Setup & identity",
@@ -10584,7 +10647,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions delete <motn_id> --confirm <yes|true|Y|y>",
     "    audienti motions clone <motn_id> --name <text>",
     "    audienti motions move-prospects <source_motn_id> --target <target_motn_id> <prsp_id> [prsp_id...]",
-    "    Tip: `plays` is accepted anywhere `motions` is accepted.",
+    `    Tip: ${MOTION_ALIASES.map((alias) => "`" + alias + "`").join(", ")} are aliases for motions; see audienti help methodology.`,
     "",
     "  ContentOps",
     "    audienti content programs",
@@ -10722,6 +10785,7 @@ const HELP_TOPICS = new Map([
     "  Work the next move:  audienti operator next --plan",
     "  Inspect a prospect:  audienti prospects show <prsp_id> --json",
     "  Preview a campaign:  audienti writer test-run <prsp_id>",
+    "  Research website gifts: audienti tools gift-research --url <website>",
     "  Analyze one motion:  audienti motions analytics <motn_id>",
     "  Audit motion mix:    audienti analytics motions",
     "  Count one campaign:   audienti analytics dashboard --play-tag <tag>",
@@ -15160,6 +15224,9 @@ const HELP_TOPICS = new Map([
     "  Give a local coding agent the shortest safe path through the common Audienti production workflows.",
     "",
     "1. Authenticate and select an account",
+    "  Before creating, changing or judging any experiment: audienti help methodology",
+    "  For website-only gift research: audienti tools gift-research --url <website>",
+    "  Discover additional skills: audienti skills list",
     "  audienti auth login",
     "  audienti accounts list",
     "  audienti accounts select <acct_id>",
@@ -15959,6 +16026,13 @@ for (const [group, usages] of parityActionUsagesByGroup) {
   const existing = HELP_TOPICS.get(group);
   HELP_TOPICS.set(group, existing ? `${existing}\n\n${section}` : section);
 }
+
+for (const [topic, text] of HELP_TOPICS) {
+  if (topic === "motions" || topic.startsWith("motions ")) {
+    HELP_TOPICS.set(topic, `${text}\n\nStrategy:\n  Read audienti help methodology before creating, changing or judging an experiment.\n  ${MOTION_ALIASES.join(", ")} are aliases for motions.`);
+  }
+}
+HELP_TOPICS.set("tools", `${HELP_TOPICS.get("tools")}\n\nAgent research (no app or login):\n  audienti tools gift-research --url <website> [--json]`);
 
 function parseJsonObjectOption(raw, flag) {
   if (raw === undefined) return undefined;

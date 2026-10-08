@@ -1,0 +1,27 @@
+{
+  "commit": "271515e227b4ce25965992b6c7975d642a14dc7b",
+  "source": "https://github.com/audienti/plugins",
+  "codex_manifest": ".agents/plugins/marketplace.json",
+  "claude_manifest": ".claude-plugin/marketplace.json",
+  "codex_plugins": {
+    "signal-prospect-research": "https://github.com/audienti/signal-research.git",
+    "reddit-pain-finder": "https://github.com/audienti/reddit-pain-finder.git",
+    "linkedin-pain-finder": "https://github.com/audienti/linkedin-pain-finder.git",
+    "twitter-signal-finder": "https://github.com/audienti/twitter-signal-finder.git",
+    "instagram-comment-finder": "https://github.com/audienti/instagram-comment-finder.git",
+    "facebook-comment-finder": "https://github.com/audienti/facebook-comment-finder.git",
+    "tiktok-comment-finder": "https://github.com/audienti/tiktok-comment-finder.git",
+    "sales-sheet-builder": "https://github.com/audienti/sales-sheet-builder.git"
+  },
+  "claude_plugins": {
+    "signal-prospect-research": "https://github.com/audienti/signal-research.git",
+    "reddit-pain-finder": "https://github.com/audienti/reddit-pain-finder.git",
+    "linkedin-pain-finder": "https://github.com/audienti/linkedin-pain-finder.git",
+    "twitter-signal-finder": "https://github.com/audienti/twitter-signal-finder.git",
+    "instagram-comment-finder": "https://github.com/audienti/instagram-comment-finder.git",
+    "facebook-comment-finder": "https://github.com/audienti/facebook-comment-finder.git",
+    "tiktok-comment-finder": "https://github.com/audienti/tiktok-comment-finder.git",
+    "sales-sheet-builder": "https://github.com/audienti/sales-sheet-builder.git"
+  },
+  "selection": "Outbound research and sales assets"
+}
