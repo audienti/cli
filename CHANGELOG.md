@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.105] - 2026-10-07
+
+### Added
+
+- `audienti find <name>` finds people, companies, experiments and users in the account by name (a person also matches by company name), at most 5 of each. It uses the same search as the web Jump to pop-up (Cmd+K), through `GET /api/v1/accounts/:account_id/jump_to?q=<name>`.
+
 ## [0.1.104] - 2026-10-07
 
 ### Changed

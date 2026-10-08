@@ -470,6 +470,10 @@ export class AudientiClient {
     });
   }
 
+  jumpTo(accountId, query) {
+    return this.requestJson(accountPath(accountId, ["jump_to"], { q: query }));
+  }
+
   tags(accountId) {
     return this.requestJson(accountPath(accountId, ["tags"]));
   }

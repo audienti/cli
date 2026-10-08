@@ -412,6 +412,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "reply-alerts") return replyAlertsCommand(action, rest, context);
   if (normalizedResource === "brand-profile") return brandProfileCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "payment") return paymentCommand(action, rest, context, { accountOverride });
+  if (normalizedResource === "find") return findByName([action, ...rest].filter((value) => value !== undefined), context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
   if (normalizedResource === "tags" && action === "show") return tagsShow(rest, context, { accountOverride });
   if (normalizedResource === "tasks" && ["list", "manage"].includes(action)) return tasksList(rest, context, { accountOverride });
@@ -3010,6 +3011,19 @@ function writeBrandProfile(profile, context) {
   writeLine(context.stdout, `Voice: ${display(profile?.voice, "-")}`);
   writeLine(context.stdout, `Style: ${display(profile?.style, "-")}`);
   writeLine(context.stdout, `Do not use: ${display(profile?.do_not_use, "-")}`);
+}
+
+// Same search as the web ⌘K "Jump to" pop-up: people, companies, experiments and users by name, at most 5 of each.
+async function findByName(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  const query = positionals.join(" ").trim();
+  if (!query) throw new CommandError("Usage: audienti find <name> [--json] [--account <acct_id>]");
+
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.jumpTo(accountId, query);
+  if (values.json) return writeJson(context.stdout, payload);
+
+  renderFindResults(payload, context);
 }
 
 async function tagsList(args, context, { accountOverride } = {}) {
@@ -7264,6 +7278,19 @@ function routingRuleTargetLabel(rule) {
     "-";
 }
 
+function renderFindResults(payload, context) {
+  const groups = [["People", payload?.people], ["Companies", payload?.companies], ["Experiments", payload?.experiments], ["Users", payload?.users]];
+  if (groups.every(([, rows]) => !Array.isArray(rows) || rows.length === 0)) return writeLine(context.stdout, "Nothing found.");
+
+  for (const [title, rows] of groups) {
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    writeLine(context.stdout, title);
+    for (const row of rows) {
+      writeLine(context.stdout, ["  " + display(row.name), display(row.detail, ""), display(row.path, "")].join("\t"));
+    }
+  }
+}
+
 function renderTags(tags, context) {
   if (!Array.isArray(tags) || tags.length === 0) return writeLine(context.stdout, "No tags found.");
 
@@ -10603,6 +10630,7 @@ const HELP_TOPICS = new Map([
     "    audienti lists bulk-add-tag --tag <tag> <list_id> [list_id...]",
     "    audienti lists merge <list_id> <list_id>",
     "    audienti lists export <list_id> [--output <file.csv>]",
+    "    audienti find <name>",
     "    audienti tags list",
     "    audienti tags show <tag>",
     "    audienti tasks list [--status open]",
@@ -12023,6 +12051,21 @@ const HELP_TOPICS = new Map([
     "API:",
     "  POST /api/v1/accounts/:account_id/company_rules/:id/apply.json",
     "  POST /api/v1/accounts/:account_id/company_rules/apply_all.json"
+  ].join("\n")],
+
+  ["find", [
+    "Usage:",
+    "  audienti find <name> [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  Find people, companies, experiments and users in the account by name, at most 5 of each.",
+    "  A person also matches by company name.",
+    "  Uses the same search as the web Jump to pop-up (Cmd+K). Needs at least 2 characters.",
+    "",
+    "API:",
+    "  GET /api/v1/accounts/:account_id/jump_to?q=<name>"
   ].join("\n")],
 
   ["tags", [

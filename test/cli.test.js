@@ -490,6 +490,7 @@ test("global help lists commands and points agents at command-specific shapes", 
   assert.match(stdout.output, /audienti motions pause <motn_id>/);
   assert.match(stdout.output, /audienti motions delete <motn_id> --confirm <yes\|true\|Y\|y>/);
   assert.match(stdout.output, /audienti motions clone <motn_id> --name <text>/);
+  assert.match(stdout.output, /audienti find <name>/);
   assert.match(stdout.output, /audienti tags list/);
   assert.match(stdout.output, /audienti tasks list \[--status open\]/);
   assert.match(stdout.output, /audienti tasks add --title <text> --due <time>/);
@@ -3154,6 +3155,54 @@ test("tags list renders a readable table", async () => {
     assert.match(stdout.output, /TAG\tICPS\tLISTS\tMOTIONS\tTOTAL/);
     assert.match(stdout.output, /matt\t0\t1\t2\t3/);
     assert.match(stdout.output, /sarit\t1\t2\t1\t4/);
+  });
+});
+
+test("find searches people and experiments by name like the web Jump to pop-up", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const responseBody = {
+      people: [{ id: 1, prefix_id: "prsp_one", name: "Ada Lovelace", detail: "CTO · Engines", path: "/prospects/prsp_one" }],
+      companies: [{ id: 3, prefix_id: "prof_three", name: "Ada Engines", detail: "adaengines.com", path: "/prospects/companies/prof_three" }],
+      experiments: [{ id: 2, prefix_id: "motn_one", name: "Ada launch", detail: "Active", path: "/motions/motn_one" }],
+      users: [{ id: 4, prefix_id: "4", name: "Ada Teammate", detail: "ada@example.com", path: "/operations/users/4" }]
+    };
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/jump_to.json?q=ada+love");
+      assert.equal(options.method, "GET");
+      return jsonResponse(responseBody);
+    });
+
+    const exitCode = await run(["find", "ada", "love"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /People\n  Ada Lovelace\tCTO · Engines\t\/prospects\/prsp_one/);
+    assert.match(stdout.output, /Companies\n  Ada Engines\tadaengines\.com\t\/prospects\/companies\/prof_three/);
+    assert.match(stdout.output, /Experiments\n  Ada launch\tActive\t\/motions\/motn_one/);
+    assert.match(stdout.output, /Users\n  Ada Teammate\tada@example\.com\t\/operations\/users\/4/);
+
+    const jsonOut = captureStream();
+    assert.equal(await run(["find", "ada", "love", "--json"], { env, fetch, stdout: jsonOut }), 0);
+    assert.deepEqual(JSON.parse(jsonOut.output), responseBody);
+  });
+});
+
+test("find says nothing found when both groups are empty", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one", accountName: "One" }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({ people: [], companies: [], experiments: [], users: [] }));
+
+    assert.equal(await run(["find", "zz"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /Nothing found\./);
   });
 });
 
