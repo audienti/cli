@@ -78,6 +78,10 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId]));
   }
 
+  socialCookieActivity(accountId, socialCookieId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "activity"], query));
+  }
+
   createSocialCookie(accountId, body) {
     return this.requestJson(accountPath(accountId, ["social_cookies"]), { method: "POST", body });
   }

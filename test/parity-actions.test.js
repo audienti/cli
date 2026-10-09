@@ -8,6 +8,7 @@ import { captureStream, createFetch, jsonResponse, withTempConfigHome } from "./
 const ACCOUNT = "/api/v1/accounts/acct_one";
 
 const CASES = [
+  { args: ["social-cookies", "activity", "scok_one", "--section", "sync", "--task-type", "messages_sync"], method: "GET", path: "/social_cookies/scok_one/activity.json", query: "section=sync&task_type=messages_sync", body: undefined, response: {section: "sync", history: []}, output: /Loaded 0 sync activity rows/ },
   { args: ["prospects", "defer", "prsp_one"], method: "POST", path: "/prospects/prsp_one/defer.json", body: undefined, output: /Deferred prospect prsp_one/ },
   { args: ["prospects", "delay", "prsp_one", "--for", "1_week"], method: "POST", path: "/prospects/prsp_one/delay.json", body: { delay_duration: "1_week" }, response: { undelay_at: "2026-10-05" }, output: /until 2026-10-05/ },
   { args: ["prospects", "monitor", "prsp_one", "--note", "Watch"], method: "POST", path: "/prospects/prsp_one/monitor.json", body: { monitor_note: "Watch" } },
@@ -72,6 +73,7 @@ for (const testCase of CASES) {
       const stdout = captureStream();
       const fetch = createFetch((url, options) => {
         assert.equal(url.pathname, `${ACCOUNT}${testCase.path}`);
+        if (testCase.query) assert.equal(url.search.slice(1), testCase.query);
         assert.equal(options.method, testCase.method);
         if (testCase.body === undefined) {
           assert.equal(options.body, undefined);

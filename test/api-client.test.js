@@ -51,6 +51,21 @@ test("syncSocialCookieMessages preserves API status and error body", async () =>
   );
 });
 
+test("socialCookieActivity sends read filters to the account-scoped activity route", async () => {
+  const responseBody = {section: "browser", rows: [], total_count: 0};
+  const fetch = createFetch((url, options) => {
+    assert.equal(url.pathname, "/api/v1/accounts/acct_one/social_cookies/scok_one/activity.json");
+    assert.equal(url.searchParams.get("section"), "browser");
+    assert.equal(url.searchParams.get("task_id"), "42");
+    assert.equal(options.method, "GET");
+    return jsonResponse(responseBody);
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  assert.deepEqual(await client.socialCookieActivity("acct_one", "scok_one", {section: "browser", task_id: 42}), responseBody);
+  assert.equal(fetch.calls.length, 1);
+});
+
 test("motionSignals uses the local account-scoped API route", async (t) => {
   const responseBody = {
     motion_id: 42,

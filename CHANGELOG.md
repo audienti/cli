@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.112] - 2026-10-09
+
+### Added
+
+- `social-cookies activity` reads account-scoped action, sync, and browser activity with paging and filters.
+
 ## [0.1.111] - 2026-10-09
 
 ### Changed
