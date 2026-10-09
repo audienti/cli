@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.111] - 2026-10-09
+
+### Changed
+
+- Record shared setup API fixes in this CLI release: bare public domains normalize to HTTPS, and valid same-site retries preserve trusted website evidence and explicitly scoped corrections.
+
 ## [0.1.110] - 2026-10-08
 
 ### Added
