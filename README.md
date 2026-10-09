@@ -877,3 +877,4 @@ credentials or silently authenticate an agent.
 Copyright (c) 2026 OMALab, Inc. All rights reserved. See [LICENSE](LICENSE).
 
 Batch import accepts up to 50 rows per API request. Split larger files before importing. Row destination IDs or new names override batch defaults; failed rows stay visible in the response.
+Bulk destinations: `audienti prospects set-destination <prsp_id> --type list --destination <list_id>` adds by default. Use `--name "New list"` to create a list, `--type experiment --name "Existing relationships"` to create a transition without setup, or `--mode move` for explicit reassignment. Add preserves existing memberships; experiment Add skips people assigned elsewhere.

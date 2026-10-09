@@ -65,6 +65,7 @@ const PROSPECTS_ADD_NOTE_USAGE = "Usage: audienti prospects add-note <prsp_id> (
 const PROSPECTS_ADD_STEER_USAGE = "Usage: audienti prospects add-steer <prsp_id> (--message <text> [--engagement-type <key>] | --payload <file.json>) [--json] [--account <acct_id>]";
 const PROSPECTS_ADD_PROFILE_USAGE = "Usage: audienti prospects add-profile <prsp_id> --url <profile_url|email|phone> [--json] [--account <acct_id>]";
 const PROSPECTS_REPORT_BAD_PROFILE_USAGE = "Usage: audienti prospects report-bad-profile <prsp_id> <prof_id|citation_id> [--json] [--account <acct_id>]";
+const PROSPECTS_DESTINATION_USAGE = "Usage: audienti prospects set-destination <prsp_id> [prsp_id...] --type <list|experiment> (--destination <id> | --name <name>) [--mode <add|move>] [--json] [--account <acct_id>]. A new experiment name creates a transition without setup.";
 const PROSPECTS_ASSIGN_USAGE = "Usage: audienti prospects assign <prsp_id> [prsp_id...] --assigned-user <id|me|unassign> [--json] [--account <acct_id>]";
 const PROSPECTS_MOVE_ACCOUNT_USAGE = "Usage: audienti prospects move-account <prsp_id> --target-account <acct_id> [--assigned-user <id|me>] [--target-motion <motn_id>] [--target-list <list_id>] [--apply] [--json] [--account <source_acct_id>]";
 const PROSPECTS_SET_STATUS_USAGE = "Usage: audienti prospects set-status <prsp_id> --status <active|nurture|non_responsive|not_fit|bad_data_404|rejected> [--json] [--account <acct_id>]";
@@ -484,6 +485,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "prospects" && action === "list") return prospectsList(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "check") return prospectsCheck(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "show") return prospectsShow(rest, context, { accountOverride });
+  if (normalizedResource === "prospects" && action === "set-destination") return prospectsSetDestination(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "assign") return prospectsAssign(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "move-account") return prospectsMoveAccount(rest, context, { accountOverride });
   if (normalizedResource === "prospects" && action === "set-status") return prospectsSetStatus(rest, context, { accountOverride });
@@ -4564,6 +4566,28 @@ function prospectQueryFromValues(values, config, { accountOverride } = {}) {
     page: values.page,
     include_profiles: values.profiles
   });
+}
+
+async function prospectsSetDestination(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(), type: { type: "string" }, destination: { type: "string" },
+    name: { type: "string" }, mode: { type: "string", default: "add" }
+  });
+  if (!positionals.length || !["list", "experiment"].includes(values.type) ||
+      !["add", "move"].includes(values.mode) || Boolean(values.destination) === Boolean(values.name)) {
+    throw new CommandError(PROSPECTS_DESTINATION_USAGE);
+  }
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const { payload, rejected } = await performBulkMutation(() => client.setProspectDestination(accountId, compactObject({
+    prospect_ids: positionals, destination_type: values.type === "list" ? "list" : "motion",
+    destination_id: values.destination, name: values.name, mode: values.mode
+  })));
+  if (values.json) writeJson(context.stdout, payload);
+  else {
+    writeLine(context.stdout, `${payload.created ? "Created " : ""}${display(payload.destination?.name)}: ${payload.added?.length || 0} added, ${payload.moved?.length || 0} moved, ${payload.skipped?.length || 0} skipped, ${payload.failed?.length || 0} failed.`);
+    for (const row of payload.failed || []) writeLine(context.stdout, `${row.id}: ${row.message || row.reason}`);
+  }
+  return rejected ? 1 : 0;
 }
 
 async function prospectsAssign(args, context, { accountOverride } = {}) {
@@ -13745,6 +13769,22 @@ const HELP_TOPICS = new Map([
     "Examples:",
     "  audienti prospects check --motion <motn_id> --all --csv",
     "  audienti prospects check --assigned-user me --json"
+  ].join("\n")],
+
+  ["prospects set-destination", [
+    "Usage:",
+    `  ${PROSPECTS_DESTINATION_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Status: implemented",
+    "",
+    "Behavior:",
+    "  Search destinations in the app; pass an existing destination ID or a new name here.",
+    "  --type list creates a list; --type experiment with a new name creates a transition without setup.",
+    "  Add preserves other lists and skips people assigned to another experiment. Move is explicit.",
+    "  Partial failures return their row outcomes and exit 1.",
+    "",
+    "API:",
+    "  POST /api/v1/accounts/:account_id/prospect_destinations.json"
   ].join("\n")],
 
   ["prospects assign", [

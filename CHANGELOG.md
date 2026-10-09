@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.110] - 2026-10-08
+
+### Added
+
+- `prospects set-destination` adds or explicitly moves selected people to existing lists/experiments, creates named lists or transitions without setup, and preserves partial-failure results through the shared destination API.
+
 ## [0.1.109] - 2026-10-08
 
 ### Changed

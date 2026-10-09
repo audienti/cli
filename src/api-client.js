@@ -949,6 +949,13 @@ export class AudientiClient {
     });
   }
 
+  setProspectDestination(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["prospect_destinations"]), {
+      method: "POST",
+      body
+    });
+  }
+
   assignProspects(accountId, body) {
     return this.requestJson(accountPath(accountId, ["prospects", "assign"]), {
       method: "POST",

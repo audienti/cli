@@ -13936,3 +13936,22 @@ test("social-cookies show JSON preserves measured Computer scopes and missing us
     assert.deepEqual(JSON.parse(stdout.output).social_cookie.computer_usage, usage);
   });
 });
+
+
+test("prospects set-destination creates a transition and preserves partial failure JSON", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({ host: "https://app.audienti.com", token: "saved-token", accountId: "acct_one" }, { env });
+    const stdout = captureStream();
+    const body = { destination: { name: "October relationships", kind: "transition" }, created: true,
+      added: ["prsp_one"], moved: [], skipped: [], failed: [{ id: "prsp_two", reason: "not_available" }] };
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.toString(), "https://app.audienti.com/api/v1/accounts/acct_one/prospect_destinations.json");
+      assert.equal(options.method, "POST");
+      assert.deepEqual(JSON.parse(options.body), { prospect_ids: ["prsp_one", "prsp_two"], destination_type: "motion", name: "October relationships", mode: "add" });
+      return jsonResponse(body, { status: 422 });
+    });
+    const exitCode = await run(["prospects", "set-destination", "prsp_one", "prsp_two", "--type", "experiment", "--name", "October relationships", "--json"], { env, fetch, stdout });
+    assert.equal(exitCode, 1);
+    assert.deepEqual(JSON.parse(stdout.output), body);
+  });
+});
