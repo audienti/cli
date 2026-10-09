@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.109] - 2026-10-08
+
+### Changed
+
+- Advance the API contract version for account-scoped operator browser capability requests and receipt inspection (#2147). This phase adds no new top-level CLI command; the approved API-only scope is tracked in the repository parity baseline.
+
 ## [0.1.108] - 2026-10-08
 
 ### Fixed
