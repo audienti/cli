@@ -277,6 +277,7 @@ const COHORT_STAGE_ORDER = [
   "identified",
   "pre_connect",
   "connect_request",
+  "request_not_accepted",
   "connected",
   "engaged",
   "meeting_requested",

@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.113] - 2026-10-10
+
+### Changed
+
+- Cohort stage output orders the new `request_not_accepted` stage between `connect_request` and `connected` (#2767).
+
 ## [0.1.112] - 2026-10-09
 
 ### Added
