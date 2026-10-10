@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.114] - 2026-10-10
+
+### Changed
+
+- Operator output from the API now carries `surface_state.activity_ledger.discovery_state` (the true search state) and company records in the activity rows. The setup step answers an invalid website with "Enter a public website address, such as yourcompany.com." (#2733).
+
 ## [0.1.113] - 2026-10-10
 
 ### Changed
