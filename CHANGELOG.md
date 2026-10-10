@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.115] - 2026-10-10
+
+### Fixed
+
+- Keep private automatic-repair review findings and candidate history out of the browser capability status API (#2147).
+
 ## [0.1.114] - 2026-10-10
 
 ### Changed
