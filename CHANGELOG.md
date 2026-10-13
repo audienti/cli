@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.117] - 2026-10-12
+
+### Changed
+
+- Quick Start API `linkedin_sign_in` can now return `computer_needed` when LinkedIn requires the person to finish sign-in in their Computer. The `setup_state` read accepts an optional `computer_handoff_cookie_id`; it is used only when it matches the selected owner's current LinkedIn cookie in `approval_needed` state. The CLI does not start a Computer or perform the handoff.
+
 ## [0.1.116] - 2026-10-12
 
 ### Changed
