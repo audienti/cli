@@ -199,6 +199,65 @@ test("tools runs list, show, results and export call their routes", async () => 
   });
 });
 
+test("tools runs show renders the shared current-expense payload", async () => {
+  await withConfig(async ({ env }) => {
+    const fetch = createFetch(() => jsonResponse(queuedRun({
+      status: "completed",
+      summary: { attempt_count: 5, cache_hit_count: 2 },
+      current_expenses: {
+        state: "partial",
+        known_expense_cents: "20.139561",
+        unknown_expense_receipt_count: 2,
+        uncertain_attempt_count: 0,
+        completion_unverified_attempt_count: 3
+      }
+    })));
+    const stdout = captureStream();
+
+    assert.equal(await run(["tools", "runs", "show", "trun_1"], { env, fetch, stdout }), 0);
+
+    assert.match(stdout.output, /Recorded expenses: 20\.14¢ recorded; 2 linked receipt\(s\) with unknown amount; 3 call\(s\) with cost unverified at completion; known sum may be partial/);
+    assert.match(stdout.output, /Usage: 5 provider call\(s\)/);
+    assert.match(stdout.output, /2 cached/);
+  });
+});
+
+test("tools runs show omits empty usage while a queued run has no attempt data", async () => {
+  await withConfig(async ({ env }) => {
+    const fetch = createFetch(() => jsonResponse(queuedRun({current_expenses: {
+      state: "none",
+      known_expense_cents: null,
+      unknown_expense_receipt_count: 0,
+      uncertain_attempt_count: 0,
+      completion_unverified_attempt_count: 0,
+      in_progress_attempt_count: 0
+    }})));
+    const stdout = captureStream();
+
+    assert.equal(await run(["tools", "runs", "show", "trun_1"], { env, fetch, stdout }), 0);
+    assert.doesNotMatch(stdout.output, /Usage:/);
+    assert.doesNotMatch(stdout.output, /Recorded expenses:/);
+  });
+});
+
+test("tools runs show labels an unfinished provider attempt as in progress", async () => {
+  await withConfig(async ({ env }) => {
+    const fetch = createFetch(() => jsonResponse(queuedRun({status: "running", current_expenses: {
+      state: "partial",
+      known_expense_cents: null,
+      unknown_expense_receipt_count: 0,
+      uncertain_attempt_count: 0,
+      completion_unverified_attempt_count: 0,
+      in_progress_attempt_count: 1
+    }})));
+    const stdout = captureStream();
+
+    assert.equal(await run(["tools", "runs", "show", "trun_1"], { env, fetch, stdout }), 0);
+    assert.match(stdout.output, /Recorded expenses: no priced receipts; 1 call\(s\) in progress/);
+    assert.doesNotMatch(stdout.output, /Usage:/);
+  });
+});
+
 test("network list shows coverage and rows; export writes CSV", async () => {
   await withConfig(async ({ env }) => {
     const fetch = createFetch((url) => {

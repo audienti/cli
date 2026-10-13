@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.116] - 2026-10-12
+
+### Changed
+
+- Show linked receipt expenses from the current run, and distinguish current unknown amounts from costs that were unverified at completion (#2618).
+
 ## [0.1.115] - 2026-10-10
 
 ### Fixed

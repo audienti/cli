@@ -16474,12 +16474,44 @@ async function writeExportPayload(payload, format, outputPath, context) {
 function renderToolRun(run, context) {
   writeLine(context.stdout, `Run ${display(run?.id)} (${display(run?.tool)}): ${display(run?.status)}`);
   writeLine(context.stdout, `Items: ${display(run?.item_count, 0)} total, ${display(run?.completed_item_count, 0)} completed, ${display(run?.failed_item_count, 0)} failed`);
+  if (run?.summary && Object.keys(run.summary).length > 0) {
+    const usage = [`${display(run.summary.attempt_count, 0)} provider call(s)`];
+    if (Number(run.summary.cache_hit_count) > 0) usage.push(`${run.summary.cache_hit_count} cached`);
+    writeLine(context.stdout, `Usage: ${usage.join("; ")}`);
+  }
+  const stillRunningWithoutExpenses = ["queued", "running"].includes(run?.status) && run?.current_expenses?.state === "none";
+  if (run?.current_expenses && !stillRunningWithoutExpenses) writeLine(context.stdout, `Recorded expenses: ${toolRunExpenseSummary(run.current_expenses)}`);
   const outcomes = run?.summary?.outcomes || {};
   if (Object.keys(outcomes).length > 0) {
     writeLine(context.stdout, `Outcomes: ${Object.entries(outcomes).map(([outcome, count]) => `${outcome} ${count}`).join(", ")}`);
   }
   if (run?.error_code) writeLine(context.stdout, `Error: ${run.error_code}`);
   if (run?.details_expired) writeLine(context.stdout, "Details expired after 90 days; only this summary remains.");
+}
+
+function toolRunExpenseSummary(expenses) {
+  if (expenses.state === "unavailable") return "data unavailable";
+  if (expenses.state === "none") return "no recorded expenses";
+  if (expenses.state === "expired") {
+    const known = expenses.completion_snapshot?.known_billed_expense_cents;
+    return `current receipt detail expired; completion-time snapshot ${expenseAmountLabel(known)}; ${display(expenses.uncertain_attempt_count, 0)} call(s) with unknown or uncertain expense at completion`;
+  }
+
+  const known = expenses.known_expense_cents;
+  const parts = [known === null || known === undefined ? "no priced receipts" : `${expenseAmountLabel(known)} recorded`];
+  if (expenses.unknown_expense_receipt_count > 0) parts.push(`${expenses.unknown_expense_receipt_count} linked receipt(s) with unknown amount`);
+  if (expenses.uncertain_attempt_count > 0) parts.push(`${expenses.uncertain_attempt_count} call(s) with unknown or uncertain expense`);
+  if (expenses.completion_unverified_attempt_count > 0) parts.push(`${expenses.completion_unverified_attempt_count} call(s) with cost unverified at completion`);
+  if (expenses.in_progress_attempt_count > 0) parts.push(`${expenses.in_progress_attempt_count} call(s) in progress`);
+  if (expenses.state === "partial") parts.push("known sum may be partial");
+  return parts.join("; ");
+}
+
+function expenseAmountLabel(cents) {
+  if (cents === null || cents === undefined) return "no known amount";
+  const amount = Number(cents);
+  if (amount > 0 && amount < 0.01) return "less than 0.01¢";
+  return `${amount.toFixed(2)}¢`;
 }
 
 function renderToolRunItems(tool, items, context) {
