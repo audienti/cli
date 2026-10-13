@@ -112,7 +112,8 @@ jobs:
 
       - name: Publish to npm
         if: steps.registry.outputs.publish == 'true'
-        run: npm publish --access public
+        # npm reports failed trusted-publisher token exchange only at verbose level.
+        run: npm publish --access public --loglevel verbose
 
       - name: Build release notes from the versioned changelog
         env:
