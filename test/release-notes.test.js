@@ -18,3 +18,17 @@ test("publish workflow extracts the package version without escaping JavaScript 
   assert.match(workflow, /node -p 'require\("\.\/package\.json"\)\.version'/);
   assert.doesNotMatch(workflow, /require\\\("\.\/package\.json/);
 });
+
+test("npm publishing uses the trusted publisher from main without a token secret", async () => {
+  const workflow = await readFile(new URL("../.github/workflows/publish.yml", import.meta.url), "utf8");
+  const publishStep = workflow.match(/      - name: Publish to npm\n([\s\S]*?)(?=\n      - name: |$)/);
+
+  assert.ok(publishStep, "npm publish step exists");
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /if: github\.repository == 'audienti\/cli' && github\.ref == 'refs\/heads\/main'/);
+  assert.match(workflow, /^  id-token: write$/m);
+  assert.match(workflow, /npm --version/);
+  assert.match(workflow, /11\.5\.1/);
+  assert.doesNotMatch(workflow, /NPM_PUBLISH_TOKEN/);
+  assert.doesNotMatch(publishStep[1], /secrets\./);
+});

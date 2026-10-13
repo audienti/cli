@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   publish:
-    if: github.repository == 'audienti/cli'
+    if: github.repository == 'audienti/cli' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
@@ -24,6 +24,25 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+
+      - name: Require npm version for trusted publishing
+        run: |
+          npm_version="$(npm --version)"
+          echo "Using npm $npm_version"
+          node -e '
+            const parts = process.argv[1].split(".").map(Number);
+            const [major, minor, patch] = parts;
+            const supported = parts.length === 3 &&
+              parts.every(Number.isInteger) &&
+              (major > 11 ||
+                (major === 11 &&
+                  (minor > 5 || (minor === 5 && patch >= 1))));
+
+            if (!supported) {
+              console.error(`Trusted publishing requires npm 11.5.1 or later; found ${process.argv[1] || "unknown"}.`);
+              process.exit(1);
+            }
+          ' "$npm_version"
 
       - name: Verify package metadata
         run: npm run verify
@@ -42,6 +61,29 @@ jobs:
           test -n "$tarball"
           npm install --ignore-scripts --prefix "$smoke_dir" "$tarball"
           "$smoke_dir/node_modules/.bin/audienti" --help
+
+          mcp_config_dir="$smoke_dir/mcp-config"
+          mkdir -p "$mcp_config_dir"
+          mcp_response="$(
+            printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+              | timeout 10s env -i \
+                PATH="$PATH" \
+                HOME="$mcp_config_dir" \
+                AUDIENTI_CONFIG_HOME="$mcp_config_dir" \
+                "$smoke_dir/node_modules/.bin/audienti-mcp"
+          )"
+          printf '%s\n' "$mcp_response" | node -e '
+            let response = "";
+            process.stdin.on("data", (chunk) => response += chunk);
+            process.stdin.on("end", () => {
+              const message = JSON.parse(response);
+              if (message.jsonrpc !== "2.0" || message.id !== 1 ||
+                  !message.error?.message?.startsWith("Not authenticated.")) {
+                console.error("audienti-mcp returned an unexpected unauthenticated response.");
+                process.exit(1);
+              }
+            });
+          '
 
       - name: Read package version
         id: version
@@ -70,10 +112,6 @@ jobs:
 
       - name: Publish to npm
         if: steps.registry.outputs.publish == 'true'
-        env:
-          # Required only for the initial publish. Remove it after npm trusted
-          # publishing is configured for this repository and workflow.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
         run: npm publish --access public
 
       - name: Build release notes from the versioned changelog
