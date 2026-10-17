@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.118] - 2026-10-16
+
+### Changed
+
+- Update the operator conversation-reader request and task-status API contract. This release adds no new CLI command.
+
 ## [0.1.117] - 2026-10-12
 
 ### Changed
