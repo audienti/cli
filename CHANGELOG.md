@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.119] - 2026-10-18
+
+### Changed
+
+- Extend the operator conversation-reader request and status API contract with bounded retries that retain failure evidence. This release adds no new CLI command.
+
 ## [0.1.118] - 2026-10-16
 
 ### Changed
