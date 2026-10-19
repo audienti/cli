@@ -15936,20 +15936,21 @@ const PARITY_ACTION_COMMANDS = new Map([
     done: (_positionals, payload) => describeSocialCookie(payload?.social_cookie)
   }],
   ["social-cookies activity", {
-    usage: "audienti social-cookies activity <scok_id> [--section <actions|status|sync|browser>] [--window <1h|24h|7d|30d>] [--task-type <type>] [--page <n>]",
+    usage: "audienti social-cookies activity <scok_id> [--section <actions|status|sync|browser>] [--window <1h|24h|7d|30d>] [--task-type <type>] [--task-id <id>] [--repair-id <id>] [--page <n>]",
     purpose: "Read a social account's action, sync, and browser activity without changing work.",
     api: "GET /api/v1/accounts/:account_id/social_cookies/:id/activity.json",
     json: true,
     options: {
       section: { type: "string" }, window: { type: "string" }, "task-type": { type: "string" },
       page: { type: "string" }, "per-page": { type: "string" }, "event-id": { type: "string" },
-      "task-id": { type: "string" }, "session-id": { type: "string" }, status: { type: "string" },
+      "task-id": { type: "string" }, "repair-task-id": { type: "string" }, "repair-id": { type: "string" }, "session-id": { type: "string" }, status: { type: "string" },
       "action-type": { type: "string" }, "automation-filter": { type: "string" }, query: { type: "string" },
       "created-from": { type: "string" }, "created-to": { type: "string" }
     },
     run: (client, accountId, [id], values) => client.socialCookieActivity(accountId, id, compactObject({
       section: values.section, window: values.window, task_type: values["task-type"], page: values.page,
       per_page: values["per-page"], event_id: values["event-id"], task_id: values["task-id"],
+      repair_task_id: values["repair-task-id"], repair_id: values["repair-id"],
       session_id: values["session-id"], status: values.status, action_type: values["action-type"],
       automation_filter: values["automation-filter"], query: values.query,
       created_from: values["created-from"], created_to: values["created-to"]

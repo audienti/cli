@@ -66,6 +66,22 @@ test("socialCookieActivity sends read filters to the account-scoped activity rou
   assert.equal(fetch.calls.length, 1);
 });
 
+test("socialCookieActivity sends an exact browser repair selection", async () => {
+  const responseBody = {section: "browser", task_id: 42, repair: {id: 7, status: "Incomplete"}};
+  const fetch = createFetch((url) => {
+    assert.equal(url.searchParams.get("section"), "browser");
+    assert.equal(url.searchParams.get("repair_task_id"), "42");
+    assert.equal(url.searchParams.get("repair_id"), "7");
+    return jsonResponse(responseBody);
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  assert.deepEqual(
+    await client.socialCookieActivity("acct_one", "scok_one", {section: "browser", repair_task_id: 42, repair_id: 7}),
+    responseBody
+  );
+});
+
 test("motionSignals uses the local account-scoped API route", async (t) => {
   const responseBody = {
     motion_id: 42,

@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.120] - 2026-10-19
+
+### Changed
+
+- Extend the existing `social-cookies activity` command with `--repair-task-id` and `--repair-id` for exact read-only browser repair details from the account-scoped activity API.
+
 ## [0.1.119] - 2026-10-18
 
 ### Changed
