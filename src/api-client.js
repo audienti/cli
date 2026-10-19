@@ -813,6 +813,10 @@ export class AudientiClient {
     });
   }
 
+  motionRuns(accountId, motionId, params = {}) {
+    return this.requestJson(accountPath(accountId, ["motions", motionId, "runs"], params));
+  }
+
   motionStatus(accountId, motionId) {
     return this.requestJson(accountPath(accountId, ["motions", motionId, "status"]));
   }

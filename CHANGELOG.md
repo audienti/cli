@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.121] - 2026-10-19
+
+### Added
+
+- Add `motions runs` to read account-scoped, paginated discovery history with run purposes, current saved-person outcomes, and blocked-search reasons.
+
 ## [0.1.120] - 2026-10-19
 
 ### Changed

@@ -232,6 +232,7 @@ audienti analytics motions --json
 audienti analytics icps --json
 audienti motions analytics <motn_id>
 audienti motions run-discovery <motn_id>
+audienti motions runs <motn_id> [--cursor <id>] [--limit <1-10>] [--json]
 audienti motions quick-start --url https://example.com --wait --confirm
 audienti motions abm-companies <motn_id> add --file abm-domains.txt
 audienti motions abm-companies <motn_id> list

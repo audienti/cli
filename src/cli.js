@@ -450,6 +450,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "motions" && action === "list") return motionsList(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "show") return motionsShow(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "signals") return motionsSignals(rest, context, { accountOverride });
+  if (normalizedResource === "motions" && action === "runs") return motionsRuns(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "status") return motionsStatus(rest, context, { accountOverride });
   if (normalizedResource === "motions" && ["abm-companies", "company-filters"].includes(action)) return motionsAbmCompanies(rest, context, { accountOverride });
   if (normalizedResource === "motions" && action === "profile-signals") return motionsProfileSignals(rest, context, { accountOverride });
@@ -3600,6 +3601,25 @@ async function motionsSignals(args, context, { accountOverride } = {}) {
   if (values.json) return writeJson(context.stdout, payload);
 
   renderMotionDiscoverySignals(payload, context);
+}
+
+async function motionsRuns(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(), cursor: { type: "string" }, limit: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError("Usage: audienti motions runs <motn_id> [--cursor <id>] [--limit <1-10>] [--json] [--account <acct_id>]");
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = await client.motionRuns(accountId, positionals[0], compactObject({
+    cursor: normalizeOptionalPositiveInteger(values.cursor, "--cursor"),
+    limit: normalizeOptionalPositiveInteger(values.limit, "--limit")
+  }));
+  if (values.json) return writeJson(context.stdout, payload);
+  for (const row of payload.runs || []) {
+    context.stdout.write(`#${row.id} ${row.purpose}: ${row.status} · ${row.outcome || "outcome unknown"} · seen ${row.seen_count} · submitted ${row.submitted_count} · saved ${row.promoted_count}\n`);
+    if (row.error_message) context.stdout.write(`  ${row.error_message}\n`);
+  }
+  if (!payload.runs?.length) context.stdout.write("No discovery runs on this page.\n");
+  if (payload.has_more) context.stdout.write(`More runs: --cursor ${payload.next_cursor}\n`);
 }
 
 async function motionsStatus(args, context, { accountOverride } = {}) {
@@ -10621,6 +10641,7 @@ const HELP_TOPICS = new Map([
   ["skills list", "Usage:\n  audienti skills list [--json]\n\nList bundled skills and marketplace discovery metadata without network or login."],
   ["skills show", "Usage:\n  audienti skills show <name> [--json]\n\nPrint bundled skill instructions, or upstream source links and host-specific install commands. Read each upstream README for its dependencies. Installation is a separate action."],
   ["tools gift-research", "Usage:\n  audienti tools gift-research --url <website> [--json]\n\nGive the agent the website-gift-research skill and the supplied HTTP(S) URL. The agent browses using its own tools. The CLI does not fetch the website, call Audienti, require login, create gifts or return research results.\n\nRead the skill without a website:\n  audienti skills show audienti-gift-research"],
+  ["motions runs", "Usage:\n  audienti motions runs <motn_id> [--cursor <id>] [--limit <1-10>] [--json] [--account <acct_id>]\n\nList account-scoped discovery runs with read-only pagination."],
   ["", [
     "Usage:",
     "  audienti <command> [options]",
@@ -10657,6 +10678,7 @@ const HELP_TOPICS = new Map([
     "    audienti motions list",
     "    audienti motions show <motn_id>",
     "    audienti motions analytics <motn_id>",
+    "    audienti motions runs <motn_id> [--cursor <id>] [--limit <1-10>] [--json]",
     "    audienti motions run-discovery <motn_id>",
     "    audienti motions quick-start --url <company_url> --confirm --wait",
     "    audienti motions prospects <motn_id>",
@@ -13019,6 +13041,7 @@ const HELP_TOPICS = new Map([
     "  audienti motions show <motn_id> [--json]",
     "  audienti motions signals <motn_id> [--json]",
     "  audienti motions status <motn_id> [--json]",
+    "  audienti motions runs <motn_id> [--cursor <id>] [--limit <1-10>] [--json]",
     "  audienti motions run-discovery <motn_id> [--target-count <n>] [--json]",
     "  audienti motions quick-start --url <company_url> [--confirm] [--wait] [--json]",
     "  audienti motions setup-state [--json]",
