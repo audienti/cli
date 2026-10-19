@@ -78,6 +78,7 @@ Authenticate through the browser, then configure the default account context:
 ```bash
 audienti auth login
 audienti accounts list --json
+audienti accounts create --name Doppel --parent OMALab --json
 audienti accounts select <acct_id>
 audienti users list
 audienti users select <account_user_id|email|name|me>
@@ -879,3 +880,5 @@ Copyright (c) 2026 OMALab, Inc. All rights reserved. See [LICENSE](LICENSE).
 
 Batch import accepts up to 50 rows per API request. Split larger files before importing. Row destination IDs or new names override batch defaults; failed rows stay visible in the response.
 Bulk destinations: `audienti prospects set-destination <prsp_id> --type list --destination <list_id>` adds by default. Use `--name "New list"` to create a list, `--type experiment --name "Existing relationships"` to create a transition without setup, or `--mode move` for explicit reassignment. Add preserves existing memberships; experiment Add skips people assigned elsewhere.
+
+Create a child workspace with `audienti accounts create --name <name> --parent <name-or-id> [--json]`. The parent can be a visible name, unique name fragment, numeric ID, or prefixed ID. You must administer a root team account. All parent admins receive access to the child; ordinary members do not. Ambiguous names show matching IDs and stop. A duplicate child name under the same parent fails clearly. The response includes the new account ID. Creation keeps your selected account unchanged: use `audienti accounts select <new_acct_id>` or `--account <new_acct_id>` before creating a motion there.

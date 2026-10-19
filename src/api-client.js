@@ -40,6 +40,10 @@ export class AudientiClient {
     return this.requestJson("/api/v1/accounts.json");
   }
 
+  createAccount(body) {
+    return this.requestJson("/api/v1/accounts.json", { method: "POST", body });
+  }
+
   account(accountId) {
     return this.requestJson(accountPath(accountId, []));
   }

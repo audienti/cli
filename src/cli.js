@@ -149,6 +149,7 @@ const PAYMENT_SHOW_USAGE = "Usage: audienti payment show [--json] [--account <ac
 const PAYMENT_CODE_USAGE = "Usage: audienti payment code <signup_code> [--json] [--account <acct_id>]";
 const BRAND_PROFILE_SHOW_USAGE = "Usage: audienti brand-profile show [--json] [--account <acct_id>]";
 const BRAND_PROFILE_UPDATE_USAGE = "Usage: audienti brand-profile update [--voice <text>] [--style <text>] [--do-not-use <text>] [--json] [--account <acct_id>]";
+const ACCOUNTS_CREATE_USAGE = "Usage: audienti accounts create --name <text> --parent <name-or-id> [--json]";
 const ACCOUNTS_SHOW_USAGE = "Usage: audienti accounts show [<acct_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUPS_USAGE = "Usage: audienti linkedin-lookups <company-sizes|company-types|functions|industries|job-titles|locations|seniorities> [--query <text>] [--icp <icp_id>] [--json] [--account <acct_id>]";
 const LINKEDIN_LOOKUP_KINDS = new Map([
@@ -368,6 +369,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "config" && action === "list") return configList(rest, context);
   if (normalizedResource === "update" && action === "check") return updateCheck(rest, context);
   if (normalizedResource === "accounts" && action === "list") return accountsList(rest, context, { accountOverride });
+  if (normalizedResource === "accounts" && action === "create") return accountsCreate(rest, context);
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
   if (normalizedResource === "accounts" && action === "show") return accountsShow(rest, context, { accountOverride });
   if (normalizedResource === "linkedin-lookups") return linkedinLookups(action, rest, context, { accountOverride });
@@ -1734,6 +1736,27 @@ async function accountsList(args, context, { accountOverride } = {}) {
   }
 }
 
+async function accountsCreate(args, context) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(),
+    name: { type: "string" },
+    parent: { type: "string" }
+  });
+  if (positionals.length || !values.name?.trim() || !values.parent?.trim()) {
+    throw new CommandError(ACCOUNTS_CREATE_USAGE);
+  }
+
+  const config = await requireAuthenticatedConfig(context);
+  const client = clientFromConfig(config, context);
+  const parent = resolveAccountSelection(await client.accounts(), values.parent);
+  if (!parent) throw new CommandError(`Parent account "${values.parent}" does not exist or is not accessible.`);
+  if (!parent.prefix_id) throw new CommandError("Account payload is missing prefix_id.");
+
+  const account = await client.createAccount({ account: { name: values.name, parent_account_id: parent.prefix_id } });
+  if (values.json) return writeJson(context.stdout, account);
+  writeLine(context.stdout, `Created account: ${account.name} (${account.prefix_id})`);
+}
+
 async function accountsShow(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, jsonOptions());
   if (positionals.length > 1) throw new CommandError(ACCOUNTS_SHOW_USAGE);
@@ -1823,12 +1846,14 @@ function resolveAccountSelection(accounts, term) {
 
   const exactPrefix = accounts.find((candidate) => candidate.prefix_id === requested);
   if (exactPrefix) return exactPrefix;
+  const exactId = accounts.find((candidate) => String(candidate.id) === requested);
+  if (exactId) return exactId;
 
   const normalizedRequested = requested.toLowerCase();
-  const exactName = accounts.find((candidate) => String(candidate.name || "").toLowerCase() === normalizedRequested);
-  if (exactName) return exactName;
+  const exactNames = accounts.filter((candidate) => String(candidate.name || "").toLowerCase() === normalizedRequested);
+  if (exactNames.length === 1) return exactNames[0];
 
-  const matches = accounts.filter((candidate) => {
+  const matches = exactNames.length > 1 ? exactNames : accounts.filter((candidate) => {
     const prefixId = String(candidate.prefix_id || "").toLowerCase();
     const name = String(candidate.name || "").toLowerCase();
     return prefixId.includes(normalizedRequested) || name.includes(normalizedRequested);
@@ -11004,6 +11029,7 @@ const HELP_TOPICS = new Map([
   ["accounts", [
     "Usage:",
     "  audienti accounts list [--json]",
+    `  ${ACCOUNTS_CREATE_USAGE.slice("Usage: ".length)}`,
     "  audienti accounts show [<acct_id>] [--json]",
     "  audienti accounts select <acct_id>",
     "",
@@ -11048,6 +11074,21 @@ const HELP_TOPICS = new Map([
     "  The CLI only requests work; provider traversal remains owned by the server worker."
   ].join("\n")],
 
+  ["accounts create", [
+    "Usage:",
+    `  ${ACCOUNTS_CREATE_USAGE.slice("Usage: ".length)}`,
+    "",
+    "Creates a child under a root team account you administer and copies its admins.",
+    "--parent accepts an accessible account name, unique fragment, numeric ID or prefixed ID.",
+    "Ambiguous names list matching IDs; use an ID to choose. Duplicate child names fail clearly.",
+    "Returns the new account ID. Your selected account does not change.",
+    "Use audienti accounts select <new_acct_id> or --account <new_acct_id> for subsequent commands.",
+    "",
+    "API: POST /api/v1/accounts.json",
+    "",
+    "Example:",
+    "  audienti accounts create --name Doppel --parent OMALab --json"
+  ].join("\n")],
   ["accounts list", [
     "Usage:",
     "  audienti accounts list [--json] [--account <acct_id>]",

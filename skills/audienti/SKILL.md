@@ -111,6 +111,7 @@ context:
 ```bash
 audienti auth login
 audienti accounts list --json
+audienti accounts create --name Doppel --parent OMALab --json
 audienti accounts select <acct_id>
 audienti users select me
 ```
@@ -332,3 +333,5 @@ completed report later.
 - `tools email-find`, `linkedin-enrich`, `signals-find` and `write` return a run id immediately. Pass `--wait --json` to get results in one call, or poll `tools runs show <trun_id>` and read `tools runs results <trun_id>`. Nothing is sent and no prospects or experiments are created.
 - Pass `--request-key <key>` when retrying a submission; the same key and input return the same run.
 - `audienti network list|export` reads only the requester's own connected account's saved network. A 404 means the requester is not that account's owner. Coverage `unsupported_capture` or `not_yet_observed` is not zero.
+
+Create a child workspace with `audienti accounts create --name <name> --parent <name-or-id> [--json]`. The parent can be a visible name, unique name fragment, numeric ID, or prefixed ID. You must administer a root team account. All parent admins receive access to the child; ordinary members do not. Ambiguous names show matching IDs and stop. A duplicate child name under the same parent fails clearly. The response includes the new account ID. Creation keeps your selected account unchanged: use `audienti accounts select <new_acct_id>` or `--account <new_acct_id>` before creating a motion there.

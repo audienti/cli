@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.122] - 2026-10-19
+
+### Added
+
+- Create child accounts with `audienti accounts create --name <name> --parent <name-or-id> [--json]` and the shared API. Parent admins receive access; ambiguous parent names and duplicate child names fail clearly (#2943).
+
 ## [0.1.121] - 2026-10-19
 
 ### Added
