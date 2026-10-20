@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.123] - 2026-10-20
+
+### Fixed
+
+- `audienti prospects replan <prsp> --apply` now admits a prospect that was never admitted to the Planner. When it cannot, it reports `not admitted` with the reason instead of `legacy`. Members of an active transition motion are no longer blocked from admission (#2945).
+
 ## [0.1.122] - 2026-10-19
 
 ### Added

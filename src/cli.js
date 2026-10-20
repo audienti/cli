@@ -8394,6 +8394,8 @@ function renderProspectReplan(payload, context) {
     writeLine(context.stdout, "The request was recorded, but the Planner could not apply it. Review the reason before retrying.");
   } else if (payload?.status === "evaluation_error") {
     writeLine(context.stdout, "Planner evaluation failed. Fix the evaluation error and rerun with --apply.");
+  } else if (payload?.status === "not_admitted") {
+    writeLine(context.stdout, "This prospect is not admitted to the Planner, so nothing was planned. Fix the reason above and rerun with --apply.");
   } else if (payload?.status === "not_applied") {
     writeLine(context.stdout, "The plan was not persisted. Review the reason before retrying.");
   }
@@ -8458,6 +8460,7 @@ const REPLAN_STATUS_LABELS = Object.freeze({
   dry_run: "dry run",
   coach_error: "coach error",
   not_applied: "not applied",
+  not_admitted: "not admitted",
   pending: "pending",
   busy: "busy",
   failed: "failed",

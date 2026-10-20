@@ -6757,6 +6757,36 @@ test("prospects replan applies and supports json output", async () => {
   });
 });
 
+test("prospects replan apply names why a prospect could not be admitted", async () => {
+  await withTempConfigHome(async ({ env }) => {
+    await writeConfig({
+      host: "https://app.audienti.com",
+      token: "saved-token",
+      accountId: "acct_one",
+      accountName: "One"
+    }, { env });
+
+    const stdout = captureStream();
+    const fetch = createFetch(() => jsonResponse({
+      status: "not_admitted",
+      applied: false,
+      request_recorded: false,
+      changed: false,
+      reason_code: "locked_membership",
+      prospect: { prefix_id: "prsp_one", display_name: "Pat Prospect" },
+      current: { next_action: { type: "wait" } },
+      replanned: { next_action: { type: "wait" } }
+    }));
+
+    const exitCode = await run(["prospects", "replan", "prsp_one", "--apply"], { env, fetch, stdout });
+
+    assert.equal(exitCode, 0);
+    assert.match(stdout.output, /Replan not admitted for Pat Prospect \(prsp_one\)\./);
+    assert.match(stdout.output, /Reason: locked_membership/);
+    assert.match(stdout.output, /not admitted to the Planner, so nothing was planned/);
+  });
+});
+
 test("prospects replan shows coach errors as not persisted", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({
