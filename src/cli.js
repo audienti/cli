@@ -4061,6 +4061,7 @@ async function motionsUpdate(args, context, { accountOverride } = {}) {
 
   writeLine(context.stdout, `Updated motion ${display(motion?.name)} (${display(motion?.prefix_id)}).`);
   renderMotion(motion, context);
+  if (motion?.list_attachment?.message) writeLine(context.stdout, `List: ${motion.list_attachment.message}`);
   if (!statusBlocked) return undefined;
 
   writeLine(

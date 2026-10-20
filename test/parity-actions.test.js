@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { PassThrough, Readable } from "node:stream";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import { writeConfig } from "../src/config.js";
 import { run } from "../src/cli.js";
@@ -276,6 +279,23 @@ test("motions update exits zero when no status change is blocked", async () => {
     const stdout = captureStream();
     const fetch = createFetch(() => jsonResponse({ name: "Mixed", prefix_id: "motn_one", status: "active" }));
     assert.equal(await run(["motions", "update", "motn_one", "--status", "active", "--json"], { env, fetch, stdout }), 0);
+  });
+});
+
+test("motions update tells the user that attaching a list does not add the people already on it", async () => {
+  await withConfig(async (env) => {
+    const stdout = captureStream();
+    const message = "Attaching a list does not add the people already on it. 3 of them are not in this experiment yet.";
+    const fetch = createFetch(() => jsonResponse({
+      name: "Backing", prefix_id: "motn_one", status: "active",
+      list_attachment: { list_id: "list_one", list_members: 3, not_in_experiment: 3, adds_existing_members: false, message }
+    }));
+    const payloadDir = await fs.mkdtemp(path.join(os.tmpdir(), "audienti-motion-payload-"));
+    const payloadFile = path.join(payloadDir, "motion.json");
+    await fs.writeFile(payloadFile, JSON.stringify({ motion: { list_id: "list_one" } }));
+    const exitCode = await run(["motions", "update", "motn_one", "--payload", payloadFile], { env, fetch, stdout });
+    assert.equal(exitCode ?? 0, 0);
+    assert.match(stdout.output, /List: Attaching a list does not add the people already on it\. 3 of them are not in this experiment yet\./);
   });
 });
 

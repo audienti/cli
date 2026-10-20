@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.125] - 2026-10-20
+
+### Changed
+
+- `audienti motions update` now says when a newly attached backing list does not add the people already on it, and how many of them are not in the experiment yet. The API returns the same notice as `list_attachment` (#2945).
+
 ## [0.1.124] - 2026-10-20
 
 ### Fixed
