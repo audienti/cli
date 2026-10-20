@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.124] - 2026-10-20
+
+### Fixed
+
+- Motion status and discovery history no longer count completed visibility records as in-progress people. Status omits expired eligibility dates and reports discovery-history reconciliation holds instead of stale success or retry timers (#2944).
+
 ## [0.1.123] - 2026-10-20
 
 ### Fixed
