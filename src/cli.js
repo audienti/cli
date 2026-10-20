@@ -372,6 +372,8 @@ async function dispatch(argv, context) {
   if (normalizedResource === "accounts" && action === "create") return accountsCreate(rest, context);
   if (normalizedResource === "accounts" && action === "select") return accountsSelect(rest, context);
   if (normalizedResource === "accounts" && action === "show") return accountsShow(rest, context, { accountOverride });
+  if (normalizedResource === "social-tools" && action === "list") return socialToolsList(rest, context);
+  if (normalizedResource === "social-tools" && action === "show") return socialToolsShow(rest, context);
   if (normalizedResource === "linkedin-lookups") return linkedinLookups(action, rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
@@ -1755,6 +1757,30 @@ async function accountsCreate(args, context) {
   const account = await client.createAccount({ account: { name: values.name, parent_account_id: parent.prefix_id } });
   if (values.json) return writeJson(context.stdout, account);
   writeLine(context.stdout, `Created account: ${account.name} (${account.prefix_id})`);
+}
+
+async function socialToolsList(args, context) {
+  const {values, positionals} = parseCommandArgs(args, {json: {type: "boolean"}});
+  if (positionals.length > 0) throw new CommandError("Usage: audienti social-tools list [--json]");
+
+  const config = await requireAuthenticatedConfig(context);
+  const tools = await clientFromConfig(config, context).socialTools();
+  if (values.json) {
+    writeLine(context.stdout, JSON.stringify(tools, null, 2));
+    return;
+  }
+
+  writeLine(context.stdout, "  NAME\tKIND\tWRITER\tEFFECT");
+  for (const tool of tools) writeLine(context.stdout, `  ${tool.name}\t${tool.kind}\t${tool.writer}\t${tool.effect}`);
+}
+
+async function socialToolsShow(args, context) {
+  const {values, positionals} = parseCommandArgs(args, {json: {type: "boolean"}});
+  if (positionals.length !== 1) throw new CommandError("Usage: audienti social-tools show <name> [--json]");
+
+  const config = await requireAuthenticatedConfig(context);
+  const tool = await clientFromConfig(config, context).socialTool(positionals[0]);
+  writeLine(context.stdout, JSON.stringify(tool, null, 2));
 }
 
 async function accountsShow(args, context, { accountOverride } = {}) {
@@ -11041,6 +11067,17 @@ const HELP_TOPICS = new Map([
     "",
     "Input shape:",
     "  acct_id: string  Account prefix id, for example acct_abc123"
+  ].join("\n")],
+
+  ["social-tools", [
+    "Usage:",
+    "  audienti social-tools list [--json]",
+    "  audienti social-tools show <name> [--json]",
+    "",
+    "Status: implemented",
+    "",
+    "Purpose:",
+    "  List the server's social tool catalog or inspect one tool's public metadata."
   ].join("\n")],
 
   ["social-cookies", [

@@ -1465,6 +1465,28 @@ test("accounts list sends bearer auth and supports json output", async () => {
   });
 });
 
+test("social-tools list and show use the catalog API", async () => {
+  await withTempConfigHome(async ({env}) => {
+    await writeConfig({host: "https://app.audienti.com", token: "saved-token"}, {env});
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.headers.Authorization, "Bearer saved-token");
+      if (url.pathname === "/api/v1/social_tools.json") {
+        return jsonResponse([{name: "action.profile.follow", kind: "mutating", writer: "ready", effect: "follow"}]);
+      }
+      assert.equal(url.pathname, "/api/v1/social_tools/action.profile.follow.json");
+      return jsonResponse({name: "action.profile.follow", kind: "mutating", writer: "ready", effect: "follow"});
+    });
+
+    assert.equal(await run(["social-tools", "list", "--json"], {env, fetch, stdout}), 0);
+    assert.deepEqual(JSON.parse(stdout.output), [{name: "action.profile.follow", kind: "mutating", writer: "ready", effect: "follow"}]);
+
+    stdout.output = "";
+    assert.equal(await run(["social-tools", "show", "action.profile.follow", "--json"], {env, fetch, stdout}), 0);
+    assert.deepEqual(JSON.parse(stdout.output), {name: "action.profile.follow", kind: "mutating", writer: "ready", effect: "follow"});
+  });
+});
+
 test("accounts select persists only a visible prefixed account id", async () => {
   await withTempConfigHome(async ({ env }) => {
     await writeConfig({

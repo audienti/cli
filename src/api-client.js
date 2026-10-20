@@ -40,6 +40,14 @@ export class AudientiClient {
     return this.requestJson("/api/v1/accounts.json");
   }
 
+  socialTools() {
+    return this.requestJson("/api/v1/social_tools.json");
+  }
+
+  socialTool(name) {
+    return this.requestJson(`/api/v1/social_tools/${encodeURIComponent(name)}.json`);
+  }
+
   createAccount(body) {
     return this.requestJson("/api/v1/accounts.json", { method: "POST", body });
   }

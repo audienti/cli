@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.126] - 2026-10-20
+
+### Added
+
+- `audienti social-tools list` and `audienti social-tools show <name>` show the social tool catalog (name, kind, description and inputs) from the read-only catalog API (#2147).
+
 ## [0.1.125] - 2026-10-20
 
 ### Changed

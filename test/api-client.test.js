@@ -4,6 +4,29 @@ import test from "node:test";
 import { ApiError, AudientiClient } from "../src/api-client.js";
 import { createFetch, jsonResponse } from "./helpers.js";
 
+test("socialTools lists the public social tool catalog", async () => {
+  const responseBody = [{name: "action.profile.follow", kind: "mutating"}];
+  const fetch = createFetch((url, options) => {
+    assert.equal(url.toString(), "https://app.example.test/api/v1/social_tools.json");
+    assert.equal(options.method, "GET");
+    return jsonResponse(responseBody);
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  assert.deepEqual(await client.socialTools(), responseBody);
+});
+
+test("socialTool requests a named catalog entry", async () => {
+  const responseBody = {name: "action.profile.follow"};
+  const fetch = createFetch((url) => {
+    assert.equal(url.toString(), "https://app.example.test/api/v1/social_tools/action.profile.follow.json");
+    return jsonResponse(responseBody);
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  assert.deepEqual(await client.socialTool("action.profile.follow"), responseBody);
+});
+
 test("syncSocialCookieMessages posts the account, cookie, folder, and retry intent", async () => {
   const responseBody = {
     social_cookie_id: "scok_mail",
