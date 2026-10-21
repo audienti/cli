@@ -83,6 +83,12 @@ export class AudientiClient {
     });
   }
 
+  browserRepairComputer(attemptId, tool, body = {}, token) {
+    return this.requestJson(apiPath(["browser_repair_attempts", attemptId, "computer", tool]), {
+      method: "POST", body, token
+    });
+  }
+
   users(accountId) {
     return this.requestJson(accountPath(accountId, ["users"]));
   }

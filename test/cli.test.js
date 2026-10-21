@@ -13966,6 +13966,29 @@ test("browser-repair commands call the three worker tool endpoints", async () =>
   });
 });
 
+test("browser-repair computer commands call primitive endpoints", async () => {
+  await withTempConfigHome(async ({env}) => {
+    await writeConfig({host: "https://app.example.test", token: "saved-token"}, {env});
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer live-token");
+      return jsonResponse({status: "completed"});
+    });
+
+    for (const args of [
+      ["browser-repair", "computer", "observe", "--attempt", "41", "--token", "live-token"],
+      ["browser-repair", "computer", "click", "--attempt", "41", "--token", "live-token", "--ref", "a1", "--mutating"]
+    ]) {
+      assert.equal(await run(args, {env, fetch, stdout: captureStream()}), 0);
+    }
+
+    assert.deepEqual(fetch.calls.map(({url, options}) => [url, JSON.parse(options.body)]), [
+      ["https://app.example.test/api/v1/browser_repair_attempts/41/computer/observe.json", {}],
+      ["https://app.example.test/api/v1/browser_repair_attempts/41/computer/click.json", {ref: "a1", mutating: true}]
+    ]);
+  });
+});
+
 test("catalog help topics describe the API routes", async () => {
   const topics = [
     [["lists", "bulk-add-tag"], /POST \/api\/v1\/accounts\/:account_id\/lists\/bulk_add_tag/],

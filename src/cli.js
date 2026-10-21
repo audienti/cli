@@ -1785,6 +1785,7 @@ async function socialToolsShow(args, context) {
 }
 
 async function browserRepair(action, args, context) {
+  if (action === "computer") return browserRepairComputer(args, context);
   const config = await requireAuthenticatedConfig(context);
   const client = clientFromConfig(config, context);
   const {values, positionals} = parseCommandArgs(args, {
@@ -1808,6 +1809,33 @@ async function browserRepair(action, args, context) {
   }
   if (values.json) writeJson(context.stdout, result);
   else writeLine(context.stdout, JSON.stringify(result));
+}
+
+async function browserRepairComputer(args, context) {
+  const config = await requireAuthenticatedConfig(context);
+  const client = clientFromConfig(config, context);
+  const {values, positionals} = parseCommandArgs(args, {
+    attempt: {type: "string"}, token: {type: "string"}, selector: {type: "string"}, url: {type: "string"},
+    ref: {type: "string"}, text: {type: "string"}, "expected-target": {type: "string"}, target: {type: "string"},
+    offset: {type: "string"}, x: {type: "string"}, y: {type: "string"}, "delta-x": {type: "string"},
+    "delta-y": {type: "string"}, mutating: {type: "boolean"}, submit: {type: "boolean"}, json: {type: "boolean"}
+  });
+  const tool = positionals.shift();
+  if (!tool || positionals.length || !values.attempt || !values.token || !["observe", "navigate", "click", "scroll", "type", "responses"].includes(tool)) {
+    throw new CommandError("Usage: audienti browser-repair computer <observe|navigate|click|scroll|type|responses> --attempt <id> --token <token>");
+  }
+  const body = {};
+  for (const [key, value] of Object.entries({selector: values.selector, url: values.url, ref: values.ref, text: values.text,
+    offset: values.offset === undefined ? undefined : Number(values.offset), x: values.x === undefined ? undefined : Number(values.x),
+    y: values.y === undefined ? undefined : Number(values.y), delta_x: values["delta-x"] === undefined ? undefined : Number(values["delta-x"]),
+    delta_y: values["delta-y"] === undefined ? undefined : Number(values["delta-y"]), mutating: values.mutating, submit: values.submit})) {
+    if (value !== undefined) body[key] = value;
+  }
+  if (values["expected-target"] !== undefined) body.expected_target = parseJsonObjectOption(values["expected-target"], "--expected-target");
+  if (values.target !== undefined) body.target = parseJsonObjectOption(values.target, "--target");
+  const result = await client.browserRepairComputer(values.attempt, tool, body, values.token);
+  if (values.json) return writeJson(context.stdout, result);
+  writeLine(context.stdout, JSON.stringify(result));
 }
 
 async function accountsShow(args, context, { accountOverride } = {}) {

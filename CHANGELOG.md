@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.128] - 2026-10-21
+
+### Added
+
+- `browser-repair computer <observe|navigate|click|scroll|type|responses>` commands for task-bound live browser sessions in the bounded repair loop (#2147).
+
 ## [0.1.127] - 2026-10-21
 
 ### Added

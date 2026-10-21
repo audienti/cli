@@ -46,6 +46,23 @@ test("browser repair commands post their bounded payloads", async () => {
   ]);
 });
 
+test("computer repair commands use the bound primitive routes", async () => {
+  const fetch = createFetch((url, options) => {
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers.Authorization, "Bearer live-token");
+    return jsonResponse({status: "completed"});
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  await client.browserRepairComputer("attempt/7", "observe", {selector: "#main"}, "live-token");
+  await client.browserRepairComputer("attempt/7", "click", {ref: "a1", mutating: true}, "live-token");
+
+  assert.deepEqual(fetch.calls.map(({url, options}) => [url, JSON.parse(options.body)]), [
+    ["https://app.example.test/api/v1/browser_repair_attempts/attempt%2F7/computer/observe.json", {selector: "#main"}],
+    ["https://app.example.test/api/v1/browser_repair_attempts/attempt%2F7/computer/click.json", {ref: "a1", mutating: true}]
+  ]);
+});
+
 test("syncSocialCookieMessages posts the account, cookie, folder, and retry intent", async () => {
   const responseBody = {
     social_cookie_id: "scok_mail",
