@@ -27,6 +27,25 @@ test("socialTool requests a named catalog entry", async () => {
   assert.deepEqual(await client.socialTool("action.profile.follow"), responseBody);
 });
 
+test("browser repair commands post their bounded payloads", async () => {
+  const responses = [{status: "stored"}, {status: "round_closed"}, {status: "finished"}];
+  const fetch = createFetch((url, options) => {
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers.Authorization, "Bearer worker-token");
+    return jsonResponse(responses.shift());
+  });
+  const client = new AudientiClient({host: "https://app.example.test", token: "saved-token", fetchImpl: fetch});
+
+  assert.deepEqual(await client.browserRepairPatch("attempt/7", {path: "app/fix.rb", content: "body"}, "worker-token"), {status: "stored"});
+  assert.deepEqual(await client.browserRepairHostedTest("attempt/7", "worker-token"), {status: "round_closed"});
+  assert.deepEqual(await client.browserRepairNoChange("attempt/7", "not safe", "worker-token"), {status: "finished"});
+  assert.deepEqual(fetch.calls.map(({url, options}) => [url, JSON.parse(options.body)]), [
+    ["https://app.example.test/api/v1/browser_repair_attempts/attempt%2F7/patch.json", {path: "app/fix.rb", content: "body"}],
+    ["https://app.example.test/api/v1/browser_repair_attempts/attempt%2F7/hosted_test.json", {}],
+    ["https://app.example.test/api/v1/browser_repair_attempts/attempt%2F7/no_change.json", {reason: "not safe"}]
+  ]);
+});
+
 test("syncSocialCookieMessages posts the account, cookie, folder, and retry intent", async () => {
   const responseBody = {
     social_cookie_id: "scok_mail",

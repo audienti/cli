@@ -67,6 +67,22 @@ export class AudientiClient {
     });
   }
 
+  browserRepairPatch(attemptId, { path, content }, token) {
+    return this.requestJson(`/api/v1/browser_repair_attempts/${encodeURIComponent(attemptId)}/patch.json`, {
+      method: "POST", body: { path, content }, token
+    });
+  }
+
+  browserRepairHostedTest(attemptId, token) {
+    return this.requestJson(`/api/v1/browser_repair_attempts/${encodeURIComponent(attemptId)}/hosted_test.json`, {method: "POST", body: {}, token});
+  }
+
+  browserRepairNoChange(attemptId, reason, token) {
+    return this.requestJson(`/api/v1/browser_repair_attempts/${encodeURIComponent(attemptId)}/no_change.json`, {
+      method: "POST", body: {reason}, token
+    });
+  }
+
   users(accountId) {
     return this.requestJson(accountPath(accountId, ["users"]));
   }
@@ -1434,14 +1450,14 @@ export class AudientiClient {
     });
   }
 
-  async requestJson(path, { method = "GET", body } = {}) {
+  async requestJson(path, { method = "GET", body, token } = {}) {
     const url = new URL(path, `${this.host}/`);
     let response;
 
     try {
       response = await this.fetchImpl(url, {
         method,
-        headers: this.headers(body),
+        headers: this.headers(body, token === undefined ? this.token : token),
         body: body === undefined ? undefined : JSON.stringify(body)
       });
     } catch (error) {
@@ -1460,14 +1476,14 @@ export class AudientiClient {
     return responseBody;
   }
 
-  headers(body) {
+  headers(body, token = this.token) {
     const headers = {
       Accept: "application/json",
       "X-Audienti-Client": "cli"
     };
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
     }
 
     if (body !== undefined) {

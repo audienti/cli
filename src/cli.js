@@ -374,6 +374,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "accounts" && action === "show") return accountsShow(rest, context, { accountOverride });
   if (normalizedResource === "social-tools" && action === "list") return socialToolsList(rest, context);
   if (normalizedResource === "social-tools" && action === "show") return socialToolsShow(rest, context);
+  if (normalizedResource === "browser-repair") return browserRepair(action, rest, context);
   if (normalizedResource === "linkedin-lookups") return linkedinLookups(action, rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "list") return usersList(rest, context, { accountOverride });
   if (normalizedResource === "users" && action === "select") return usersSelect(rest, context, { accountOverride });
@@ -1781,6 +1782,32 @@ async function socialToolsShow(args, context) {
   const config = await requireAuthenticatedConfig(context);
   const tool = await clientFromConfig(config, context).socialTool(positionals[0]);
   writeLine(context.stdout, JSON.stringify(tool, null, 2));
+}
+
+async function browserRepair(action, args, context) {
+  const config = await requireAuthenticatedConfig(context);
+  const client = clientFromConfig(config, context);
+  const {values, positionals} = parseCommandArgs(args, {
+    attempt: {type: "string"}, path: {type: "string"}, "content-file": {type: "string"},
+    reason: {type: "string"}, token: {type: "string"}, json: {type: "boolean"}
+  });
+  if (positionals.length || !values.attempt || !values.token) {
+    throw new CommandError("Usage: audienti browser-repair <patch|hosted-test|no-change> --attempt <id> --token <token> ...");
+  }
+  let result;
+  if (action === "patch") {
+    if (!values.path || !values["content-file"]) throw new CommandError("Usage: audienti browser-repair patch --attempt <id> --path <p> --content-file <file>");
+    result = await client.browserRepairPatch(values.attempt, {path: values.path, content: await readFile(values["content-file"], "utf8")}, values.token);
+  } else if (action === "hosted-test") {
+    result = await client.browserRepairHostedTest(values.attempt, values.token);
+  } else if (action === "no-change") {
+    if (!values.reason) throw new CommandError("Usage: audienti browser-repair no-change --attempt <id> --reason <text>");
+    result = await client.browserRepairNoChange(values.attempt, values.reason, values.token);
+  } else {
+    throw new CommandError("Usage: audienti browser-repair <patch|hosted-test|no-change>");
+  }
+  if (values.json) writeJson(context.stdout, result);
+  else writeLine(context.stdout, JSON.stringify(result));
 }
 
 async function accountsShow(args, context, { accountOverride } = {}) {

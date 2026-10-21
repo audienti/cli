@@ -13939,6 +13939,33 @@ test("catalog commands reject invalid usage without calling the API", async () =
   });
 });
 
+test("browser-repair commands call the three worker tool endpoints", async () => {
+  await withTempConfigHome(async ({ env, root }) => {
+    await writeConfig({ host: "https://app.example.test", token: "saved-token" }, { env });
+    const contentFile = join(root, "candidate.rb");
+    await writeFile(contentFile, "class CandidateFix\nend\n");
+    const fetch = createFetch((url, options) => {
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers.Authorization, "Bearer worker-token");
+      return jsonResponse({status: url.pathname.includes("hosted_test") ? "round_closed" : url.pathname.includes("no_change") ? "finished" : "stored"});
+    });
+
+    for (const args of [
+      ["browser-repair", "patch", "--attempt", "41", "--token", "worker-token", "--path", "app/fix.rb", "--content-file", contentFile],
+      ["browser-repair", "hosted-test", "--attempt", "41", "--token", "worker-token"],
+      ["browser-repair", "no-change", "--attempt", "41", "--token", "worker-token", "--reason", "not safe"]
+    ]) {
+      assert.equal(await run(args, {env, fetch, stdout: captureStream()}), 0);
+    }
+
+    assert.deepEqual(fetch.calls.map(({url, options}) => [url, JSON.parse(options.body)]), [
+      ["https://app.example.test/api/v1/browser_repair_attempts/41/patch.json", {path: "app/fix.rb", content: "class CandidateFix\nend\n"}],
+      ["https://app.example.test/api/v1/browser_repair_attempts/41/hosted_test.json", {}],
+      ["https://app.example.test/api/v1/browser_repair_attempts/41/no_change.json", {reason: "not safe"}]
+    ]);
+  });
+});
+
 test("catalog help topics describe the API routes", async () => {
   const topics = [
     [["lists", "bulk-add-tag"], /POST \/api\/v1\/accounts\/:account_id\/lists\/bulk_add_tag/],
