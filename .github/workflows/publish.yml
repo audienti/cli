@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   publish:
@@ -24,25 +23,6 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Require npm version for trusted publishing
-        run: |
-          npm_version="$(npm --version)"
-          echo "Using npm $npm_version"
-          node -e '
-            const parts = process.argv[1].split(".").map(Number);
-            const [major, minor, patch] = parts;
-            const supported = parts.length === 3 &&
-              parts.every(Number.isInteger) &&
-              (major > 11 ||
-                (major === 11 &&
-                  (minor > 5 || (minor === 5 && patch >= 1))));
-
-            if (!supported) {
-              console.error(`Trusted publishing requires npm 11.5.1 or later; found ${process.argv[1] || "unknown"}.`);
-              process.exit(1);
-            }
-          ' "$npm_version"
 
       - name: Verify package metadata
         run: npm run verify
@@ -112,8 +92,14 @@ jobs:
 
       - name: Publish to npm
         if: steps.registry.outputs.publish == 'true'
-        # npm reports failed trusted-publisher token exchange only at verbose level.
-        run: npm publish --access public --loglevel verbose
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_PUBLISH_TOKEN is required to publish to npm." >&2
+            exit 1
+          fi
+          npm publish --access public
 
       - name: Build release notes from the versioned changelog
         env:
