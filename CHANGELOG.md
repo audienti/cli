@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.129] - 2026-10-21
+
+### Changed
+
+- `browser-repair` hosted-test responses take `remaining_rounds` from the hosted-rounds cap in the repair skill file instead of a fixed constant (#2147).
+
 ## [0.1.128] - 2026-10-21
 
 ### Added
