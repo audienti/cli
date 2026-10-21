@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.130] - 2026-10-21
+
+### Changed
+
+- `browser_repair` Computer tools are named `computer_observe`, `computer_navigate`, `computer_click`, `computer_scroll`, `computer_type` and `computer_responses` in the API tool registry, because the Codex model loop rejects dotted tool names. The `browser-repair computer` CLI commands and their REST paths are unchanged (#2147).
+
 ## [0.1.129] - 2026-10-21
 
 ### Changed
