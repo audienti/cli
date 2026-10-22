@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.131] - 2026-10-21
+
+### Changed
+
+- Add the `computer_run_reader` browser-repair tool for host-verified non-mutating live operations (#2147).
+
 ## [0.1.130] - 2026-10-21
 
 ### Changed

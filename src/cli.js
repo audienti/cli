@@ -1821,8 +1821,8 @@ async function browserRepairComputer(args, context) {
     "delta-y": {type: "string"}, mutating: {type: "boolean"}, submit: {type: "boolean"}, json: {type: "boolean"}
   });
   const tool = positionals.shift();
-  if (!tool || positionals.length || !values.attempt || !values.token || !["observe", "navigate", "click", "scroll", "type", "responses"].includes(tool)) {
-    throw new CommandError("Usage: audienti browser-repair computer <observe|navigate|click|scroll|type|responses> --attempt <id> --token <token>");
+  if (!tool || positionals.length || !values.attempt || !values.token || !["observe", "navigate", "click", "scroll", "type", "responses", "run_reader"].includes(tool)) {
+    throw new CommandError("Usage: audienti browser-repair computer <observe|navigate|click|scroll|type|responses|run_reader> --attempt <id> --token <token>");
   }
   const body = {};
   for (const [key, value] of Object.entries({selector: values.selector, url: values.url, ref: values.ref, text: values.text,
