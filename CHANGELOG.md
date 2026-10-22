@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.132] - 2026-10-22
+
+### Fixed
+
+- App-hosted MCP tool calls (including the browser-repair `patch`, `hosted_test` and `no_change` tools) carry the application's own host over HTTPS, so production host authorization no longer refuses them before any controller runs (#2147).
+
 ## [0.1.131] - 2026-10-21
 
 ### Changed
