@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.134] - 2026-10-23
+
+### Fixed
+
+- Prospect discovery shares a 50-person inventory limit across experiments for each assigned person in an account. API discovery requests use remaining capacity and report the admitted run target (#3093).
+
 ## [0.1.133] - 2026-10-23
 
 ### Removed
