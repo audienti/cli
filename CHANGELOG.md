@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.133] - 2026-10-23
+
+### Removed
+
+- The browser capability request task-status route (`GET /api/v1/accounts/:account_id/browser_capability_requests/tasks/:id`) and the message reader request shape are gone; list reads now run inside the browser repair loop (#2147). A capability request without a usable `profile_url` returns 422 `invalid_linkedin_profile_url`.
+
 ## [0.1.132] - 2026-10-22
 
 ### Fixed
