@@ -199,11 +199,12 @@ test("tools runs list, show, results and export call their routes", async () => 
   });
 });
 
-test("tools runs show renders the shared current-expense payload", async () => {
+test("tools runs show uses credits and hides supplier expenses", async () => {
   await withConfig(async ({ env }) => {
     const fetch = createFetch(() => jsonResponse(queuedRun({
       status: "completed",
       summary: { attempt_count: 5, cache_hit_count: 2 },
+      credit_usage: {credit_history_available: true, charged_credits: "0.75"},
       current_expenses: {
         state: "partial",
         known_expense_cents: "20.139561",
@@ -216,7 +217,8 @@ test("tools runs show renders the shared current-expense payload", async () => {
 
     assert.equal(await run(["tools", "runs", "show", "trun_1"], { env, fetch, stdout }), 0);
 
-    assert.match(stdout.output, /Recorded expenses: 20\.14¢ recorded; 2 linked receipt\(s\) with unknown amount; 3 call\(s\) with cost unverified at completion; known sum may be partial/);
+    assert.match(stdout.output, /Charged: 0\.75 credits/);
+    assert.doesNotMatch(stdout.output, /Recorded expenses:|¢|20\.14/);
     assert.match(stdout.output, /Usage: 5 provider call\(s\)/);
     assert.match(stdout.output, /2 cached/);
   });
@@ -253,7 +255,8 @@ test("tools runs show labels an unfinished provider attempt as in progress", asy
     const stdout = captureStream();
 
     assert.equal(await run(["tools", "runs", "show", "trun_1"], { env, fetch, stdout }), 0);
-    assert.match(stdout.output, /Recorded expenses: no priced receipts; 1 call\(s\) in progress/);
+    assert.match(stdout.output, /running/);
+    assert.doesNotMatch(stdout.output, /Recorded expenses:|¢/);
     assert.doesNotMatch(stdout.output, /Usage:/);
   });
 });
@@ -312,5 +315,41 @@ test("usage errors and help never call the API", async () => {
       assert.match(stdout.output, /Usage:/);
     }
     assert.equal(fetch.calls.length, 0);
+  });
+});
+
+test("Email Find quotes without submitting and accepts a server quote explicitly", async () => {
+  await withConfig(async ({env}) => {
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      const body = JSON.parse(options.body);
+      if (url.pathname.endsWith("/run_quotes.json")) {
+        assert.equal(body.tool, "email_find");
+        assert.equal(body.accept_quote, undefined);
+        return jsonResponse({quote_reference: "quote-1", maximum_credits: "0.75", max_units: 1, available_credits: "2.0"});
+      }
+      assert.equal(body.quote_reference, "quote-1");
+      assert.equal(body.accept_quote, true);
+      return jsonResponse(queuedRun(), {status: 201});
+    });
+    const input = ["tools", "email-find", "--first-name", "Ada", "--last-name", "Example", "--company-domain", "example.test"];
+    assert.equal(await run([...input, "--quote"], {env, fetch, stdout}), 0);
+    assert.equal(fetch.calls.length, 1);
+    assert.match(stdout.output, /Up to 0\.75 credits/);
+    assert.equal(await run([...input, "--accept-quote", "quote-1"], {env, fetch, stdout}), 0);
+    assert.equal(fetch.calls.length, 2);
+  });
+});
+
+test("queued row commands pass reviewed selection and idempotency unchanged", async () => {
+  await withConfig(async ({env}) => {
+    const stdout = captureStream();
+    const fetch = createFetch((url, options) => {
+      assert.equal(url.pathname, "/api/v1/accounts/acct_one/tools/runs/trun_1/credit_actions.json");
+      assert.deepEqual(JSON.parse(options.body), {action_name: "resume", item_ids: ["tri_1"], revision: "revision-1", idempotency_key: "resume-key-1"});
+      return jsonResponse({action: "resume"});
+    });
+    assert.equal(await run(["tools", "runs", "resume", "trun_1", "--item", "tri_1", "--revision", "revision-1", "--idempotency-key", "resume-key-1"], {env, fetch, stdout}), 0);
+    assert.equal(fetch.calls.length, 1);
   });
 });

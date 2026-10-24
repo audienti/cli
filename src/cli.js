@@ -231,11 +231,11 @@ const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-li
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
 const TOOLS_HUMANIZE_USAGE = "Usage: audienti tools humanize --file <path> [--tone <professional|academic|blog|casual|creative|scientific|technical>] [--language <language>] [--async [--wait]] [--json] [--account <acct_id>]";
 const TOOL_RUN_FLAGS_USAGE = "[--request-key <key>] [--wait [--timeout-seconds <n>] [--poll-interval-seconds <n>]] [--json] [--account <acct_id>]";
-const TOOLS_EMAIL_FIND_USAGE = `Usage: audienti tools email-find (--first-name <name> --last-name <name> --company-domain <domain> | --linkedin-url <url> | --file <csv|jsonl|json>) ${TOOL_RUN_FLAGS_USAGE}`;
+const TOOLS_EMAIL_FIND_USAGE = `Usage: audienti tools email-find (--first-name <name> --last-name <name> --company-domain <domain> | --linkedin-url <url> | --file <csv|jsonl|json>) [--quote | --accept-quote <reference>] ${TOOL_RUN_FLAGS_USAGE}`;
 const TOOLS_LINKEDIN_ENRICH_USAGE = `Usage: audienti tools linkedin-enrich (--url <linkedin_url> [--kind <person|company>] | --file <csv|jsonl|json>) ${TOOL_RUN_FLAGS_USAGE}`;
 const TOOLS_SIGNALS_FIND_USAGE = `Usage: audienti tools signals-find --icp <text> --question <text> [--count <1-10>] [--date-window-days <n>] ${TOOL_RUN_FLAGS_USAGE}`;
 const TOOLS_WRITE_USAGE = `Usage: audienti tools write --purpose <text> --audience <text> --fact <text> [--fact <text> ...] --channel <channel> [--tone <tone>] [--subject|--no-subject] [--prospect <prsp_id>] ${TOOL_RUN_FLAGS_USAGE}`;
-const TOOLS_RUNS_USAGE = "Usage: audienti tools runs (list [--tool <tool>] [--status <status>] [--limit <n>] [--cursor <id>] | show <trun_id> | results <trun_id> [--limit <n>] [--cursor <n>] | export <trun_id> [--format <csv|json>] [--output <path>]) [--json] [--account <acct_id>]";
+const TOOLS_RUNS_USAGE = "Usage: audienti tools runs (list [--tool <tool>] [--status <status>] [--limit <n>] [--cursor <id>] | show <trun_id> | results <trun_id> [--limit <n>] [--cursor <n>] | export <trun_id> [--format <csv|json>] [--output <path>] | review <trun_id> | (resume|pause|cancel|approve-payer) <trun_id> --item <item_id> --revision <revision> --idempotency-key <key> [--cancel-others] | usage <reference>) [--json] [--account <acct_id>]";
 const NETWORK_USAGE = "Usage: audienti network (list|export) --cookie <scok_id> [--platform <linkedin|twitter>] [--kind <connection|follow>] [--direction <incoming|outgoing>] [--query <text>] [--limit <n>] [--cursor <n>] [--format <csv|json>] [--output <path>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_USAGE = "Usage: audienti tools linkedin-review --url <linkedin_url> [--icp <icp_id>] [--json] [--account <acct_id>]";
 const TOOLS_LINKEDIN_REVIEW_REPORTS_USAGE = "Usage: audienti tools linkedin-review reports [--limit <n>] [--json] [--account <acct_id>]";
@@ -16353,6 +16353,8 @@ async function toolsEmailFind(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     ...TOOL_RUN_WAIT_OPTIONS,
+    quote: { type: "boolean" },
+    "accept-quote": { type: "string" },
     "first-name": { type: "string" },
     "last-name": { type: "string" },
     "company-domain": { type: "string" },
@@ -16450,7 +16452,16 @@ async function toolsWrite(args, context, { accountOverride } = {}) {
 
 async function submitToolRun(tool, input, values, context, { accountOverride } = {}) {
   const { client, accountId } = await requireAccountContext(context, { accountOverride });
-  const run = await client.createToolRun(accountId, compactObject({ tool, input, request_key: values["request-key"] }));
+  if (values.quote) {
+    if (values["accept-quote"]) throw new CommandError("Choose --quote or --accept-quote, not both.");
+    const quote = await client.quoteToolRun(accountId, { tool, input });
+    if (values.json) return writeJson(context.stdout, quote);
+    writeLine(context.stdout, `Up to ${quote.maximum_credits} credits for ${quote.max_units} rows. Available: ${quote.available_credits} credits.`);
+    writeLine(context.stdout, `Accept with the same input and --accept-quote ${quote.quote_reference}`);
+    return 0;
+  }
+  const run = await client.createToolRun(accountId, compactObject({ tool, input, request_key: values["request-key"],
+    quote_reference: values["accept-quote"], accept_quote: values["accept-quote"] ? true : undefined }));
   if (!values.wait) {
     if (values.json) return writeJson(context.stdout, run);
 
@@ -16507,12 +16518,31 @@ async function fetchAllToolRunItems(client, accountId, runId) {
 
 async function toolsRuns(args, context, { accountOverride } = {}) {
   const [subcommand, ...rest] = args;
+  if (["review", "resume", "pause", "cancel", "approve-payer", "usage"].includes(subcommand)) return toolsRunsCredits(subcommand, rest, context, { accountOverride });
   if (subcommand === "list") return toolsRunsList(rest, context, { accountOverride });
   if (subcommand === "show") return toolsRunsShow(rest, context, { accountOverride });
   if (subcommand === "results") return toolsRunsResults(rest, context, { accountOverride });
   if (subcommand === "export") return toolsRunsExport(rest, context, { accountOverride });
 
   throw new CommandError(TOOLS_RUNS_USAGE);
+}
+
+async function toolsRunsCredits(action, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, {
+    ...jsonOptions(), item: { type: "string", multiple: true }, revision: { type: "string" },
+    "idempotency-key": { type: "string" }, "cancel-others": { type: "boolean" }
+  });
+  if (positionals.length !== 1) throw new CommandError("Supply one run id (or usage reference for usage).");
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  if (action === "usage") return writeJson(context.stdout, await client.toolCreditUsage(accountId, positionals[0]));
+  if (action !== "review" && (!values.item?.length || !values.revision || !values["idempotency-key"])) {
+    throw new CommandError("Review first, then supply --item for each selected row, --revision and --idempotency-key.");
+  }
+  const result = await client.toolRunCreditAction(accountId, positionals[0], compactObject({
+    action_name: action.replaceAll("-", "_"), item_ids: values.item, revision: values.revision,
+    idempotency_key: values["idempotency-key"], cancel_others: values["cancel-others"]
+  }));
+  return writeJson(context.stdout, result);
 }
 
 async function toolsRunsList(args, context, { accountOverride } = {}) {
@@ -16666,39 +16696,14 @@ function renderToolRun(run, context) {
     if (Number(run.summary.cache_hit_count) > 0) usage.push(`${run.summary.cache_hit_count} cached`);
     writeLine(context.stdout, `Usage: ${usage.join("; ")}`);
   }
-  const stillRunningWithoutExpenses = ["queued", "running"].includes(run?.status) && run?.current_expenses?.state === "none";
-  if (run?.current_expenses && !stillRunningWithoutExpenses) writeLine(context.stdout, `Recorded expenses: ${toolRunExpenseSummary(run.current_expenses)}`);
+  if (run?.credit_usage) writeLine(context.stdout, run.credit_usage.credit_history_available
+    ? `Charged: ${run.credit_usage.charged_credits} credits` : "Credit history unavailable");
   const outcomes = run?.summary?.outcomes || {};
   if (Object.keys(outcomes).length > 0) {
     writeLine(context.stdout, `Outcomes: ${Object.entries(outcomes).map(([outcome, count]) => `${outcome} ${count}`).join(", ")}`);
   }
   if (run?.error_code) writeLine(context.stdout, `Error: ${run.error_code}`);
   if (run?.details_expired) writeLine(context.stdout, "Details expired after 90 days; only this summary remains.");
-}
-
-function toolRunExpenseSummary(expenses) {
-  if (expenses.state === "unavailable") return "data unavailable";
-  if (expenses.state === "none") return "no recorded expenses";
-  if (expenses.state === "expired") {
-    const known = expenses.completion_snapshot?.known_billed_expense_cents;
-    return `current receipt detail expired; completion-time snapshot ${expenseAmountLabel(known)}; ${display(expenses.uncertain_attempt_count, 0)} call(s) with unknown or uncertain expense at completion`;
-  }
-
-  const known = expenses.known_expense_cents;
-  const parts = [known === null || known === undefined ? "no priced receipts" : `${expenseAmountLabel(known)} recorded`];
-  if (expenses.unknown_expense_receipt_count > 0) parts.push(`${expenses.unknown_expense_receipt_count} linked receipt(s) with unknown amount`);
-  if (expenses.uncertain_attempt_count > 0) parts.push(`${expenses.uncertain_attempt_count} call(s) with unknown or uncertain expense`);
-  if (expenses.completion_unverified_attempt_count > 0) parts.push(`${expenses.completion_unverified_attempt_count} call(s) with cost unverified at completion`);
-  if (expenses.in_progress_attempt_count > 0) parts.push(`${expenses.in_progress_attempt_count} call(s) in progress`);
-  if (expenses.state === "partial") parts.push("known sum may be partial");
-  return parts.join("; ");
-}
-
-function expenseAmountLabel(cents) {
-  if (cents === null || cents === undefined) return "no known amount";
-  const amount = Number(cents);
-  if (amount > 0 && amount < 0.01) return "less than 0.01¢";
-  return `${amount.toFixed(2)}¢`;
 }
 
 function renderToolRunItems(tool, items, context) {

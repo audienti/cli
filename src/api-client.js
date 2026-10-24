@@ -1318,6 +1318,18 @@ export class AudientiClient {
   }
 
   // Standalone account tool runs (#2554).
+  quoteToolRun(accountId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "run_quotes"]), { method: "POST", body });
+  }
+
+  toolRunCreditAction(accountId, runId, body) {
+    return this.requestJson(accountPath(accountId, ["tools", "runs", runId, "credit_actions"]), { method: "POST", body });
+  }
+
+  toolCreditUsage(accountId, reference) {
+    return this.requestJson(accountPath(accountId, ["tools", "credit_usages", reference]));
+  }
+
   createToolRun(accountId, body) {
     return this.requestJson(accountPath(accountId, ["tools", "runs"]), { method: "POST", body });
   }

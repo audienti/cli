@@ -4,6 +4,13 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.138] - 2026-10-24
+
+### Added
+
+- Review and explicitly accept Email Find credit quotes. Review queued rows and resume, pause, cancel or approve a new payer through shared API controls. Read exact credit receipts; ordinary tool history hides supplier monetary amounts (#2643). Real charging remains separately gated.
+
+
 ## [0.1.137] - 2026-10-24
 
 ### Changed

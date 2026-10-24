@@ -328,6 +328,23 @@ inside fields are not. With `--wait`, the exit code is 1 on an API error, a
 timeout or an aborted (failed) run; per-item outcomes such as `no_match` do
 not change it.
 
+For an active paid Email Find operation, review a server quote first:
+
+```bash
+audienti tools email-find --file people.csv --quote
+audienti tools email-find --file people.csv --accept-quote <quote_reference>
+audienti tools runs review <run_id>
+audienti tools runs resume <run_id> --item <item_id> --revision <revision> --idempotency-key <unique_key>
+```
+
+Use the same input when accepting the quote. Queued rows retain the accepted price.
+Review reports available credits and the rows that can continue. Select fewer rows
+or top up; a top-up does not restart manually paused work. Use `pause` or `cancel`
+in place of `resume` with the same reviewed selection. `approve-payer` requires the
+new root administrator and does not resume work. `tools runs usage <usage_reference>`
+opens the exact receipt data. Tool history displays credits; supplier costs stay internal.
+Real prices and production charging require separate approval.
+
 Prefer `tools email-find` for an email lookup. `tools get email` still runs the
 prospect import pipeline and creates a prospect.
 
