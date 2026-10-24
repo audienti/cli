@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.135] - 2026-10-24
+
+### Added
+
+- `audienti events resolve-uncertain-comment <event_id> --outcome <posted|not_sent> [--link <comment_link>]` settles a post comment whose result is unclear (`POST /api/v1/accounts/:account_id/events/:id/resolve_uncertain_comment`). Say it was posted (with the link to the comment) or not sent. It records the answer only: nothing is sent, retried or queued. A comment marked not sent is not planned again by itself (#3097).
+
 ## [0.1.134] - 2026-10-23
 
 ### Fixed

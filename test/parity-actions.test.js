@@ -30,6 +30,8 @@ const CASES = [
   { args: ["prospects", "reject-selected", "prsp_one", "prsp_two"], method: "POST", path: "/prospects/reject_selected.json", body: { prospect_ids: ["prsp_one", "prsp_two"] }, response: { rejected: ["prsp_one"], failed: [{ id: "prsp_two" }] }, output: /Rejected 1; failed 1/ },
   { args: ["prospects", "intake", "--url", "https://www.linkedin.com/in/pat", "--list", "lst_one"], method: "POST", path: "/prospects/intake.json", body: { url: "https://www.linkedin.com/in/pat", list_id: "lst_one" } },
   { args: ["events", "retry", "42"], method: "POST", path: "/events/42/retry.json", body: undefined },
+  { args: ["events", "resolve-uncertain-comment", "42", "--outcome", "posted", "--link", "https://www.linkedin.com/feed/update/urn:li:activity:5/?dashCommentUrn=x"], method: "POST", path: "/events/42/resolve_uncertain_comment.json", body: { outcome: "posted", comment_url: "https://www.linkedin.com/feed/update/urn:li:activity:5/?dashCommentUrn=x" }, response: { status: "confirmed" }, output: /recorded as posted/ },
+  { args: ["events", "resolve-uncertain-comment", "42", "--outcome", "not_sent"], method: "POST", path: "/events/42/resolve_uncertain_comment.json", body: { outcome: "not_sent" }, response: { status: "not_sent_recorded" }, output: /recorded as not sent. Nothing was sent/ },
   { args: ["profiles", "delete", "prof_one"], method: "DELETE", path: "/profiles/prof_one.json", body: undefined },
   { args: ["companies", "stop-pursuing", "prof_co"], method: "POST", path: "/companies/prof_co/stop_pursuing.json", body: undefined },
   { args: ["content", "defer", "cwi_one", "--for", "1_day"], method: "POST", path: "/content_ops/work_items/cwi_one/defer.json", body: { delay_duration: "1_day" } },

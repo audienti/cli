@@ -15886,6 +15886,19 @@ const PARITY_ACTION_COMMANDS = new Map([
     run: (client, accountId, [id]) => client.retryEvent(accountId, id),
     done: ([id], payload) => `Retried event ${id} as ${display(payload?.event?.id)}.`
   }],
+  ["events resolve-uncertain-comment", {
+    usage: "audienti events resolve-uncertain-comment <event_id> --outcome <posted|not_sent> [--link <comment_link>]",
+    purpose: "Settle a post comment whose result is unclear. Say it was posted (with the link to the comment) or that it was not sent. Records your answer; nothing is sent or retried.",
+    api: "POST /api/v1/accounts/:account_id/events/:id/resolve_uncertain_comment.json",
+    options: { outcome: { type: "string" }, link: { type: "string" } },
+    required: ["outcome"],
+    run: (client, accountId, [id], values) => client.resolveUncertainComment(accountId, id, compactObject({ outcome: values.outcome, comment_url: values.link })),
+    done: ([id], payload) => {
+      if (payload?.status === "needs_resolution") return `Event ${id}: that is a short link (${display(payload?.short_url)}). Paste the full comment link instead.`;
+      if (payload?.status === "not_sent_recorded" || payload?.status === "already_not_sent") return `Event ${id} is recorded as not sent. Nothing was sent.`;
+      return `Event ${id} is recorded as posted (${display(payload?.status)}).`;
+    }
+  }],
   ["profiles delete", {
     usage: "audienti profiles delete <profile_id>",
     purpose: "Remove one profile from its prospect. Backend admins only, like the web action.",
