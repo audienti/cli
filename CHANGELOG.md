@@ -4,6 +4,16 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.136] - 2026-10-24
+
+### Added
+
+- `audienti events resolve-uncertain-comment-status <event_id> --resolution <resolution_id>` shows the result of your Computer's check of a pasted short comment link (`GET /api/v1/accounts/:account_id/events/:id/resolve_uncertain_comment/status`): checking, resolved or failed, with a message. Read-only.
+
+### Changed
+
+- `audienti events resolve-uncertain-comment` with a short `lnkd.in` link now starts one read-only check in your Computer (HTTP 202, `status: checking`, `resolution_id`) instead of asking for the full link. The comment is recorded only when the page shows it and shows you as its author; otherwise nothing is recorded (#3097).
+
 ## [0.1.135] - 2026-10-24
 
 ### Added

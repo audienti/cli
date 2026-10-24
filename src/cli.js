@@ -15894,9 +15894,22 @@ const PARITY_ACTION_COMMANDS = new Map([
     required: ["outcome"],
     run: (client, accountId, [id], values) => client.resolveUncertainComment(accountId, id, compactObject({ outcome: values.outcome, comment_url: values.link })),
     done: ([id], payload) => {
-      if (payload?.status === "needs_resolution") return `Event ${id}: that is a short link (${display(payload?.short_url)}). Paste the full comment link instead.`;
+      if (payload?.status === "checking") return `Event ${id}: your Computer is checking the short link (${display(payload?.short_url)}). Check the result with: audienti events resolve-uncertain-comment-status ${id} --resolution ${display(payload?.resolution_id)}`;
       if (payload?.status === "not_sent_recorded" || payload?.status === "already_not_sent") return `Event ${id} is recorded as not sent. Nothing was sent.`;
       return `Event ${id} is recorded as posted (${display(payload?.status)}).`;
+    }
+  }],
+  ["events resolve-uncertain-comment-status", {
+    usage: "audienti events resolve-uncertain-comment-status <event_id> --resolution <resolution_id>",
+    purpose: "Show whether your Computer has finished checking a short comment link: checking, resolved or failed. Read-only.",
+    api: "GET /api/v1/accounts/:account_id/events/:id/resolve_uncertain_comment/status.json",
+    options: { resolution: { type: "string" } },
+    required: ["resolution"],
+    run: (client, accountId, [id], values) => client.resolveUncertainCommentStatus(accountId, id, values.resolution),
+    done: ([id], payload) => {
+      if (payload?.status === "resolved") return `Event ${id}: the comment is recorded as posted (${display(payload?.comment_url)}).`;
+      if (payload?.status === "failed") return `Event ${id}: the check did not confirm the comment (${display(payload?.code)}). ${display(payload?.message)}`;
+      return `Event ${id}: your Computer is still checking the link.`;
     }
   }],
   ["profiles delete", {

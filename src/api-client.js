@@ -1154,6 +1154,10 @@ export class AudientiClient {
     });
   }
 
+  resolveUncertainCommentStatus(accountId, eventId, resolutionId) {
+    return this.requestJson(accountPath(accountId, ["events", eventId, "resolve_uncertain_comment", "status"], { resolution_id: resolutionId }));
+  }
+
   deleteProfile(accountId, profileId) {
     return this.requestJson(accountPath(accountId, ["profiles", profileId]), {
       method: "DELETE"
