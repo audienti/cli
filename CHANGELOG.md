@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.137] - 2026-10-24
+
+### Changed
+
+- No CLI behavior change. The API events controller now shares its rejection status table with the Operator drawer for settling an uncertain post comment (#3097).
+
 ## [0.1.136] - 2026-10-24
 
 ### Added
