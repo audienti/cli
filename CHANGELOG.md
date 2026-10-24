@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.139] - 2026-10-25
+
+### Changed
+
+- No CLI behavior change. The failed-draft requeue now reads its failed-status list from the draft model (#3091).
+
 ## [0.1.138] - 2026-10-24
 
 ### Added
