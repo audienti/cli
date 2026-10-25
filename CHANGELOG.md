@@ -4,6 +4,14 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.140] - 2026-10-25
+
+### Added
+
+- Connect Signal search to shared quote acceptance and one-search credit units.
+- Add credit history, exact receipts, root price/payer approvals and staff result-refund commands through shared APIs.
+- Preserve exact decimal credit strings and keep supplier accounting out of customer financial output.
+
 ## [0.1.139] - 2026-10-25
 
 ### Changed

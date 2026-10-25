@@ -231,6 +231,7 @@ const ANALYTICS_COHORT_LIST_USAGE = "Usage: audienti analytics cohorts create-li
 const TOOLS_LIST_USAGE = "Usage: audienti tools list [--json]";
 const TOOLS_HUMANIZE_USAGE = "Usage: audienti tools humanize --file <path> [--tone <professional|academic|blog|casual|creative|scientific|technical>] [--language <language>] [--async [--wait]] [--json] [--account <acct_id>]";
 const TOOL_RUN_FLAGS_USAGE = "[--request-key <key>] [--wait [--timeout-seconds <n>] [--poll-interval-seconds <n>]] [--json] [--account <acct_id>]";
+const CREDITS_USAGE = "Usage: audienti credits (history [--limit <n>] [--cursor <id>] | show <usage_id> | approvals | accept-price <price_id> | approve-payer <operation_id> --revision <revision> --request-key <key>) [--json] [--account <acct_id>]";
 const TOOLS_EMAIL_FIND_USAGE = `Usage: audienti tools email-find (--first-name <name> --last-name <name> --company-domain <domain> | --linkedin-url <url> | --file <csv|jsonl|json>) [--quote | --accept-quote <reference>] ${TOOL_RUN_FLAGS_USAGE}`;
 const TOOLS_LINKEDIN_ENRICH_USAGE = `Usage: audienti tools linkedin-enrich (--url <linkedin_url> [--kind <person|company>] | --file <csv|jsonl|json>) ${TOOL_RUN_FLAGS_USAGE}`;
 const TOOLS_SIGNALS_FIND_USAGE = `Usage: audienti tools signals-find --icp <text> --question <text> [--count <1-10>] [--date-window-days <n>] ${TOOL_RUN_FLAGS_USAGE}`;
@@ -429,6 +430,7 @@ async function dispatch(argv, context) {
   if (normalizedResource === "webhooks") return webhooksCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "reply-alerts") return replyAlertsCommand(action, rest, context);
   if (normalizedResource === "brand-profile") return brandProfileCommand(action, rest, context, { accountOverride });
+  if (normalizedResource === "credits") return creditsCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "payment") return paymentCommand(action, rest, context, { accountOverride });
   if (normalizedResource === "find") return findByName([action, ...rest].filter((value) => value !== undefined), context, { accountOverride });
   if (normalizedResource === "tags" && action === "list") return tagsList(rest, context, { accountOverride });
@@ -16403,6 +16405,8 @@ async function toolsSignalsFind(args, context, { accountOverride } = {}) {
   const { values, positionals } = parseCommandArgs(args, {
     ...jsonOptions(),
     ...TOOL_RUN_WAIT_OPTIONS,
+    quote: { type: "boolean" },
+    "accept-quote": { type: "string" },
     icp: { type: "string" },
     question: { type: "string" },
     count: { type: "string" },
@@ -16456,7 +16460,7 @@ async function submitToolRun(tool, input, values, context, { accountOverride } =
     if (values["accept-quote"]) throw new CommandError("Choose --quote or --accept-quote, not both.");
     const quote = await client.quoteToolRun(accountId, { tool, input });
     if (values.json) return writeJson(context.stdout, quote);
-    writeLine(context.stdout, `Up to ${quote.maximum_credits} credits for ${quote.max_units} rows. Available: ${quote.available_credits} credits.`);
+    writeLine(context.stdout, `Up to ${quote.maximum_credits} credits for ${tool === "signals_find" ? "one search" : `${quote.max_units} rows`}. Available: ${quote.available_credits} credits.`);
     writeLine(context.stdout, `Accept with the same input and --accept-quote ${quote.quote_reference}`);
     return 0;
   }
@@ -16543,6 +16547,140 @@ async function toolsRunsCredits(action, args, context, { accountOverride } = {})
     idempotency_key: values["idempotency-key"], cancel_others: values["cancel-others"]
   }));
   return writeJson(context.stdout, result);
+}
+
+async function creditsCommand(action, args, context, { accountOverride } = {}) {
+  if (["refund-review", "refund"].includes(action)) return creditRefundCommand(action, args, context, { accountOverride });
+  if (action === "history") return creditsHistory(args, context, { accountOverride });
+  if (action === "show") return creditUsageShow(args, context, { accountOverride });
+  if (action === "approvals") return creditApprovals(args, context, { accountOverride });
+  if (action === "accept-price") return acceptCreditPrice(args, context, { accountOverride });
+  if (action === "approve-payer") return approveCreditPayer(args, context, { accountOverride });
+  throw new CommandError(CREDITS_USAGE);
+}
+
+async function creditRefundCommand(action, args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(),
+    "cumulative-principal": { type: "string" }, "evidence-token": { type: "string" }, reason: { type: "string" }, evidence: { type: "string" }
+  });
+  if (positionals.length !== 1) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  if (action === "refund-review") return writeJson(context.stdout, await client.creditRefundReview(accountId, positionals[0]));
+  if (!["cumulative-principal", "evidence-token", "reason", "evidence"].every((key) => values[key])) {
+    throw new CommandError("Staff only: credits refund <usage_id> --cumulative-principal <exact_credits> --evidence-token <uuid> --reason <confirmed_defect> --evidence <exact_result_evidence>");
+  }
+  return writeJson(context.stdout, await client.approveCreditRefund(accountId, positionals[0], {
+    cumulative_principal: values["cumulative-principal"], evidence_token: values["evidence-token"], reason: values.reason, evidence: values.evidence
+  }));
+}
+
+async function creditsHistory(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), limit: { type: "string" }, cursor: { type: "string" } });
+  if (positionals.length > 0) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const payload = safeCreditHistory(await client.creditUsages(accountId, compactObject({
+    limit: normalizeOptionalPositiveInteger(values.limit, "--limit"), cursor: values.cursor
+  })));
+  if (values.json) return writeJson(context.stdout, payload);
+  writeLine(context.stdout, `Credit balance: ${display(payload.balance, "unknown")}`);
+  const usages = payload.usages || [];
+  if (usages.length === 0) return writeLine(context.stdout, "No customer credit charges recorded.");
+  for (const usage of usages) renderCreditReceipt(usage, context);
+  if (payload.next_cursor) writeLine(context.stdout, `More credit history: audienti credits history --cursor ${payload.next_cursor}`);
+}
+
+async function creditUsageShow(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const usage = safeCreditReceipt(await client.creditUsage(accountId, positionals[0]));
+  if (values.json) return writeJson(context.stdout, usage);
+  renderCreditReceipt(usage, context);
+}
+
+async function creditApprovals(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length > 0) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const approvals = safeCreditApprovals(await client.creditApprovals(accountId));
+  if (values.json) return writeJson(context.stdout, approvals);
+  renderCreditApprovals(approvals, context);
+}
+
+async function acceptCreditPrice(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, jsonOptions());
+  if (positionals.length !== 1) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const approvals = safeCreditApprovals(await client.acceptCreditPrice(accountId, positionals[0]));
+  if (values.json) return writeJson(context.stdout, approvals);
+  writeLine(context.stdout, `Price approval recorded for ${positionals[0]}.`);
+  renderCreditApprovals(approvals, context);
+}
+
+async function approveCreditPayer(args, context, { accountOverride } = {}) {
+  const { values, positionals } = parseCommandArgs(args, { ...jsonOptions(), revision: { type: "string" }, "request-key": { type: "string" } });
+  if (positionals.length !== 1 || !values.revision || !values["request-key"]) throw new CommandError(CREDITS_USAGE);
+  const { client, accountId } = await requireAccountContext(context, { accountOverride });
+  const approvals = safeCreditApprovals(await client.approveCreditPayer(accountId, positionals[0], {
+    revision: values.revision, idempotency_key: values["request-key"]
+  }));
+  if (values.json) return writeJson(context.stdout, approvals);
+  writeLine(context.stdout, `Payer approval recorded for operation ${positionals[0]}. Waiting work remains paused.`);
+  renderCreditApprovals(approvals, context);
+}
+
+function renderCreditApprovals(approvals, context) {
+  writeLine(context.stdout, `Payer: ${display(approvals.payer_account_id, "unknown")}`);
+  writeLine(context.stdout, "Credit prices:");
+  for (const price of approvals.prices || []) {
+    writeLine(context.stdout, `  ${price.id} ${price.version}: ${JSON.stringify(price.prices)} credits (${price.accepted ? "approved" : "approval required"})${price.test_price ? " [test price]" : ""}`);
+  }
+  writeLine(context.stdout, "Payer approvals waiting:");
+  for (const approval of approvals.payer_approvals || []) {
+    writeLine(context.stdout, `  ${approval.operation_id} workspace ${approval.origin_account_id}: ${approval.action_label}, price ${approval.price_version}, maximum ${approval.maximum_credits} credits, revision ${approval.revision}`);
+  }
+}
+
+function renderCreditReceipt(usage, context) {
+  writeLine(context.stdout, `${display(usage.label, "Credit usage")} (${display(usage.id, "unknown")})`);
+  if (usage.origin_account_id) writeLine(context.stdout, `Workspace: ${usage.origin_account_id}`);
+  if (typeof usage.credits === "string") writeLine(context.stdout, `Credits charged: ${usage.credits}`);
+  if (typeof usage.returned_credits === "string") writeLine(context.stdout, `Credits returned: ${usage.returned_credits}`);
+  if (usage.created_at) writeLine(context.stdout, `Date: ${usage.created_at}`);
+  if (usage.result_url && usage.result_available) writeLine(context.stdout, `Saved result: ${usage.result_url}`);
+  else if (usage.result_message) writeLine(context.stdout, usage.result_message);
+}
+
+function safeCreditHistory(payload) {
+  const result = {};
+  if (typeof payload?.balance === "string") result.balance = payload.balance;
+  if (Array.isArray(payload?.usages)) result.usages = payload.usages.map(safeCreditReceipt);
+  if (typeof payload?.next_cursor === "string") result.next_cursor = payload.next_cursor;
+  return result;
+}
+
+function safeCreditReceipt(usage) {
+  return pickFields(usage, ["id", "key", "label", "credits", "returned_credits", "origin_account_id", "created_at", "result_available", "result_url", "result_message"], {
+    decimalFields: ["credits", "returned_credits"]
+  });
+}
+
+function safeCreditApprovals(payload) {
+  const result = {};
+  if (typeof payload?.payer_account_id === "string") result.payer_account_id = payload.payer_account_id;
+  if (Array.isArray(payload?.prices)) result.prices = payload.prices.map((price) => ({ ...pickFields(price, ["id", "version", "effective_at", "email_sent_at", "accepted", "test_price"]), prices: Object.fromEntries(Object.entries(price.prices || {}).filter(([key, value]) => ["tool.email_find", "tool.signals_find"].includes(key) && typeof value === "string")) }));
+  if (Array.isArray(payload?.payer_approvals)) result.payer_approvals = payload.payer_approvals.map((approval) => pickFields(approval,
+    ["operation_id", "origin_account_id", "key", "action_label", "price_version", "revision", "maximum_credits"], { decimalFields: ["maximum_credits"] }));
+  return result;
+}
+
+function pickFields(value, fields, { decimalFields = [] } = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(fields.filter((field) => {
+    if (!Object.hasOwn(value, field)) return false;
+    if (decimalFields.includes(field)) return typeof value[field] === "string";
+    return typeof value[field] === "string" || typeof value[field] === "boolean" || Number.isSafeInteger(value[field]);
+  }).map((field) => [field, value[field]]));
 }
 
 async function toolsRunsList(args, context, { accountOverride } = {}) {

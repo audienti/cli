@@ -1351,6 +1351,34 @@ export class AudientiClient {
     return this.requestJson(accountPath(accountId, ["tools", "runs", runId, "export"], query));
   }
 
+  creditRefundReview(accountId, usageId) {
+    return this.requestJson(accountPath(accountId, ["credit_usages", usageId, "refund"]));
+  }
+
+  approveCreditRefund(accountId, usageId, body) {
+    return this.requestJson(accountPath(accountId, ["credit_usages", usageId, "refund"]), { method: "POST", body });
+  }
+
+  creditUsages(accountId, query = {}) {
+    return this.requestJson(accountPath(accountId, ["credit_usages"], query));
+  }
+
+  creditUsage(accountId, usageId) {
+    return this.requestJson(accountPath(accountId, ["credit_usages", usageId]));
+  }
+
+  creditApprovals(accountId) {
+    return this.requestJson(accountPath(accountId, ["credit_approvals"]));
+  }
+
+  acceptCreditPrice(accountId, priceId) {
+    return this.requestJson(accountPath(accountId, ["credit_approvals", "prices", priceId]), { method: "POST", body: {} });
+  }
+
+  approveCreditPayer(accountId, operationId, body) {
+    return this.requestJson(accountPath(accountId, ["credit_approvals", "payers", operationId]), { method: "POST", body });
+  }
+
   // Saved network of one connected account (owner-only).
   socialCookieNetwork(accountId, socialCookieId, query = {}) {
     return this.requestJson(accountPath(accountId, ["social_cookies", socialCookieId, "network"], query));

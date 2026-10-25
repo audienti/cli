@@ -328,10 +328,11 @@ inside fields are not. With `--wait`, the exit code is 1 on an API error, a
 timeout or an aborted (failed) run; per-item outcomes such as `no_match` do
 not change it.
 
-For an active paid Email Find operation, review a server quote first:
+For active paid Email Find or Signal search work, review a server quote first:
 
 ```bash
 audienti tools email-find --file people.csv --quote
+audienti tools signals-find --icp "Logistics companies" --question "Warehouse expansion" --count 5 --quote
 audienti tools email-find --file people.csv --accept-quote <quote_reference>
 audienti tools runs review <run_id>
 audienti tools runs resume <run_id> --item <item_id> --revision <revision> --idempotency-key <unique_key>
@@ -899,3 +900,18 @@ Batch import accepts up to 50 rows per API request. Split larger files before im
 Bulk destinations: `audienti prospects set-destination <prsp_id> --type list --destination <list_id>` adds by default. Use `--name "New list"` to create a list, `--type experiment --name "Existing relationships"` to create a transition without setup, or `--mode move` for explicit reassignment. Add preserves existing memberships; experiment Add skips people assigned elsewhere.
 
 Create a child workspace with `audienti accounts create --name <name> --parent <name-or-id> [--json]`. The parent can be a visible name, unique name fragment, numeric ID, or prefixed ID. You must administer a root team account. All parent admins receive access to the child; ordinary members do not. Ambiguous names show matching IDs and stop. A duplicate child name under the same parent fails clearly. The response includes the new account ID. Creation keeps your selected account unchanged: use `audienti accounts select <new_acct_id>` or `--account <new_acct_id>` before creating a motion there.
+
+### Credit history and root approvals
+
+`audienti credits history` lists credit charges. `credits show <usage_id>` opens an
+exact receipt. A root billing role does not grant access to private saved results.
+`credits approvals` shows action prices and changed-payer requests. After the
+root billing admin explicitly agrees, use `credits accept-price <price_id>` or
+`credits approve-payer <operation_id> --revision <revision> --request-key <unique_key>`.
+Approval never resumes waiting work. Increased prices also require the notice period.
+
+Omalab staff can use `credits refund-review <usage_id>` to inspect the exact charge,
+result and previous reviews. After confirming a defect, `credits refund <usage_id>
+--cumulative-principal <exact_credits> --evidence-token <uuid> --reason <reason>
+--evidence <exact_result_evidence>` records the cumulative credit return. Customer
+billing admins cannot use these staff actions. This never refunds cash.
