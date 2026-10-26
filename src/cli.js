@@ -15901,6 +15901,16 @@ const PARITY_ACTION_COMMANDS = new Map([
       return `Event ${id} is recorded as posted (${display(payload?.status)}).`;
     }
   }],
+  ["events defer-comment-retry", {
+    usage: "audienti events defer-comment-retry <event_id>",
+    purpose: "Say \"Not now\" to the \"Not sent: try again?\" offer for a post comment you settled as not sent. Hides the offer for 24 hours; it comes back once, and a second \"Not now\" ends it. Nothing is sent.",
+    api: "POST /api/v1/accounts/:account_id/events/:id/defer_comment_retry.json",
+    run: (client, accountId, [id]) => client.deferCommentRetry(accountId, id),
+    done: ([id], payload) => {
+      if (payload?.status === "retired" || payload?.status === "already_retired") return `Event ${id}: the offer to send again has ended. Nothing was sent.`;
+      return `Event ${id}: the offer to send again is hidden until ${display(payload?.hidden_until)}. Nothing was sent.`;
+    }
+  }],
   ["events resolve-uncertain-comment-status", {
     usage: "audienti events resolve-uncertain-comment-status <event_id> --resolution <resolution_id>",
     purpose: "Show whether your Computer has finished checking a short comment link: checking, resolved or failed. Read-only.",

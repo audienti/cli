@@ -1154,6 +1154,12 @@ export class AudientiClient {
     });
   }
 
+  deferCommentRetry(accountId, eventId) {
+    return this.requestJson(accountPath(accountId, ["events", eventId, "defer_comment_retry"]), {
+      method: "POST"
+    });
+  }
+
   resolveUncertainCommentStatus(accountId, eventId, resolutionId) {
     return this.requestJson(accountPath(accountId, ["events", eventId, "resolve_uncertain_comment", "status"], { resolution_id: resolutionId }));
   }

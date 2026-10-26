@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.141] - 2026-10-26
+
+### Added
+
+- `audienti events defer-comment-retry <event_id>` is "Not now" for a post comment you said was not sent (`POST /api/v1/accounts/:account_id/events/:id/defer_comment_retry`). It hides the "Not sent: try again?" offer for 24 hours; the offer comes back once, and a second "Not now" ends it. Nothing is sent.
+
 ## [0.1.140] - 2026-10-25
 
 ### Added
