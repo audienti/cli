@@ -4,6 +4,12 @@ All notable changes to the Audienti CLI are documented here.
 
 ## [Unreleased]
 
+## [0.1.144] - 2026-10-26
+
+### Changed
+
+- No CLI behavior change. The server-side draft-readiness code moved to new owners (#3091); CLI version bumped because an API contract file changed.
+
 ## [0.1.143] - 2026-10-26
 
 ### Changed
