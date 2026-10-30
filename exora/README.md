@@ -16,14 +16,21 @@ Give the agent the profile path, not your password or a human API token.
 audienti agent poll --profile "$HOME/.audienti/exo-agent.json"
 audienti workspace list --profile "$HOME/.audienti/exo-agent.json"
 audienti workspace use WORKSPACE_UUID --profile "$HOME/.audienti/exo-agent.json"
-audienti tools balance --profile "$HOME/.audienti/exo-agent.json"
 audienti profiles list --profile "$HOME/.audienti/exo-agent.json"
 audienti skills show audienti
 ```
 
-Approval initially grants read access. For CRM writes or paid tools, grant the agent
-workspace access on your Agents page. Workspace policy and current permissions still
-apply. Only a verified human Admin can purchase or redeem credits through Billing.
+Approval initially grants read access. Before checking tool credits or the hosted tool catalog, making CRM writes
+or using paid tools, open **Settings → Agents** and choose **Allow workspace changes**
+for this agent. Then check its workspace balance:
+
+```sh
+audienti tools balance --profile "$HOME/.audienti/exo-agent.json"
+```
+
+Balance reads also require this permission because they settle expired credit lots.
+Workspace policy and current permissions still apply. Only a verified human Admin
+can purchase or redeem credits through Billing.
 Paid calls spend shared workspace credits; development credits are local-only.
 
 To connect an MCP client, use this command and environment after selecting a workspace:
