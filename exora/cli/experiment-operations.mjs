@@ -7,7 +7,7 @@ const signal=z.discriminatedUnion('kind',[
  z.object({...signalBase,kind:z.literal('topic'),topic:z.string()}).strict(),
  z.object({...signalBase,kind:z.literal('profile'),url:z.string(),track:z.enum(['audience','activity']).optional(),interactions:z.array(z.enum(['comments','reactions'])).optional()}).strict(),
 ]);
-const fields=z.object({name:z.string(),audienceId:uuid,audienceRevision:z.number().int(),offerId:uuid,offerRevision:z.number().int(),premise:z.string(),approach:z.string().optional(),approachPin:z.object({id:uuid,revision:z.number().int().positive()}).strict().optional(),notes:z.string().optional(),ownerUserId:uuid.nullable().optional(),tags:z.array(z.string()).optional(),signalMatch:z.enum(['any','all']).optional(),signals:z.array(signal).optional(),targets:z.discriminatedUnion('kind',[
+const fields=z.object({name:z.string(),audienceId:uuid,audienceRevision:z.number().int(),offerId:uuid,offerRevision:z.number().int(),premise:z.string().optional(),approach:z.string().optional(),approachPin:z.object({id:uuid,revision:z.number().int().positive()}).strict().optional(),notes:z.string().optional(),ownerUserId:uuid.nullable().optional(),tags:z.array(z.string()).optional(),signalMatch:z.enum(['any','all']).optional(),signals:z.array(signal).optional(),targets:z.discriminatedUnion('kind',[
  z.object({kind:z.literal('none'),values:z.array(z.never())}).strict(),
  z.object({kind:z.literal('companies'),values:z.array(z.object({type:z.enum(['domain','linkedin-company']),value:z.string()}).strict())}).strict(),
  z.object({kind:z.literal('people'),values:z.array(z.object({type:z.literal('linkedin-person'),value:z.string()}).strict())}).strict(),

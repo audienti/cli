@@ -1,6 +1,6 @@
 {
   "name": "@audienti/cli",
-  "version": "0.2.0-exora.1",
+  "version": "0.2.0-exora.2",
   "description": "Audienti CLI and MCP client for exo.audienti.com",
   "type": "module",
   "bin": {

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 const uuid=z.string().uuid(),workspace={workspaceId:uuid.optional()},locator={...workspace,offerId:uuid};
-const fields=z.object({name:z.string(),description:z.string().optional(),url:z.string().optional(),avoidClaims:z.array(z.string()).optional(),pricing:z.object({currency:z.string().optional(),oneTimeAmountCents:z.number().optional(),recurringAmountCents:z.number().optional(),recurringInterval:z.enum(['monthly','annual']).optional(),notes:z.string().optional()}).strict().optional()}).strict();
+const fields=z.object({name:z.string(),description:z.string().optional(),outcome:z.string().trim().max(2000).optional(),benefits:z.array(z.string().trim().min(1).max(1000)).max(20).optional(),url:z.string().optional(),avoidClaims:z.array(z.string()).optional(),pricing:z.object({currency:z.string().optional(),oneTimeAmountCents:z.number().optional(),recurringAmountCents:z.number().optional(),recurringInterval:z.enum(['monthly','annual']).optional(),notes:z.string().optional()}).strict().optional()}).strict();
 const path=a=>`/workspaces/${a.workspaceId}/offers`;
 export const offerOperations={
  offer_list:{schema:z.object({...workspace,archived:z.boolean().optional(),limit:z.number().int().optional(),after:uuid.optional(),q:z.string().optional()}).strict(),method:'GET',path:a=>path(a)+'?'+new URLSearchParams(Object.fromEntries(Object.entries({archived:a.archived,limit:a.limit,after:a.after,q:a.q}).filter(([,v])=>v!==undefined).map(([k,v])=>[k,String(v)]))),scoped:true},

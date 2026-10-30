@@ -50,3 +50,20 @@ providers or execute hidden workflows.
 Start with saved-record reads and inspect the credit balance. Explicit enrichment
 uses the configured hosted provider; registration of an external agent-managed
 connection does not configure a hosted provider or imply successful synchronization.
+
+## Approach plays and review
+
+`audienti approach show ID` reads the versioned stage plays, waits, voice and
+completion rules. Your agent performs the work externally and cites stored
+evidence when reporting progress with `audienti approach record --file report.json`.
+Use exactly one of `stageKey`, `offRampKey` or `finishStage: true`. Finishing a play
+resolves its next/stay/off-ramp rule from the participation’s admitted version.
+
+When human review is required, use `audienti approach suggest --file report.json`
+and `audienti approach suggestions`. Suggestions do not move anyone. The assigned
+human or a workspace Admin approves or dismisses in Operator → Queue. Agents
+cannot approve suggestions. Stay completion records work without moving a stage.
+
+MCP exposes `approach_progress_suggest` and `approach_suggestions_list` alongside
+the existing approach tools. These operations require current workspace permission
+and do not send messages or call providers.
