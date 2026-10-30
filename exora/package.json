@@ -1,0 +1,35 @@
+{
+  "name": "@audienti/cli",
+  "version": "0.2.0-exora.1",
+  "description": "Audienti CLI and MCP client for exo.audienti.com",
+  "type": "module",
+  "bin": {
+    "audienti": "cli/audienti.mjs",
+    "audienti-mcp": "bin/audienti-mcp.mjs"
+  },
+  "files": [
+    "cli/",
+    "bin/",
+    "skills/",
+    "README.md",
+    "LICENSE",
+    "source-manifest.json"
+  ],
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audienti/cli.git",
+    "directory": "exora"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "publishConfig": {
+    "access": "public",
+    "tag": "exora"
+  }
+}

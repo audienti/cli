@@ -1,0 +1,52 @@
+name: Publish Exora CLI
+on:
+  push:
+    branches: [main]
+    paths: ['exora/**', '.github/workflows/publish-exora.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.repository == 'audienti/cli' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: exora
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: exora/package-lock.json
+      - run: npm ci --omit=dev --ignore-scripts
+      - name: Verify source manifest and package
+        run: |
+          node scripts/verify.mjs
+          npm pack --pack-destination "$RUNNER_TEMP"
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/smoke" "$RUNNER_TEMP/audienti-cli-$(node -p 'require("./package.json").version').tgz"
+          "$RUNNER_TEMP/smoke/node_modules/.bin/audienti" --help
+          "$RUNNER_TEMP/smoke/node_modules/.bin/audienti" skills list
+          node scripts/smoke-mcp.mjs "$RUNNER_TEMP/smoke/node_modules/.bin/audienti-mcp"
+      - name: Publish isolated Exora channel
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: |
+          set +e
+          npm view "@audienti/cli@$(node -p 'require("./package.json").version')" version --json > "$RUNNER_TEMP/exora-version.json" 2> "$RUNNER_TEMP/exora-version.err"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Version already published; no mutation.'
+          elif grep -q E404 "$RUNNER_TEMP/exora-version.err"; then
+            if [ -z "$NODE_AUTH_TOKEN" ]; then
+              echo "NPM_PUBLISH_TOKEN is required to publish the Exora channel." >&2
+              exit 1
+            fi
+            npm publish --access public --tag exora
+          else
+            cat "$RUNNER_TEMP/exora-version.err" >&2
+            exit "$status"
+          fi
