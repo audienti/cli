@@ -64,7 +64,7 @@ same-request replay are different events even when both are free.
 5. Compare sourced company/role/question judgments to the brief, preserving
    counterevidence. Record observations/interpretations with the shared evidence
    owner. The server's exact qualification operation, when requested, owns
-   admission to an experiment; a helper score or this receipt is not admission.
+   admission to a campaign; a helper score or this receipt is not admission.
 6. Continue until requested scope/count, agreed budget/time limit or documented
    source exhaustion. Return supported findings plus pending/rejected/unknown
    records and next actions; one completed search batch is not completion.
@@ -195,7 +195,7 @@ bracketed value with the selected workspace or a returned server ID:
 
 `observedAt:null` means unknown, not now. Signal evidence has its own live
 `signalId`/`result`/`details` contract; an interpretation is not a qualification
-or experiment admission.
+or campaign admission.
 
 For operation recovery, use CLI `tools runs get OPERATION_ID` / `tools runs list`
 or MCP `tools_runs_get` / `tools_runs_list`. Paid primitive MCP names use `tools_`

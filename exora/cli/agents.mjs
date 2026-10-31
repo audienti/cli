@@ -2,8 +2,13 @@ import { readProfile, writeProfile, validateUrl, configuration, WorkspaceRequest
 import { z } from 'zod';
 import {readJsonFile} from './json-file.mjs';
 
-export const agentManagementOperations = ['agent_list','agent_revoke','agent_permission','agent_capabilities_get','agent_capability_sharing_get','agent_capability_sharing_set','agent_account_authorizations_get','agent_account_authorization_set'];
+export const agentManagementOperations = ['agent_list','agent_revoke','agent_permission','agent_capabilities_set','agent_capabilities_get','agent_inventory_get','agent_capability_sharing_get','agent_capability_sharing_set','agent_account_authorizations_get','agent_account_authorization_set'];
+const inventoryLabel=z.string().trim().min(1).max(80);
+const inventoryEntry=z.object({category:z.enum(['web_search','web_browse','people_data','company_data','email','linkedin','social','crm','spreadsheet','docs','chat','calendar','tasks','files','code','scheduling','memory','other']),name:inventoryLabel,access:z.array(z.enum(['read','write','send'])).min(1).max(3),status:z.enum(['connected','needs_sign_in','unavailable']),via:inventoryLabel.optional(),tools:z.array(z.string().min(1).max(128)).max(16).optional()}).strict();
 export const agentOperations = {
+ agent_inventory_report:{description:'Getting started step 2: report the tools and connectors this agent already has (search, mailboxes, CRM, sheets, chat, scheduling, memory). Replaces the whole inventory. List only what is already available; never connect anything new and never include credentials. Requires an active agent profile.',schema:z.object({runtime:z.object({name:inventoryLabel,model:inventoryLabel.optional()}).strict(),entries:z.array(inventoryEntry).max(64)}).strict()},
+ agent_inventory_show:{description:'Read this agent\u2019s own reported tool inventory. Requires an active agent profile.',schema:z.object({}).strict()},
+ agent_inventory_get:{schema:z.object({id:z.string().uuid()}).strict()},
  agent_account_authorizations_get:{schema:z.object({id:z.string().uuid()}).strict()},
  agent_account_authorizations_show:{schema:z.object({}).strict()},
  agent_account_authorization_set:{schema:z.object({id:z.string().uuid(),provider:z.enum(['email','linkedin']),accountRef:z.string().min(1).max(200),authorized:z.boolean()}).strict()},
@@ -13,7 +18,8 @@ export const agentOperations = {
  agent_capabilities_show: {schema:z.object({}).strict()},
  agent_capabilities_get: {schema:z.object({id:z.string().uuid()}).strict()},
  agent_permission: {schema:z.object({id:z.string().uuid(),scope:z.enum(['workspace:read','workspace:access'])}).strict()},
- agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80) }).strict() },
+ agent_capabilities_set: {schema:z.object({id:z.string().uuid(),capabilities:z.array(z.enum(['find','enrich','listen','approve'])).min(1).max(4)}).strict()},
+ agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(['find','enrich','listen','approve'])).max(4).optional() }).strict() },
  agent_poll: { schema: z.object({}).strict() },
  agent_cancel: { schema: z.object({}).strict() },
  agent_list: { schema: z.object({}).strict() },
@@ -44,6 +50,11 @@ export async function callAgent(name, args, config, profilePath) {
  }
  if (name === 'agent_capability_sharing_get') return {data:await request(config,`/agents/${input.data.id}/capability-sharing`,undefined,true)};
  if (name === 'agent_capability_sharing_set') {const {id,...body}=input.data;return {data:await request(config,`/agents/${id}/capability-sharing`,body,true)};}
+ if (name === 'agent_inventory_get') return {data:await request(config,`/agents/${input.data.id}/inventory`,undefined,true)};
+ if (name === 'agent_inventory_show' || name === 'agent_inventory_report') {
+  if (!config.profile?.agent || !/^agt_/.test(config.token ?? '')) throw new Error('Use an active agent profile for tool inventory report and self readback.');
+  return {data:await request(config,'/agent-inventory',name==='agent_inventory_report' ? input.data : undefined,true,name==='agent_inventory_report' ? 'PUT' : 'GET')};
+ }
  if (name === 'agent_capabilities_get') return {data:await request(config,`/agents/${input.data.id}/capabilities`,undefined,true)};
  if (name === 'agent_capabilities_show' || name === 'agent_capabilities_report') {
   if (!config.profile?.agent || !/^agt_/.test(config.token ?? '')) throw new Error('Use an active agent profile for capability check-in and self readback.');
@@ -51,6 +62,7 @@ export async function callAgent(name, args, config, profilePath) {
  }
  if (name === 'agent_list') return { data: await request(config, '/agents', undefined, true) };
  if (name === 'agent_permission') return {data:await request(config, `/agents/${input.data.id}/permission`, {scope:input.data.scope}, true)};
+ if (name === 'agent_capabilities_set') return {data:await request(config, `/agents/${input.data.id}/approved-capabilities`, {capabilities:input.data.capabilities}, true)};
  if (name === 'agent_revoke') return { data: await request(config, `/agents/${input.data.id}/revoke`, {}, true) };
  if (!profilePath) throw new Error('Use a separate private --profile PATH for each agent.');
  const profile = readProfile(profilePath);
@@ -83,19 +95,25 @@ export async function agentCli(args) {
   if (args[i] === '--json') continue;
   if (args[i].startsWith('--')) {
    const key = args[i].slice(2);
-   if (!['profile', 'name','scope','file','id','provider','account','workspace','shared','authorized'].includes(key) || !args[i+1] || args[i+1].startsWith('--')) throw new Error('Unknown or incomplete agent option.');
+   if (!['profile', 'name','capabilities','scope','file','id','provider','account','workspace','shared','authorized','set'].includes(key) || !args[i+1] || args[i+1].startsWith('--')) throw new Error('Unknown or incomplete agent option.');
    flags[key] = args[++i];
   } else positions.push(args[i]);
  }
  let name = `agent_${positions[1]}`;
- let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name } : positions[1] === 'revoke' ? { id: positions[2] } : {};
+ let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name, ...(flags.capabilities ? { capabilities: flags.capabilities.split(',').map(key => key.trim()).filter(Boolean) } : {}) } : positions[1] === 'revoke' ? { id: positions[2] } : {};
  if(positions[1]==='accounts') {
   if(positions[2]==='show') {name=flags.id ? 'agent_account_authorizations_get' : 'agent_account_authorizations_show';input=flags.id ? {id:flags.id} : {};}
   else if(positions[2]==='authorize' && ['true','false'].includes(flags.authorized)) {name='agent_account_authorization_set';input={id:flags.id,provider:flags.provider,accountRef:flags.account,authorized:flags.authorized==='true'};}
   else throw new Error('Use agent accounts show [--id ID] or authorize --id ID --provider PROVIDER --account REF --authorized true|false.');
  }
+ if (positions[1] === 'inventory') {
+  if (positions[2] === 'report' && flags.file && !flags.id) {name='agent_inventory_report';input=readJsonFile(flags.file,32768,'Inventory file');}
+  else if (positions[2] === 'show' && !flags.file) {name=flags.id ? 'agent_inventory_get' : 'agent_inventory_show';input=flags.id ? {id:flags.id} : {};}
+  else throw new Error('Use agent inventory report --file PATH or show [--id ID].');
+ }
  if (positions[1] === 'capabilities') {
-  if (positions[2] === 'sharing' && flags.id) {name='agent_capability_sharing_get';input={id:flags.id};}
+  if (flags.set !== undefined && positions[2]) {name='agent_capabilities_set';input={id:positions[2],capabilities:flags.set.split(',').map(key => key.trim()).filter(Boolean)};}
+  else  if (positions[2] === 'sharing' && flags.id) {name='agent_capability_sharing_get';input={id:flags.id};}
   else if (positions[2] === 'share' && flags.id && ['true','false'].includes(flags.shared)) {name='agent_capability_sharing_set';input={id:flags.id,provider:flags.provider,accountRef:flags.account,workspaceId:flags.workspace,shared:flags.shared==='true'};}
   else if (positions[2] === 'report'  && flags.file && !flags.id) {name='agent_capabilities_report';input=readCapabilityFile(flags.file);}
   else if (positions[2] === 'show' && !flags.file) {name=flags.id ? 'agent_capabilities_get' : 'agent_capabilities_show';input=flags.id ? {id:flags.id} : {};}

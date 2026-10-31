@@ -59,7 +59,7 @@ can supply inputs; using Audienti's paid tools is optional.
 - Recover an unknown paid outcome using the existing request/operation ID and run
   history before retrying. A new request ID is new work, not a recovery mechanism.
   Do not bypass a zero-credit refusal with another alias or credential.
-- Persist requested relevant evidence even when a candidate fails an experiment's
+- Persist requested relevant evidence even when a candidate fails a campaign's
   fit criteria. Separate source facts from your interpretation and cite both.
   Include this skill's identity/version on supported evidence and assessment writes.
 - Profile research does not authorize a message, follow, contact purchase or change

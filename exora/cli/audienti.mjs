@@ -12,7 +12,7 @@ Usage: audienti whoami [--json]
        audienti workspace prospect assignment get/set --prospect-id ID [--file INPUT.json]
        audienti workspace routing-rules get/replace [--file INPUT.json]
        audienti workspace routing apply --file INPUT.json
-       audienti workspace prospect experiment-fit get --prospect-id ID --experiment-id ID
+       audienti workspace prospect campaign-fit get --prospect-id ID --campaign-id ID
        audienti workspace prospect fit-override set/clear --file INPUT.json
        audienti workspace prospect move --file INPUT.json
        audienti workspace member remove --file INPUT.json
@@ -23,10 +23,13 @@ Required environment:
   AUDIENTI_API_TOKEN  Account API token (create it from your Account page)
 
 Use HTTPS for remote hosts. Local HTTP is supported on loopback only.
-Agent commands: agent connect --name NAME|poll|cancel|list|revoke ID --profile PATH
+Agent commands: agent connect --name NAME [--capabilities find,enrich,listen,approve]|poll|cancel|list|revoke ID --profile PATH
 Owner permission change: agent permission ID --scope workspace:read|workspace:access --profile USER_PROFILE
+Owner capability change: agent capabilities ID --set find,enrich,listen,approve --profile USER_PROFILE (agents are refused outside this set)
 Agent capabilities: agent capabilities report --file REPORT.json --profile AGENT_PROFILE
 Read capabilities: agent capabilities show [--id AGENT_ID] --profile PROFILE
+Getting started: skills show getting-started, then agent inventory report --file INVENTORY.json --profile AGENT_PROFILE
+Read tool inventory: agent inventory show [--id AGENT_ID] --profile PROFILE
 Account authorization: agent accounts show [--id AGENT_ID] --profile PROFILE
 Authorize/revoke: agent accounts authorize --id AGENT_ID --provider email|linkedin --account REF --authorized true|false --profile OWNER_PROFILE
 Sharing: agent capabilities sharing --id AGENT_ID --profile OWNER_PROFILE
@@ -35,9 +38,18 @@ Team member: workspace member USER_ID [--workspace ID] --profile PROFILE
 Work execution: work execution claim|start|get PLAN --action ID; release|lookup --claim ID; report --attempt ID
 Work feedback: work changes request|list|get|respond|withdraw PLAN --workspace ID
 Work: work plan save|list|show|approve|withdraw-approval|cancel|eligibility
+Activity: work activity --workspace ID [--search TEXT] [--cursor-at ISO --cursor-id ID]
+Work list: work list --workspace ID [--order oldest|priority] [--queue review|blocked|activity]
 Work writes: --file INPUT.json; human review needs a human workspace:access token
 Audiences: audience options --kind industries|locations|sizes|types|seniorities|titles|functions|industry_groups [--q TEXT]
            audience list|show ID|create|update ID|archive ID|restore ID
+           audience summary [--audience ID]|people ID|companies ID
+           audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
+Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
+Queue: audienti queue [list]|next|claim ID|done ID [--note TEXT]|skip ID --note TEXT|release ID  (start here after you connect)
+Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your owner go to Operator, not chat)
+           audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
+Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
 Offers: offer list|show ID|create|update ID|archive ID|restore ID
 Offer options: --file FIELDS.json --request-id UUID --expected-revision N --revision N --archived true|false
   audienti prospects replies set|get|list PERSON --workspace ID [--evidence EVIDENCE] [--file INPUT.json]
@@ -47,13 +59,32 @@ Discovery: prospects list|get ID|observation create|citation create|evidence cre
            prospects contacts list|record PERSON --workspace ID
            prospects contacts get|retire PERSON CONTACT --workspace ID
            prospects suppression get|set ID --workspace ID
-Qualification: experiments qualification submit --file INPUT.json
+           guardrails show|pause|resume --workspace ID
+           dnc list|add VALUE|remove VALUE --workspace ID
+           dnc import --file LIST.csv --workspace ID  (at most 5,000 rows; reports added, skipped and invalid rows)
+           dnc export [--output FILE.csv] --workspace ID
+           budgets show --workspace ID
+           budgets alerts --workspace ID [--limit N]
+           usage breakdown [--workspace ID] [--since month|7d|30d|90d] [--by tool|provider|model|caller|day] [--format json|csv]
+           audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
+           budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
+Qualification: campaigns qualification submit --file INPUT.json
 Approaches: approach list|show ID|save --file REQUEST.json|progress ID|record --file REQUEST.json
-Analytics: analytics show --from ISO --to ISO [--experiment ID] [--approach-version ID]
+Analytics: analytics show --from ISO --to ISO [--campaign ID] [--approach-version ID] [--format json|csv]
+           analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
+           analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]
+           analytics cohorts [--workspace ID] [--stage goal|KEY] [--cohorts N] [--horizon N] [filters] [--format json|csv]
+           analytics aging [--workspace ID] [--threshold-days N] [filters] [--format json|csv]
+           analytics filters [--workspace ID]  (lists campaign, owner, offer, audience and tag values)
+           (filters: --campaign ID --owner ID --offer ID --audience ID --tag TAG; also accepted by analytics show)
+Pipeline: pipeline show [--campaign ID] [--approach-version ID]
 Connections: connections list|register --file REQUEST.json|report --file REQUEST.json
 Discovery writes use --file INPUT.json, --workspace ID and stable --request-id UUID
-Workspace commands: workspace init|list|create|show|invite|invitations|use
-Invitation commands: workspace invitation show|accept|retry|cancel ID
+Workspace commands: workspace init|list|create|show|search|invite|invitations|use
+Notifications: workspace notifications --workspace ID [--unread-only true] [--cursor FILE.json]
+Read state: workspace notification-read --workspace ID --key KEY --read true|false [--through OBSERVED_AT]
+Search: workspace search --workspace ID --query TEXT [--people-only true] [--recent FILE.json]
+Invitation commands: workspace invitation show|accept|decline|retry|cancel ID
 Options: --workspace ID --name NAME --request-id UUID --email EMAIL --generation N
 Optional private profile: --profile PATH (outside this repository)
 Save an environment token: profile save --scope account:read|workspace:access|agents:manage --profile PATH
@@ -67,16 +98,27 @@ async function main() {
   if(args[0]==='prospecting'){const {prospectingSettingsCli}=await import('./prospecting-settings.mjs');await prospectingSettingsCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='replies'){const {accountRepliesCli}=await import('./account-replies.mjs');await accountRepliesCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='contacts'){const {recipientsCli}=await import('./recipients.mjs');await recipientsCli(args);return;}
+  if(args[0]==='usage'){const {usageCli}=await import('./usage.mjs');await usageCli(args);return;}
+  if(args[0]==='audit'){const {auditCli}=await import('./audit.mjs');await auditCli(args);return;}
+  if(args[0]==='budgets'){const {budgetsCli}=await import('./budgets.mjs');await budgetsCli(args);return;}
+  if(args[0]==='guardrails'||args[0]==='dnc'){const {guardrailsCli}=await import('./guardrails.mjs');await guardrailsCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='suppression'){const {suppressionCli}=await import('./suppression.mjs');await suppressionCli(args);return;}
   if(args[0]==='tools'){const {toolsCli}=await import('./tools.mjs');await toolsCli(args);return;}
   if(['topics','posts'].includes(args[0])){const {contentCli}=await import('./content.mjs');await contentCli(args);return;}
   if(args[0]==='work'&&args[1]==='execution'){const {workExecutionCli}=await import('./work-execution.mjs');await workExecutionCli(args);return;}
   if(args[0]==='work'&&args[1]==='changes'){const {workFeedbackCli}=await import('./work-feedback.mjs');await workFeedbackCli(args);return;}
   if(args[0]==='work'){const {workCli}=await import('./work.mjs');await workCli(args);return;}
-  if(['prospects','experiments'].includes(args[0])){const {discoveryCli}=await import('./discovery.mjs');await discoveryCli(args);return;}
-  if(['approach','analytics','connections'].includes(args[0])){const {progressCli}=await import('./progress.mjs');await progressCli(args);return;}
-  if(args[0]==='experiment'){const {experimentCli}=await import('./experiments.mjs');await experimentCli(args);return;}
+  if(['prospects','campaigns'].includes(args[0])){const {discoveryCli}=await import('./discovery.mjs');await discoveryCli(args);return;}
+  if(args[0]==='analytics'&&['cohorts','aging','filters'].includes(args[1])){const {cohortCli}=await import('./cohorts.mjs');await cohortCli(args);return;}
+  if(args[0]==='analytics'&&['outbound','activity'].includes(args[1])){const {outboundCli}=await import('./outbound.mjs');await outboundCli(args);return;}
+  if(['approach','analytics','pipeline','connections'].includes(args[0])){const {progressCli}=await import('./progress.mjs');await progressCli(args);return;}
+  if(args[0]==='campaign'){const {campaignCli}=await import('./campaigns.mjs');await campaignCli(args);return;}
   if(args[0]==='audience'){const {audienceCli}=await import('./audiences.mjs');await audienceCli(args);return;}
+  if(args[0]==='file'){const {fileCli}=await import('./files.mjs');await fileCli(args);return;}
+  if(args[0]==='ask'){const {askCli}=await import('./questions.mjs');await askCli(args);return;}
+  if(args[0]==='questions'){const {questionsCli}=await import('./questions.mjs');await questionsCli(args);return;}
+  if(args[0]==='queue'){const {queueCli}=await import('./queue.mjs');await queueCli(args);return;}
+  if(args[0]==='rooms'){const {roomsCli}=await import('./rooms.mjs');await roomsCli(args);return;}
   if(args[0]==='offer'){const {offerCli}=await import('./offers.mjs');await offerCli(args);return;}
   if (args[0] === 'agent') { const { agentCli } = await import('./agents.mjs'); await agentCli(args); return; }
   if (isAssignmentCommand(args)) { await assignmentCli(args); return; }

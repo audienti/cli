@@ -25,7 +25,7 @@ export async function assignmentCli(args) {
     "file",
     "request-id",
     "prospect-id",
-    "experiment-id",
+    "campaign-id",
     "assigned-to-user-id",
     "unassigned",
     "search",
@@ -54,8 +54,8 @@ export async function assignmentCli(args) {
     "workspace assignments list": "workspace_prospect_assignments",
     "workspace prospect assignment get": "workspace_prospect_assignment",
     "workspace prospect assignment set": "workspace_prospect_assignment_set",
-    "workspace prospect experiment-fit get":
-      "workspace_prospect_experiment_fit",
+    "workspace prospect campaign-fit get":
+      "workspace_prospect_campaign_fit",
     "workspace routing-rules get": "workspace_routing_rules_get",
     "workspace routing-rules replace": "workspace_routing_rules_replace",
     "workspace routing apply": "workspace_routing_apply",
@@ -68,12 +68,12 @@ export async function assignmentCli(args) {
   const name = names[command];
   if (!name)
     throw new Error(
-      "Unknown assignment command. Use workspace assignments list, prospect assignment get/set, routing-rules get/replace, routing apply, prospect experiment-fit get, prospect fit-override set/clear, prospect move, member remove, or leave. Mutations require --file INPUT.json.",
+      "Unknown assignment command. Use workspace assignments list, prospect assignment get/set, routing-rules get/replace, routing apply, prospect campaign-fit get, prospect fit-override set/clear, prospect move, member remove, or leave. Mutations require --file INPUT.json.",
     );
   const read = [
     "workspace_prospect_assignments",
     "workspace_prospect_assignment",
-    "workspace_prospect_experiment_fit",
+    "workspace_prospect_campaign_fit",
     "workspace_routing_rules_get",
   ].includes(name);
   let input = read ? {} : readJsonFile(flags.file, 65536, "Assignment file");
@@ -81,7 +81,7 @@ export async function assignmentCli(args) {
     ["workspace", "workspaceId"],
     ["request-id", "requestId"],
     ["prospect-id", "prospectId"],
-    ["experiment-id", "experimentId"],
+    ["campaign-id", "campaignId"],
     ["assigned-to-user-id", "assignedToUserId"],
     ["search", "search"],
     ["cursor", "cursor"],

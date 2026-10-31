@@ -18,7 +18,7 @@ const location = z
   .strict();
 const criteria = z
   .object({
-    experimentIds: z.array(uuid).max(50).optional(),
+    campaignIds: z.array(uuid).max(50).optional(),
     companyLocations: z.array(location).max(50).optional(),
     personLocations: z.array(location).max(50).optional(),
     personTitles: z.array(z.string()).max(50).optional(),
@@ -38,7 +38,7 @@ const person = (a) => `${root(a)}/prospects/${a.prospectId}`;
 const omit = (a, keys) =>
   Object.fromEntries(Object.entries(a).filter(([k]) => !keys.includes(k)));
 const body = (a) => omit(a, ["workspaceId", "prospectId"]);
-function qs(a, keys = ["workspaceId", "prospectId", "experimentId"]) {
+function qs(a, keys = ["workspaceId", "prospectId", "campaignId"]) {
   const values = {};
   for (const [k, v] of Object.entries(omit(a, keys))) {
     if (v === undefined) continue;
@@ -56,7 +56,7 @@ export const assignmentOperations = {
         ...workspace,
         assignedToUserId: uuid.optional(),
         unassigned: z.boolean().optional(),
-        experimentId: uuid.optional(),
+        campaignId: uuid.optional(),
         search: z.string().optional(),
         cursor: uuid.optional(),
         limit: z.number().int().min(1).max(100).optional(),
@@ -81,17 +81,17 @@ export const assignmentOperations = {
     path: (a) => person(a) + "/assignment?" + qs(a),
     scoped: true,
   },
-  workspace_prospect_experiment_fit: {
+  workspace_prospect_campaign_fit: {
     schema: z
       .object({
         ...workspace,
         prospectId: uuid,
-        experimentId: uuid,
+        campaignId: uuid,
         overrides: page.optional(),
       })
       .strict(),
     method: "GET",
-    path: (a) => person(a) + `/experiments/${a.experimentId}/fit?` + qs(a),
+    path: (a) => person(a) + `/campaigns/${a.campaignId}/fit?` + qs(a),
     scoped: true,
   },
   workspace_prospect_assignment_set: {
@@ -133,7 +133,7 @@ export const assignmentOperations = {
       .object({
         ...request,
         prospectId: uuid,
-        experimentId: uuid.optional(),
+        campaignId: uuid.optional(),
         expectedAssignmentVersion: version,
         rulesVersion: version,
         outcomes: z
@@ -160,8 +160,8 @@ export const assignmentOperations = {
       .object({
         ...request,
         prospectId: uuid,
-        experimentId: uuid,
-        experimentRevision: z.number().int().positive(),
+        campaignId: uuid,
+        campaignRevision: z.number().int().positive(),
         expectedOverrideVersion: version,
         action: z.enum(["set", "clear"]),
         value: z.enum(["high", "moderate", "low", "no_fit"]).optional(),
@@ -179,9 +179,9 @@ export const assignmentOperations = {
         ...request,
         prospectId: uuid,
         expectedSourceParticipationId: uuid,
-        sourceExperimentId: uuid,
-        destinationExperimentId: uuid,
-        destinationExperimentRevision: z.number().int().positive(),
+        sourceCampaignId: uuid,
+        destinationCampaignId: uuid,
+        destinationCampaignRevision: z.number().int().positive(),
         destinationQualificationReceiptId: uuid,
         expectedAssignmentVersion: version,
         reason: z.string(),

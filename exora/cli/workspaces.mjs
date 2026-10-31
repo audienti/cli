@@ -1,5 +1,12 @@
+import {notificationOperations} from './notification-operations.mjs';
+import {roomsOperations} from './rooms-operations.mjs';
+import {queueOperations} from './queue-operations.mjs';
+import {questionOperations} from './question-operations.mjs';
+import {searchOperations} from './search-operations.mjs';
+import {fileOperations,uploadFileContent} from './file-operations.mjs';
 import {approachOperations} from './approach-operations.mjs';
 import {connectionRegistryOperations} from './connection-registry-operations.mjs';
+import { budgetOperations } from './budget-operations.mjs';
 import { hostedToolOperations, paidToolByName, isPaidToolOperation, paidToolResult } from './tools-operations.mjs';
 import { workspaceExecutionOperations } from './work-execution-operations.mjs';
 import { workFeedbackOperations } from './work-feedback-operations.mjs';
@@ -7,26 +14,44 @@ import { accountReplyOperations } from './account-reply-operations.mjs';
 import { accountIntakeOperations } from './account-intake-operations.mjs';
 import { recipientOperations } from './recipient-operations.mjs';
 import { suppressionOperations } from './suppression-operations.mjs';
+import { guardrailsOperations } from './guardrails-operations.mjs';
+import { auditOperations } from './audit-operations.mjs';
+import { usageOperations } from './usage-operations.mjs';
+import { outboundOperations } from './outbound-operations.mjs';
+import { cohortOperations } from './cohort-operations.mjs';
 import { workOperations } from './work-operations.mjs';
 import { assignmentOperations } from './assignment-operations.mjs';
 import {discoveryOperations} from './discovery-operations.mjs';
-import {experimentOperations} from './experiment-operations.mjs';
+import {campaignOperations} from './campaign-operations.mjs';
 import {audienceOperations} from './audience-operations.mjs';
 import { readFileSync, writeFileSync, renameSync, mkdirSync, statSync, lstatSync, realpathSync } from 'node:fs';
 import { dirname, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {offerOperations} from './offer-operations.mjs';
+import {readJsonFile} from './json-file.mjs';
 const uuid = z.string().uuid();
 const workspace = { workspaceId: uuid.optional() };
 export const operations = {
+ ...searchOperations,
+ ...notificationOperations,
+ ...roomsOperations,
+ ...queueOperations,
+ ...questionOperations,
+ ...fileOperations,
  ...approachOperations,
  ...connectionRegistryOperations,
+ ...budgetOperations,
  ...hostedToolOperations,
  ...workOperations,
  ...workspaceExecutionOperations,
  ...workFeedbackOperations,
  ...suppressionOperations,
+ ...guardrailsOperations,
+ ...auditOperations,
+ ...usageOperations,
+ ...outboundOperations,
+ ...cohortOperations,
  ...recipientOperations,
  ...accountIntakeOperations,
  ...accountReplyOperations,
@@ -34,8 +59,13 @@ export const operations = {
  ...discoveryOperations,
  ...offerOperations,
  ...audienceOperations,
- ...experimentOperations,
+ ...campaignOperations,
  workspace_sending_settings_get: {schema:z.object({...workspace,userId:uuid.optional()}).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/sending-settings${a.userId?'?userId='+encodeURIComponent(a.userId):''}`,scoped:true,description:'Read workspace sending defaults, or own member effective hours, ramp and activity limits with userId. A workspace Admin may read another member. External activities remain agent-managed; these values do not authorize sending.'},
+ workspace_sending_settings_save: {schema:z.object({...workspace,userId:uuid.optional(),expectedVersion:z.number().int().nonnegative(),expectedDefaultsVersion:z.number().int().nonnegative().optional(),requestId:uuid,reason:z.string().trim().min(1).max(2000),schedule:z.unknown(),limits:z.unknown(),rampPercent:z.union([z.literal(25),z.literal(50),z.literal(75),z.literal(100)]).optional(),raiseEachMonday:z.boolean().optional()}).strict(),method:'POST',path:a=>`/workspaces/${a.workspaceId}/sending-settings`,body:({workspaceId,...a})=>a,scoped:true,description:'Save workspace sending defaults, or one member\'s hours, limits and ramp with userId. People only: agent credentials are refused. Send expectedVersion from the last read; a stale version is rejected. A reason is recorded with the change.'},
+ workspace_usage_summary: {schema:z.object(workspace).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/usage/summary`,scoped:true,description:'Paid tool use for the last 30 days, per tool: operations, cache hits, charged amount (pico USD), pending and expired. Same figures as Settings > Usage.'},
+ workspace_usage_callers: {schema:z.object(workspace).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/usage/callers`,scoped:true,description:'People, agents and API keys that have called paid tools in this workspace, for filtering usage calls.'},
+ workspace_usage_calls: {schema:z.object({...workspace,after:uuid.optional(),caller:z.string().regex(/^(key|agent|user):[0-9a-f-]{36}$/i).optional(),status:z.enum(['all','succeeded','failed','pending']).optional()}).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/usage/calls?${new URLSearchParams(Object.entries(a).filter(([k,v])=>k!=='workspaceId'&&v!==undefined).map(([k,v])=>[k,String(v)]))}`,scoped:true,description:'Paid tool calls, newest first, 50 per page, with counts by status. Filter by caller (user:ID, agent:ID or key:ID) and status.'},
+ workspace_usage_call: {schema:z.object({...workspace,callId:uuid}).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/usage/calls/${a.callId}`,scoped:true,description:'One paid tool call with its request, response and saved result while the payload is kept.'},
  workspace_member: {schema:z.object({...workspace,userId:uuid}).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/members/${a.userId}`,scoped:true},
  workspace_agent_access: { schema:z.object(workspace).strict(), method:'GET', path:a=>`/workspaces/${a.workspaceId}/agent-access`, scoped:true },
  workspace_agent_access_set: { schema:z.object({...workspace,userId:uuid,blocked:z.boolean()}).strict(), method:'POST', path:a=>`/workspaces/${a.workspaceId}/members/${a.userId}/agent-access`, body:a=>({blocked:a.blocked}), scoped:true },
@@ -49,6 +79,7 @@ export const operations = {
  workspace_invitations: { schema: z.object({}).strict(), method: 'GET', path: () => '/me/invitations' },
  workspace_invitation_get: { schema: z.object({ id: uuid, generation: z.number().int().positive() }).strict(), method: 'GET', path: a => `/invitations/${a.id}?generation=${a.generation}` },
  workspace_invitation_accept: { schema: z.object({ id: uuid, generation: z.number().int().positive() }).strict(), method: 'POST', path: a => `/invitations/${a.id}/accept`, body: a => ({ generation: a.generation }) },
+ workspace_invitation_decline: { schema: z.object({ id: uuid, generation: z.number().int().positive() }).strict(), method: 'POST', path: a => `/invitations/${a.id}/decline`, body: a => ({ generation: a.generation }) },
  workspace_select: { schema: z.object({ workspaceId: uuid }).strict(), method: 'GET', path: a => `/workspaces/${a.workspaceId}` },
 };
 function profilePath(path) {
@@ -100,6 +131,7 @@ export async function callWorkspace(name, args, config) {
  const operation=operations[name]; if(!operation) throw new Error('Unknown workspace operation.');
  const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new Error('Invalid workspace arguments. Check IDs and required fields.');
  const input={...parsed.data};
+ if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  if(operation.scoped) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error('Select a workspace or supply --workspace ID.'); }
  const url=validateUrl(config.url); if(!config.token) throw new Error('A workspace:access token is required. Configure the environment or a private profile.');
  const target=new URL(`/api/v1${operation.path(input)}`,url);
@@ -125,7 +157,7 @@ export async function workspaceCli(args) {
  const flags={}; const position=[];
  for(let i=0;i<args.length;i++) {
   if(args[i]==='--json') continue;
-  if(args[i].startsWith('--')) {const key=args[i].slice(2);if(!['profile','workspace','name','request-id','email','generation','scope','user'].includes(key)||!args[i+1]||args[i+1].startsWith('--')) throw new Error('Unknown or incomplete option.');flags[key]=args[++i];}
+  if(args[i].startsWith('--')) {const key=args[i].slice(2);if(!['profile','workspace','name','request-id','email','generation','scope','user','file','caller','status','after','query','people-only','recent','unread-only','cursor','key','read','through'].includes(key)||!args[i+1]||args[i+1].startsWith('--')) throw new Error('Unknown or incomplete option.');flags[key]=args[++i];}
   else position.push(args[i]);
  }
  if(position[0]==='profile' && position[1]==='save') {
@@ -136,10 +168,18 @@ export async function workspaceCli(args) {
  const config=configuration(flags.profile);const command=position.slice(1).join(' ');
  let name, input={};
  if(command==='sending-settings') {name='workspace_sending_settings_get';input={workspaceId:flags.workspace,...(flags.user?{userId:flags.user}:{})};}
+ else if(command==='sending-settings save') {if(!flags.file) throw new Error('Supply the settings with --file PATH.');const body=readJsonFile(flags.file,65536,'Settings file');if(!body||typeof body!=='object'||Array.isArray(body)) throw new Error('Settings must be an object.');name='workspace_sending_settings_save';input={...body,workspaceId:flags.workspace??body.workspaceId,...(flags.user?{userId:flags.user}:{})};}
+ else if(command==='usage summary') {name='workspace_usage_summary';input={workspaceId:flags.workspace};}
+ else if(command==='usage callers') {name='workspace_usage_callers';input={workspaceId:flags.workspace};}
+ else if(command==='usage calls') {name='workspace_usage_calls';input={workspaceId:flags.workspace,...(flags.after?{after:flags.after}:{}),...(flags.caller?{caller:flags.caller}:{}),...(flags.status?{status:flags.status}:{})};}
+ else if(position[1]==='usage'&&position[2]==='call'&&position.length===4) {name='workspace_usage_call';input={workspaceId:flags.workspace,callId:position[3]};}
  else if(command==='agent-access') {name='workspace_agent_access';input={workspaceId:flags.workspace};}
  else if(['agent-access block','agent-access restore'].includes(command)) {name='workspace_agent_access_set';input={workspaceId:flags.workspace,userId:flags.user,blocked:command.endsWith('block')};}
  else if(command==='init') name='workspace_initialize';
  else if(command==='list') name='workspace_list';
+ else if(command==='notifications') {if(flags['unread-only']&&!['true','false'].includes(flags['unread-only']))throw new Error('--unread-only must be true or false.');name='workspace_notifications_list';input={workspaceId:flags.workspace,unreadOnly:flags['unread-only']==='true',...(flags.cursor?{cursor:readJsonFile(flags.cursor,4096,'Notification cursor')}:{})};}
+ else if(command==='notification-read') {if(!['true','false'].includes(flags.read))throw new Error('--read must be true or false.');name='workspace_notifications_mark';input={workspaceId:flags.workspace,sourceKey:flags.key,isRead:flags.read==='true',...(flags.through?{through:flags.through}:{})};}
+ else if(command==='search') {if(flags['people-only']&&!['true','false'].includes(flags['people-only']))throw new Error('--people-only must be true or false.');name='workspace_search';input={workspaceId:flags.workspace,query:flags.query??'',peopleOnly:flags['people-only']==='true',recent:flags.recent?readJsonFile(flags.recent,4096,'Recent references'):[]};}
  else if(command==='create') {name='workspace_create';input={name:flags.name,requestId:flags['request-id']};}
  else if(command==='show') {name='workspace_get';input={workspaceId:flags.workspace};}
  else if(command==='invite') {name='workspace_invite';input={workspaceId:flags.workspace,email:flags.email};}
@@ -147,7 +187,7 @@ export async function workspaceCli(args) {
  else if(position[1]==='member' && position.length===3) {name='workspace_member';input={workspaceId:flags.workspace,userId:position[2]};}
  else if(position[1]==='use' && position.length===3) {name='workspace_select';input={workspaceId:position[2]};}
  else if(position[1]==='invitation' && position.length===4) {
-  const action=position[2];name={show:'workspace_invitation_get',accept:'workspace_invitation_accept',retry:'workspace_invitation_retry',cancel:'workspace_invitation_cancel'}[action];
+  const action=position[2];name={show:'workspace_invitation_get',accept:'workspace_invitation_accept',decline:'workspace_invitation_decline',retry:'workspace_invitation_retry',cancel:'workspace_invitation_cancel'}[action];
   input={id:position[3],...(['retry','cancel'].includes(action)?{workspaceId:flags.workspace}:{generation:Number(flags.generation)})};
  }
  if(!name) throw new Error('Unknown workspace command. Use audienti --help.');
