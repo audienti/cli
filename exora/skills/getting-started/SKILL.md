@@ -54,8 +54,9 @@ Keep messages plain and short. Address the owner as "you". No emoji, no marketin
 
 ## 1. Triage your tools
 
-1. Confirm your connection: `audienti whoami --json`, then select the workspace the owner
-   approved (`audienti workspace use ID`; over MCP, `workspace_select`).
+1. Confirm your connection: `audienti workspace list --profile AGENT_PROFILE`, then select
+   the workspace the owner approved (`audienti workspace use ID --profile AGENT_PROFILE`;
+   over MCP, `workspace_select`).
 2. List every tool, connector, plugin and integration you can call now. Use your
    runtime's own listing (tool list, connector settings, MCP servers, installed plugins)
    and every integration hub you use. Check aggregators first: if you reach tools
@@ -79,8 +80,9 @@ audienti agent inventory report --file inventory.json --profile AGENT_PROFILE
 5. Also report each mailbox or LinkedIn seat you act through with
    `audienti agent capabilities report` (see the `audienti` skill). The inventory says
    what you have; the capability report says which accounts you can act as.
-6. Install the skills you will use for the work: `audienti skills list`, then
-   `audienti skills show ID` (over MCP, `skills_list` and `skills_show`). Prospect
+6. Install the skills you will use for the work: `audienti skills list --compact`,
+   then `audienti skills read ID SKILL.md` and only the references the task needs
+   (over MCP, `skills_list` with `compact: true` and `skills_read`). Prospect
    finding, planning, writing and cadence skills are published in the `audienti/plugins`
    marketplace; install the ones your tools can run, using your runtime's plugin
    installer. Use the `audienti` skill for prospect finding and profile research.
@@ -105,7 +107,9 @@ LinkedIn profile. Then fill the [campaign draft](references/campaign-draft.md):
   smart rule (`textCriteria`) only for what the filters cannot express: a single
   criterion a reviewer can answer true or false. See [audience definition](references/audience.md).
 - **Premise.** Why these people, why now, in one sentence.
-- **Approach.** One published approach (`audienti approach list`) and why it fits.
+- **Approach.** One approach template and why it fits. Reuse one from
+  `audienti approach list`, or draft one with the approach-design skill
+  (`audienti skills show approach-design`).
 - **Channels.** Only channels you can cover with accounts you reported.
 - **Test length.** 30 days or a company cap, whichever comes first.
 - **Success measure.** Meetings booked, the approach's goal stage.
@@ -164,9 +168,11 @@ Do not retry with a new request ID.
 
 ## New ideas
 
-When the owner suggests an idea later, draft a new campaign, or a successor
+When you or the owner have a new idea later, draft a new campaign, or a successor
 (`audienti campaign successor ID`) that changes one thing: the approach, the offer or
-the audience. Name what changed so the two tests can be compared.
+the audience. Name what changed so the two tests can be compared. For a new approach,
+follow the approach-design skill: save it as a new approach template so it can be
+reused, then pin it to the successor.
 
 ## After getting started: work the queue
 

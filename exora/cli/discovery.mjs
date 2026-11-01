@@ -4,7 +4,7 @@ export async function discoveryCli(args){
  const flags={},position=[];
  const children=['profiles','observations','citations','qualifications'];
  const allowed=['profile','workspace','file','request-id','kind','search','cursor','limit',...children.flatMap(k=>[k+'-cursor',k+'-limit'])];
- for(let i=0;i<args.length;i++){if(!args[i].startsWith('--')){position.push(args[i]);continue;}const key=args[i].slice(2);if(!allowed.includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete discovery option.');flags[key]=args[++i];}
+ for(let i=0;i<args.length;i++){if(args[i]==='--json')continue;if(!args[i].startsWith('--')){position.push(args[i]);continue;}const key=args[i].slice(2);if(!allowed.includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete discovery option.');flags[key]=args[++i];}
  const command=position.slice(0,3).join(' ');
  let name,input={workspaceId:flags.workspace};
  if(position[0]==='prospects'&&position[1]==='list'&&position.length===2){name='prospect_list';for(const k of ['kind','search','cursor'])if(flags[k]!==undefined)input[k]=flags[k];if(flags.limit!==undefined)input.limit=Number(flags.limit);}

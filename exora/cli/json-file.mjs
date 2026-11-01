@@ -8,6 +8,6 @@ export function readJsonFile(path,limit,label){
   do{read=readSync(fd,buffer,length,buffer.length-length,null);length+=read;}while(read&&length<buffer.length);
   if(length>limit)throw new Error();
   return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(buffer.subarray(0,length)));
- }catch{throw new Error(`${label} must be regular, non-symlink JSON no larger than ${limit/1024} KiB.`);}
+ }catch(error){if(error?.code==='ENOENT')throw new Error(`${label} not found: ${path}. Paths are relative to the current directory.`);throw new Error(`${label} must be regular, non-symlink JSON no larger than ${limit/1024} KiB.`);}
  finally{if(fd!==undefined)closeSync(fd)}
 }

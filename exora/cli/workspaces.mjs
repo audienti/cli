@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {notificationOperations} from './notification-operations.mjs';
 import {roomsOperations} from './rooms-operations.mjs';
 import {queueOperations} from './queue-operations.mjs';
@@ -129,7 +130,7 @@ export class HostedResponseUnknown extends Error {
 }
 export async function callWorkspace(name, args, config) {
  const operation=operations[name]; if(!operation) throw new Error('Unknown workspace operation.');
- const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new Error('Invalid workspace arguments. Check IDs and required fields.');
+ const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new Error(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`);
  const input={...parsed.data};
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  if(operation.scoped) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error('Select a workspace or supply --workspace ID.'); }
@@ -142,8 +143,9 @@ export async function callWorkspace(name, args, config) {
  if(!response.ok) {
   const code = typeof result?.error?.code==='string' && /^[a-z_]+$/.test(result.error.code) ? result.error.code : 'request_failed';
   const retryAt = typeof result?.error?.retryAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.error.retryAt) ? result.error.retryAt : undefined;
+  const detail = ((response.status===400 && code==='invalid_fields') || (response.status===409 && code==='identity_conflict')) && typeof result?.error?.message==='string' && result.error.message.length<=300 && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
   const blockers = code==='execution_blocked' && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
-  const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId);
+  const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId);
   if(isPaidToolOperation(name)){error.requestId=input.requestId;error.recovery=response.status>=500?'retry_same_request_id':'inspect_rejection';}
   throw error;
  }
@@ -180,7 +182,7 @@ export async function workspaceCli(args) {
  else if(command==='notifications') {if(flags['unread-only']&&!['true','false'].includes(flags['unread-only']))throw new Error('--unread-only must be true or false.');name='workspace_notifications_list';input={workspaceId:flags.workspace,unreadOnly:flags['unread-only']==='true',...(flags.cursor?{cursor:readJsonFile(flags.cursor,4096,'Notification cursor')}:{})};}
  else if(command==='notification-read') {if(!['true','false'].includes(flags.read))throw new Error('--read must be true or false.');name='workspace_notifications_mark';input={workspaceId:flags.workspace,sourceKey:flags.key,isRead:flags.read==='true',...(flags.through?{through:flags.through}:{})};}
  else if(command==='search') {if(flags['people-only']&&!['true','false'].includes(flags['people-only']))throw new Error('--people-only must be true or false.');name='workspace_search';input={workspaceId:flags.workspace,query:flags.query??'',peopleOnly:flags['people-only']==='true',recent:flags.recent?readJsonFile(flags.recent,4096,'Recent references'):[]};}
- else if(command==='create') {name='workspace_create';input={name:flags.name,requestId:flags['request-id']};}
+ else if(command==='create') {name='workspace_create';input={name:flags.name,requestId:flags['request-id']??randomUUID()};}
  else if(command==='show') {name='workspace_get';input={workspaceId:flags.workspace};}
  else if(command==='invite') {name='workspace_invite';input={workspaceId:flags.workspace,email:flags.email};}
  else if(command==='invitations') name='workspace_invitations';

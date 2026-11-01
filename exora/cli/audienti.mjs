@@ -3,7 +3,7 @@ import { isAssignmentCommand, assignmentCli } from './assignment.mjs';
 // The CLI is an HTTP client. It has no database access or separate business rules.
 const args = process.argv.slice(2);
 const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
-Skills: audienti skills list|show audienti|helper NAME --file INPUT.json|- [--json]
+Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti tools list|describe|decide|runs|balance [--help]
 Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|automation|activity report [--profile PATH]
 Prospecting: audienti prospecting settings show|save|accounts|account-show|account-save|history [--profile PATH]
@@ -49,14 +49,14 @@ Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (pe
 Queue: audienti queue [list]|next|claim ID|done ID [--note TEXT]|skip ID --note TEXT|release ID  (start here after you connect)
 Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your owner go to Operator, not chat)
            audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
-Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
+Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|read|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
 Offers: offer list|show ID|create|update ID|archive ID|restore ID
 Offer options: --file FIELDS.json --request-id UUID --expected-revision N --revision N --archived true|false
   audienti prospects replies set|get|list PERSON --workspace ID [--evidence EVIDENCE] [--file INPUT.json]
 Account intake: prospects intake --workspace ID --file INPUT.json
                 prospects conversation append|list PERSON --workspace ID
 Discovery: prospects list|get ID|observation create|citation create|evidence create
-           prospects contacts list|record PERSON --workspace ID
+           prospects contacts list|record PERSON [--file INPUT.json] --workspace ID
            prospects contacts get|retire PERSON CONTACT --workspace ID
            prospects suppression get|set ID --workspace ID
            guardrails show|pause|resume --workspace ID
@@ -92,7 +92,30 @@ Start local MCP stdio server: mcp
 --json writes the API response envelope.
 `;
 
+// Example inputs for the commands that save prospects, so `--help` shows a working shape.
+const examples = {
+  'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'web', url: 'https://example.com/team/jane' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
+  'prospects citation create': { requestId: 'UUID', source: { kind: 'prospect', id: 'PERSON_PROSPECT_ID' }, target: { kind: 'prospect', id: 'COMPANY_PROSPECT_ID' }, edgeType: 'works_at', roles: [{ roleId: 'role-1', title: 'VP Sales', current: true, observedAt: '2026-01-01T00:00:00Z' }] },
+  'prospects evidence create': { requestId: 'UUID', subject: { kind: 'person', prospectId: 'PROSPECT_ID' }, campaignId: 'CAMPAIGN_ID', campaignRevision: 1, kind: 'interpretation', data: { conclusion: 'Leads a 40-person sales team', reason: 'Team page lists her as VP Sales' }, sourceUrl: 'https://example.com/team', observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
+  'prospects contacts record': { kind: 'email|linkedin|mobile', value: 'jane@example.com, or +15551234567 for mobile', reason: 'Published on https://example.com/contact', requestId: 'UUID', provenance: { observationId: 'OBSERVATION_ID' } },
+  'campaigns qualification submit': { requestId: 'UUID', campaignId: 'CAMPAIGN_ID', campaignRevision: 1, prospectId: 'PERSON_PROSPECT_ID', companyProspectId: 'COMPANY_PROSPECT_ID', companyIcp: { status: 'pass|fail|unverified', evidenceIds: ['COMPANY_EVIDENCE_ID'] }, personIcp: { status: 'pass|fail|unverified', evidenceIds: ['PERSON_EVIDENCE_ID'] }, signal: { status: 'match|no_match|unverified|not_required', evidenceIds: [] }, fit: { status: 'high|moderate|low|no_fit|unscored', evidenceIds: ['PERSON_EVIDENCE_ID'], reason: 'why' }, skill: { id: 'signal-prospect-research', version: '1' } },
+};
+
+function commandHelp() {
+  const words = args.slice(0, args.findIndex(value => value.startsWith('-'))).filter(Boolean);
+  const lines = usage.split('\n');
+  let shown = [];
+  for (let n = Math.min(words.length, 2); n > 0 && shown.length === 0; n--) {
+    const prefix = words.slice(0, n).join(' ');
+    shown = lines.filter(line => line.includes(prefix));
+  }
+  console.log(shown.length ? shown.map(line => line.trim()).join('\n') : usage);
+  const example = Object.entries(examples).find(([command]) => words.join(' ').startsWith(command));
+  if (example) console.log(`\nExample --file INPUT.json for ${example[0]}:\n${JSON.stringify(example[1], null, 1)}\nSteps and rules: the "Save prospects and contacts" section of llms.txt.`);
+}
+
 async function main() {
+  if (args.length > 1 && args.slice(1).some(value => value === '--help' || value === '-h') && !['tools', 'skills'].includes(args[0])) { commandHelp(); return; }
   if(args[0]==='prospects'&&['intake','conversation'].includes(args[1])){const {accountIntakeCli}=await import('./account-intake.mjs');await accountIntakeCli(args);return;}
   if(args[0]==='sender'){const {senderAccountsCli}=await import('./sender-accounts.mjs');await senderAccountsCli(args);return;}
   if(args[0]==='prospecting'){const {prospectingSettingsCli}=await import('./prospecting-settings.mjs');await prospectingSettingsCli(args);return;}
@@ -132,6 +155,7 @@ async function main() {
   if (args[0] === 'whoami' && profileIndex > 0 && args[profileIndex + 1]) {
     const { configuration } = await import('./workspaces.mjs');
     profileConfig = configuration(args[profileIndex + 1], 'account:read');
+    if (!profileConfig.token) throw new Error('whoami needs a human account token. Agents confirm their connection with: audienti workspace list --profile PATH');
     args.splice(profileIndex, 2);
   }
   if (args[0] !== 'whoami' || args.length > 2 || (args[1] && args[1] !== '--json')) throw new Error('Unknown command or option. Use audienti --help.');

@@ -174,7 +174,9 @@ For `prospect_record_evidence` with `kind:interpretation`, `data` accepts
 observation IDs; a citation ID or local receipt reference is not an observation.
 Keep topic/post context in the existing saved graph, the reason and the local
 receipt, rather than inventing extra `data` keys. For example, replace every
-bracketed value with the selected workspace or a returned server ID:
+bracketed value: use the selected workspace, actual saved IDs, a new stable
+request UUID, and the installed skill version from `skills list --compact --json`
+(MCP: `skills_list` with `compact: true`; HTTP: `GET /api/v1/skills?compact=true`):
 
 ```json
 {
@@ -189,7 +191,7 @@ bracketed value with the selected workspace or a returned server ID:
   },
   "sourceUrl": "https://example.org/observed-source",
   "observedAt": null,
-  "skill": { "id": "audienti", "version": "1.3.0" }
+  "skill": { "id": "audienti", "version": "<installed skill version>" }
 }
 ```
 

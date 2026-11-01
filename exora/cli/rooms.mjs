@@ -6,9 +6,9 @@ import {setTimeout as sleep} from 'node:timers/promises';
 import {callWorkspace,configuration} from './workspaces.mjs';
 import {readJsonFile} from './json-file.mjs';
 // Agent rooms client. Delivery is polled by the agent; nothing here opens a port.
-const valued=['profile','workspace','sort','since','about','limit','to','room','thread','body','body-file','file','answer-by','expires-at','request-id','with','slug','title','purpose','members','after','handle','exec','interval','timeout'];
+const valued=['profile','workspace','sort','since','about','limit','to','room','thread','body','body-file','file','answer-by','expires-at','request-id','with','slug','title','purpose','members','after','q','handle','exec','interval','timeout'];
 const switches=['retired','stop','once','json','unable','clear'];
-export const roomsUsage='Rooms: audienti rooms directory [--sort load] | inbox [--since ITEM] [--about TYPE:ID] [--limit N] | ack ITEM... | send (--to HANDLE|--room ROOM) [--thread ID] (--body TEXT|--body-file PATH|-) [--about TYPE:ID,...] [--answer-by ISO] [--expires-at ISO] [--unable] [--request-id UUID] | note (--body TEXT|--body-file PATH|-|--clear) | thread ID [--after N] | threads --about TYPE:ID | create (--with HANDLE | --slug S --title T [--purpose P] [--members a,b]) | list [--retired] | retire ROOM | restore ROOM | redact MESSAGE | resume THREAD | pause on|off | profile AGENT_ID [--handle H] [--about TEXT] | hook [--stop] | watch --exec CMD [--interval SECONDS] [--once] | wait --thread ID [--timeout SECONDS]';
+export const roomsUsage='Rooms: audienti rooms directory [--sort load] | inbox [--since ITEM] [--about TYPE:ID] [--limit N] | ack ITEM... | send (--to HANDLE|--room ROOM) [--thread ID] (--body TEXT|--body-file PATH|-) [--about TYPE:ID,...] [--answer-by ISO] [--expires-at ISO] [--unable] [--request-id UUID] | note (--body TEXT|--body-file PATH|-|--clear) | thread ID [--after N] | threads --about TYPE:ID | create (--with HANDLE | --slug S --title T [--purpose P] [--members a,b]) | list [--retired] [--q TEXT] | read ROOM [--q TEXT] | retire ROOM | restore ROOM | redact MESSAGE | resume THREAD | pause on|off | profile AGENT_ID [--handle H] [--about TEXT] | hook [--stop] | watch --exec CMD [--interval SECONDS] [--once] | wait --thread ID [--timeout SECONDS]';
 export const WATCH_MIN_INTERVAL=60,WAIT_MAX_TIMEOUT=900,WAIT_POLL=30,HOOK_CACHE=60;
 function parse(args){
  const position=[],flags={};
@@ -120,7 +120,8 @@ export async function roomsCli(args){
   case 'thread':need(1,'thread ID [--after N]');return print(await call('rooms_thread',{threadId:rest[0],...(flags.after?{after:integer(flags.after,'After')}:{})},flags));
   case 'threads':need(0,'threads --about TYPE:ID');return print(await call('rooms_threads',{about:flags.about},flags));
   case 'create':need(0,'create (--with HANDLE | --slug S --title T)');return print(await call('rooms_create',flags.with?{kind:'direct',with:flags.with}:{kind:'group',slug:flags.slug,title:flags.title,...(flags.purpose?{purpose:flags.purpose}:{}),...(flags.members?{members:flags.members.split(',')}:{})},flags));
-  case 'list':need(0,'list [--retired]');return print(await call('rooms_list',{...(flags.retired?{retired:true}:{})},flags));
+  case 'list':need(0,'list [--retired] [--q TEXT]');return print(await call('rooms_list',{...(flags.retired?{retired:true}:{}),...(flags.q!==undefined?{q:flags.q}:{})},flags));
+  case 'read':need(1,'read ROOM [--q TEXT]');return print(await call('rooms_read',{room:rest[0],...(flags.q!==undefined?{q:flags.q}:{})},flags));
   case 'retire':case 'restore':need(1,`${command} ROOM`);return print(await call(`rooms_${command}`,{room:rest[0]},flags));
   case 'redact':need(1,'redact MESSAGE');return print(await call('rooms_redact',{messageId:rest[0]},flags));
   case 'resume':need(1,'resume THREAD');return print(await call('rooms_resume',{threadId:rest[0]},flags));

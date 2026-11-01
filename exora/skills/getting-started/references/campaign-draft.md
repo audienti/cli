@@ -12,7 +12,7 @@ Fill this before you ask the owner anything. Mark each value with where it came 
 | Buyer title and seniority | Audience filters | Who replies to the owner or signs deals. |
 | Who to avoid | Do-not-contact list | Current customers, partners, competitors (`dnc add` or `dnc import`). |
 | Premise | Campaign premise | One sentence: why these people, why now. |
-| Approach | Campaign approach pin | One published approach from `approach list`, with one line on why. |
+| Approach | Campaign approach pin | One approach from `approach list`, or a new one drafted with the approach-design skill, with one line on why. |
 | Channels | Campaign channels | `email` and `linkedin`, only for accounts you reported. |
 | Test length | Campaign `schedule.endAt`, `schedule.maxCompanies` | 30 days from activation, or a company cap. |
 | Success measure | Approach goal stage | Meetings booked. |
@@ -33,5 +33,6 @@ name or notes.
 | Campaign | `audienti campaign create --file CAMPAIGN.json --request-id UUID` | `campaign_create` |
 | Next test | `audienti campaign successor ID --file CAMPAIGN.json --request-id UUID` | `campaign_successor` |
 
-Run each command without arguments to see its fields, or read the API schema at
-`/api/v1/openapi.json`.
+Read each command's request fields in the API schema at `/api/v1/openapi.json`
+(search for the MCP tool name above). A campaign also needs the `audienceRevision`
+and `offerRevision` returned when you saved the audience and offer.

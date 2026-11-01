@@ -1,6 +1,19 @@
 # Helpers and installation
 
-Read the installed package version with `skills show audienti --json`. Node 24.22.1 is the repository's supported runtime. The helper
+Use `audienti skills list --compact --json` to discover resource names without
+loading every schema. `audienti skills read audienti helpers/NAME.json --json`
+returns one helper contract; `read audienti references/helpers.md` reads this
+guide. MCP has `skills_list {compact:true}` and `skills_read {id:"audienti",
+resource:"helpers/NAME.json"}`. Public HTTP has `GET /api/v1/skills?compact=true`
+and `GET /api/v1/skills/audienti/resource?path=helpers/NAME.json`.
+
+All three return the same package version and digest. A resource response has
+`id`, `version`, `digest`, `path` and string `content`; for a helper schema, parse
+`content` as JSON. The digest describes the whole package, not the one resource.
+Use the full artifact's ordered files to verify it. The full catalog,
+`skills show`, complete downloads and helper calls remain supported.
+
+Read the installed package version with `skills list --compact --json`. Node 24.22.1 is the repository's supported runtime. The helper
 scripts use only Node built-ins and need no network, login or provider credentials.
 The CLI/MCP adapter uses the dependencies shipped with the CLI distribution.
 
@@ -11,7 +24,7 @@ action; no command here installs a plugin, grants access or modifies credentials
 For another Node-capable agent, retain the directory structure and invoke
 `scripts/run.mjs`. To use local MCP, run `node cli/audienti.mjs mcp` from the extracted CLI directory
 through the host's stdio configuration. The server exposes `skills_list`,
-`skills_show`, `skills_profile_queries`, `skills_profile_candidates`,
+`skills_show`, `skills_read`, `skills_profile_queries`, `skills_profile_candidates`,
 `skills_profile_completeness` and `skills_profile_evidence` without
 account authentication; existing CRM/tools still check their own credentials.
 

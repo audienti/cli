@@ -5,7 +5,7 @@ const page=z.object({cursor:uuid.optional(),limit:z.number().int().min(1).max(10
 const endpoint=z.object({kind:z.enum(['prospect','profile']),id:uuid}).strict();
 const subject=z.object({kind:z.enum(['person','company']),prospectId:uuid}).strict();
 const text=z.string().nullable().optional();
-const fields=z.object({name:text,title:text,location:text,bio:text,domain:text,description:text}).strict();
+const fields=z.object({name:text,title:text,location:text,bio:text,domain:text,description:text,imageUrl:text}).strict();
 const status=(values)=>z.object({status:z.enum(values),evidenceIds:z.array(uuid)}).strict();
 const root=a=>`/workspaces/${a.workspaceId}/prospects`;
 const body=a=>Object.fromEntries(Object.entries(a).filter(([k])=>k!=='workspaceId'));
