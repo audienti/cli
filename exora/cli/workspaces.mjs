@@ -2,14 +2,17 @@ import {randomUUID} from 'node:crypto';
 import {notificationOperations} from './notification-operations.mjs';
 import {roomsOperations} from './rooms-operations.mjs';
 import {queueOperations} from './queue-operations.mjs';
+import {kvOperations} from './kv-operations.mjs';
+import {outcomeOperations} from './outcome-operations.mjs';
 import {questionOperations} from './question-operations.mjs';
 import {searchOperations} from './search-operations.mjs';
 import {fileOperations,uploadFileContent} from './file-operations.mjs';
-import {approachOperations} from './approach-operations.mjs';
+import {playbookOperations} from './playbook-operations.mjs';
 import {connectionRegistryOperations} from './connection-registry-operations.mjs';
 import { budgetOperations } from './budget-operations.mjs';
+import { secretOperations } from './secret-operations.mjs';
 import { hostedToolOperations, paidToolByName, isPaidToolOperation, paidToolResult } from './tools-operations.mjs';
-import { workspaceExecutionOperations } from './work-execution-operations.mjs';
+import { workspaceExecutionOperations, managedAccountOperations } from './work-execution-operations.mjs';
 import { workFeedbackOperations } from './work-feedback-operations.mjs';
 import { accountReplyOperations } from './account-reply-operations.mjs';
 import { accountIntakeOperations } from './account-intake-operations.mjs';
@@ -38,14 +41,18 @@ export const operations = {
  ...notificationOperations,
  ...roomsOperations,
  ...queueOperations,
+ ...kvOperations,
+ ...outcomeOperations,
  ...questionOperations,
  ...fileOperations,
- ...approachOperations,
+ ...playbookOperations,
  ...connectionRegistryOperations,
  ...budgetOperations,
+ ...secretOperations,
  ...hostedToolOperations,
  ...workOperations,
  ...workspaceExecutionOperations,
+ ...managedAccountOperations,
  ...workFeedbackOperations,
  ...suppressionOperations,
  ...guardrailsOperations,
@@ -122,7 +129,7 @@ export function validateUrl(value) {
 }
 export class WorkspaceRequestError extends Error {
  constructor(status, code, message, retryAt, blockers, requestTraceId) { super(message); this.status = status; this.code = code; this.retryAt = retryAt; this.blockers = blockers; this.requestTraceId = requestTraceId; }
- toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}) }; }
+ toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}), ...(this.charged ? {charged:this.charged} : {}) }; }
 }
 export class HostedResponseUnknown extends Error {
  constructor(requestId, reason, requestTraceId) { super('The server response is unknown. Paid work may have started. Retry using the same requestId and principal; never generate a new ID to recover this call.'); this.requestId=requestId; this.reason=reason; this.requestTraceId=requestTraceId; }
@@ -133,27 +140,30 @@ export async function callWorkspace(name, args, config) {
  const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new Error(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`);
  const input={...parsed.data};
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
- if(operation.scoped) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error('Select a workspace or supply --workspace ID.'); }
+ // #333: an agent's own queue covers all its workspaces; a user's reads the selected workspace, as before.
+ if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error('Select a workspace or supply --workspace ID.'); }
  const url=validateUrl(config.url); if(!config.token) throw new Error('A workspace:access token is required. Configure the environment or a private profile.');
  const target=new URL(`/api/v1${operation.path(input)}`,url);
- let response;try {response=await fetch(target,{method:operation.method,headers:{Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json',...((operation.traced||name.startsWith('tools_'))?{'X-Audienti-Interface':config.interface==='mcp'?'mcp':'cli'}:{})},...(['POST','PUT','PATCH'].includes(operation.method)?{body:JSON.stringify(operation.body?.(input)??{})}:{}),redirect:'error',signal:AbortSignal.timeout(operation.timeoutMs ?? 10000)});}catch(error){if(isPaidToolOperation(name))throw new HostedResponseUnknown(input.requestId,['TimeoutError','AbortError'].includes(error?.name)?'timeout':'transport_failure');throw new Error('Could not reach the API. Redirects are not followed.');}
+ let response;try {response=await fetch(target,{method:operation.method,headers:{Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json',...((operation.traced||name.startsWith('tools_'))?{'X-Audienti-Interface':config.interface==='mcp'?'mcp':'cli'}:{})},...(['POST','PUT','PATCH'].includes(operation.method)?{body:JSON.stringify(operation.body?.(input)??{})}:{}),redirect:'error',signal:AbortSignal.timeout(operation.timeoutMs ?? 10000)});}catch(error){if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,['TimeoutError','AbortError'].includes(error?.name)?'timeout':'transport_failure');throw new Error('Could not reach the API. Redirects are not followed.');}
  const headerTrace=(operation.traced||name.startsWith('tools_'))&&uuid.safeParse(response.headers.get('x-request-trace-id')).success?response.headers.get('x-request-trace-id'):undefined;
- let result;try{result=await response.json();}catch{if(isPaidToolOperation(name))throw new HostedResponseUnknown(input.requestId,'invalid_response',headerTrace);throw new Error('The API returned an invalid response.');}
+ let result;try{result=await response.json();}catch{if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,'invalid_response',headerTrace);throw new Error('The API returned an invalid response.');}
  const requestTraceId=uuid.safeParse(result?.requestTraceId).success?result.requestTraceId:headerTrace;
  if(!response.ok) {
   const code = typeof result?.error?.code==='string' && /^[a-z_]+$/.test(result.error.code) ? result.error.code : 'request_failed';
   const retryAt = typeof result?.error?.retryAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.error.retryAt) ? result.error.retryAt : undefined;
-  const detail = ((response.status===400 && code==='invalid_fields') || (response.status===409 && code==='identity_conflict')) && typeof result?.error?.message==='string' && result.error.message.length<=300 && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
-  const blockers = code==='execution_blocked' && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
+  const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===409 && (code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready'))) && typeof result?.error?.message==='string' && result.error.message.length<=1000 && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
+  const blockers = (code==='execution_blocked' || code==='campaign_not_ready') && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
   const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId);
-  if(isPaidToolOperation(name)){error.requestId=input.requestId;error.recovery=response.status>=500?'retry_same_request_id':'inspect_rejection';}
+  // What a failed paid check already spent (pico USD), so a caller counting its spend never loses it.
+  if(typeof result?.error?.charged==='string'&&/^\d{1,20}$/.test(result.error.charged))error.charged=result.error.charged;
+  if(isPaidToolOperation(name,input)){error.requestId=input.requestId;error.recovery=response.status>=500?'retry_same_request_id':'inspect_rejection';}
   throw error;
  }
- if(!result || !Object.hasOwn(result,'data')) {if(isPaidToolOperation(name))throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);throw new Error('The API returned an invalid response.');}
- const paidResult = paidToolResult(name, result?.data);
- if(isPaidToolOperation(name)&&(!uuid.safeParse(paidResult?.operationId).success||paidResult.requestId!==input.requestId||!['running','succeeded','failed','uncertain','rejected'].includes(paidResult.status)))throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);
+ if(!result || !Object.hasOwn(result,'data')) {if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);throw new Error('The API returned an invalid response.');}
+ const paidResult = paidToolResult(name, result?.data, input);
+ if(isPaidToolOperation(name,input)&&(!uuid.safeParse(paidResult?.operationId).success||paidResult.requestId!==input.requestId||!['running','succeeded','failed','uncertain','rejected'].includes(paidResult.status)))throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);
  if(name==='workspace_select') config.workspaceId=input.workspaceId;
- return {data:result.data,...(requestTraceId?{requestTraceId}:{})};
+ return {data:operation.transform?operation.transform(result.data,input):result.data,...(requestTraceId?{requestTraceId}:{})};
 }
 export async function workspaceCli(args) {
  const flags={}; const position=[];

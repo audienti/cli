@@ -7,8 +7,8 @@ import {callWorkspace,configuration} from './workspaces.mjs';
 import {readJsonFile} from './json-file.mjs';
 // Agent rooms client. Delivery is polled by the agent; nothing here opens a port.
 const valued=['profile','workspace','sort','since','about','limit','to','room','thread','body','body-file','file','answer-by','expires-at','request-id','with','slug','title','purpose','members','after','q','handle','exec','interval','timeout'];
-const switches=['retired','stop','once','json','unable','clear'];
-export const roomsUsage='Rooms: audienti rooms directory [--sort load] | inbox [--since ITEM] [--about TYPE:ID] [--limit N] | ack ITEM... | send (--to HANDLE|--room ROOM) [--thread ID] (--body TEXT|--body-file PATH|-) [--about TYPE:ID,...] [--answer-by ISO] [--expires-at ISO] [--unable] [--request-id UUID] | note (--body TEXT|--body-file PATH|-|--clear) | thread ID [--after N] | threads --about TYPE:ID | create (--with HANDLE | --slug S --title T [--purpose P] [--members a,b]) | list [--retired] [--q TEXT] | read ROOM [--q TEXT] | retire ROOM | restore ROOM | redact MESSAGE | resume THREAD | pause on|off | profile AGENT_ID [--handle H] [--about TEXT] | hook [--stop] | watch --exec CMD [--interval SECONDS] [--once] | wait --thread ID [--timeout SECONDS]';
+const switches=['retired','stop','once','json','unable','clear','brief'];
+export const roomsUsage='Rooms: audienti rooms directory [--sort load] | inbox [--since ITEM] [--about TYPE:ID] [--limit N] [--brief] | ack ITEM... | send (--to HANDLE|--room ROOM) [--thread ID] (--body TEXT|--body-file PATH|-) [--about TYPE:ID,...] [--answer-by ISO] [--expires-at ISO] [--unable] [--request-id UUID] | note (--body TEXT|--body-file PATH|-|--clear) | thread ID [--after N] | threads --about TYPE:ID | create (--with HANDLE | --slug S --title T [--purpose P] [--members a,b]) | list [--retired] [--q TEXT] | read ROOM [--q TEXT] | retire ROOM | restore ROOM | redact MESSAGE | resume THREAD | pause on|off | profile AGENT_ID [--handle H] [--about TEXT] | hook [--stop] | watch --exec CMD [--interval SECONDS] [--once] | wait --thread ID [--timeout SECONDS]';
 export const WATCH_MIN_INTERVAL=60,WAIT_MAX_TIMEOUT=900,WAIT_POLL=30,HOOK_CACHE=60;
 function parse(args){
  const position=[],flags={};
@@ -51,7 +51,7 @@ async function hook(flags,now=Date.now()){
  const path=statePath(flags),state=readState(path);
  let items=state.items;
  if(!items||!state.checkedAt||now-state.checkedAt>=HOOK_CACHE*1000){
-  try{items=(await call('rooms_inbox',{limit:20},flags)).data.items.map(i=>({id:i.id,reason:i.reason,overdue:i.overdue,answerBy:i.answerBy,message:{threadId:i.message.threadId,from:{handle:i.message.from.handle}}}))}catch{return}
+  try{items=(await call('rooms_inbox',{limit:20,brief:true},flags)).data.items.map(i=>({id:i.id,reason:i.reason,overdue:i.overdue,answerBy:i.answerBy,message:{threadId:i.message.threadId,from:{handle:i.message.from.handle}}}))}catch{return}
   Object.assign(state,{checkedAt:now,items});
  }
  if(flags.stop){
@@ -102,7 +102,7 @@ export async function roomsCli(args){
  const need=(count,text)=>{if(rest.length!==count)throw new Error(`Use audienti rooms ${text}.`)};
  switch(command){
   case 'directory':need(0,'directory [--sort load]');return print(await call('rooms_directory',{...(flags.sort?{sort:flags.sort}:{})},flags));
-  case 'inbox':need(0,'inbox');return print(await call('rooms_inbox',{...(flags.since?{since:flags.since}:{}),...(flags.about?{about:flags.about}:{}),...(flags.limit?{limit:integer(flags.limit,'Limit')}:{})},flags));
+  case 'inbox':need(0,'inbox');return print(await call('rooms_inbox',{...(flags.since?{since:flags.since}:{}),...(flags.about?{about:flags.about}:{}),...(flags.limit?{limit:integer(flags.limit,'Limit')}:{}),...(flags.brief?{brief:true}:{})},flags));
   case 'ack':if(!rest.length)throw new Error('Use audienti rooms ack ITEM....');return print(await call('rooms_ack',{ids:rest},flags));
   case 'send':{
    if(rest.length>1||(rest.length===1&&rest[0]!=='-'))throw new Error('Use audienti rooms send (--to HANDLE|--room ROOM) --body TEXT.');

@@ -12,9 +12,9 @@ export async function workExecutionCli(args) {
   const arg=args[i];if(arg==='--json')continue;if(!arg.startsWith('--')){positions.push(arg);continue;}
   const key=arg.slice(2);if(!['profile','workspace','action','claim','attempt','file','cursor','limit'].includes(key)||Object.hasOwn(flags,key)||!args[i+1]||args[i+1].startsWith('--'))throw Error('Unknown, repeated or incomplete execution option.');flags[key]=args[++i];
  }
- const command=positions[2],workspace=['claim','start','get'].includes(command),read=['get','lookup'].includes(command);
- const names={claim:'workspace_work_claim',start:'workspace_work_start',get:'workspace_work_attempt_get',release:'work_claim_release',lookup:'work_attempt_lookup',report:'work_result_report'};
- if(!names[command]||positions.length!==(workspace?4:3))throw Error('Use work execution claim|start|get PLAN, release|lookup --claim ID, or report --attempt ID.');
+ const command=positions[2],workspace=['claim','start','send','get'].includes(command),read=['get','lookup'].includes(command);
+ const names={claim:'workspace_work_claim',start:'workspace_work_start',send:'workspace_work_send',get:'workspace_work_attempt_get',release:'work_claim_release',lookup:'work_attempt_lookup',report:'work_result_report'};
+ if(!names[command]||positions.length!==(workspace?4:3))throw Error('Use work execution claim|start|send|get PLAN, release|lookup --claim ID, or report --attempt ID.');
  const allowed=['profile',...(workspace?['workspace','action']:command==='report'?['attempt']:['claim']),...(read?command==='get'?['cursor','limit']:[]:['file'])];
  if(Object.keys(flags).some(key=>!allowed.includes(key)))throw Error('Option does not apply to this execution command.');
  if(workspace&&!flags.action)throw Error('This command requires --action.');

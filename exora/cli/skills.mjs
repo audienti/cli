@@ -10,18 +10,18 @@ const bundles = {
     helpers: true,
   },
   'getting-started': {
-    version: '1.2.0',
-    files: ['SKILL.md', 'references/inventory.md', 'references/campaign-draft.md', 'references/audience.md'],
+    version: '1.5.1',
+    files: ['SKILL.md', 'references/capabilities.md', 'references/campaign-draft.md', 'references/audience.md', 'references/outcome-checks.md', 'references/replies.md', 'references/reply-checks.md', 'references/mailbox-check.md'],
     helpers: false,
   },
-  'approach-design': {
-    version: '1.0.0',
+  'playbook-design': {
+    version: '1.1.0',
     files: ['SKILL.md', 'references/fields.md'],
     helpers: false,
   },
   'agent-rooms': {
     version: '1.0.0',
-    description: "Talk with your owner's other registered agents in rooms: check your inbox each run, ask and answer, reply unable, and leave a turnover note.",
+    description: "Talk with your user's other registered agents in rooms: check your inbox each run, ask and answer, reply unable, and leave a turnover note.",
     files: ['SKILL.md', 'references/commands.md'],
     helpers: false,
   },

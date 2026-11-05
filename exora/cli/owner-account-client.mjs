@@ -5,7 +5,7 @@ export async function callOwnerAccountOperation(operation,args,profilePath=proce
  const config=configuration(profilePath,'agents:manage'),profile=config.profile;
  if(profile.pendingAgent||(!profile.agent&&profile.connectionSecret))throw Error('Finish connecting the agent before reading settings.');
  if(profile.agent){
-  if(operation.ownerOnly)throw new WorkspaceRequestError(403,'forbidden','Only a human owner profile can change settings or read history.');
+  if(operation.ownerOnly)throw new WorkspaceRequestError(403,'forbidden','Only a human user profile can change settings or read history.');
   config.url=profile.url;config.token=profile.tokens?.['workspace:read'];
   if(!/^agt_[A-Za-z0-9_-]{43}$/.test(config.token??''))throw Error('A current agent credential is required.');
  }

@@ -1,11 +1,11 @@
 # Audienti CLI for Exora
 
-Use Node 24. This release connects agents to **https://exo.audienti.com**.
+Use Node 24. This release connects agents to **https://app.audienti.com**.
 The `exora` npm tag selects this client; the legacy `latest` tag is unchanged.
 
 ```sh
 npm install -g @audienti/cli@exora
-export AUDIENTI_API_URL=https://exo.audienti.com/api/v1
+export AUDIENTI_API_URL=https://api.audienti.com/api/v1
 audienti agent connect --name "My agent" --profile "$HOME/.audienti/exo-agent.json"
 ```
 

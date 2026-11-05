@@ -25,7 +25,13 @@ const body=({workspaceId,planId,clientActionId,attemptId,...rest})=>rest;
 export const workspaceExecutionOperations={
  workspace_work_claim:{schema:z.object({...location,expectedRevision:z.number().int().positive(),requestId:uuid}).strict(),scoped:true,method:'POST',path:a=>`${path(a)}/claims`,body},
  workspace_work_start:{schema:z.object({...location,claimId:uuid,requestId:uuid}).strict(),scoped:true,method:'POST',path:a=>`${path(a)}/start`,body},
+ workspace_work_send:{schema:z.object({...location,claimId:uuid,requestId:uuid}).strict(),scoped:true,method:'POST',path:a=>`${path(a)}/send`,body,description:'LinkedIn accounts connected through Audienti only. Starts the claimed, approved action and sends it once through the managed account, then records the result. Replaying the same claim returns the recorded send; it never sends again.'},
  workspace_work_attempt_get:{schema:z.object({...location,historyCursor:uuid.optional(),historyLimit:z.number().int().min(1).max(100).optional()}).strict(),scoped:true,method:'GET',path:a=>{const q=new URLSearchParams();for(const key of ['historyCursor','historyLimit'])if(a[key]!==undefined)q.set(key,String(a[key]));return `${path(a)}/attempt?${q}`;}},
+};
+// LinkedIn accounts connected through Audienti. Only the user connects one; agents list them and send through work send.
+export const managedAccountOperations={
+ workspace_managed_accounts_list:{schema:z.object({workspaceId:uuid.optional()}).strict(),scoped:true,method:'GET',path:a=>`/workspaces/${a.workspaceId}/managed-accounts`,description:'List the LinkedIn accounts connected through Audienti in this workspace, with their sending account IDs and status.'},
+ workspace_managed_account_connect:{schema:z.object({workspaceId:uuid.optional()}).strict(),scoped:true,method:'POST',path:a=>`/workspaces/${a.workspaceId}/managed-accounts/connect`,body:()=>({}),description:'The user only, not agents. Returns a sign-in link, valid 15 minutes, where the user connects a LinkedIn account through Audienti.'},
 };
 export const narrowExecutionOperations={
  work_claim_release:{schema:z.object({claimId:uuid,requestId:uuid,reason}).strict(),method:'POST',path:a=>`/work-execution/claims/${a.claimId}/release`,body:({claimId,...rest})=>rest},

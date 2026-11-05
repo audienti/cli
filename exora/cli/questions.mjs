@@ -1,6 +1,6 @@
 import {callWorkspace,configuration} from './workspaces.mjs';
-const askHelp='Use ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID].';
-const help='Use questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT.';
+const askHelp='Use ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID] [--topic KEY]. A newer open question with the same --topic replaces the older one.';
+const help='Use questions [list] [--state open|answered|withdrawn|superseded|all] | show ID | withdraw ID | answer ID --answer TEXT.';
 function parse(args,allowed,usage){
  const position=[],flags={},options=[];
  for(let i=1;i<args.length;i++){
@@ -14,9 +14,9 @@ function parse(args,allowed,usage){
  return {position,flags,options};
 }
 export async function askCli(args){
- const {position,flags,options}=parse(args,['profile','workspace','context','option','campaign','task'],askHelp);
+ const {position,flags,options}=parse(args,['profile','workspace','context','option','campaign','task','topic'],askHelp);
  if(position.length!==1||!position[0].trim())throw new Error(askHelp);
- const input={workspaceId:flags.workspace,question:position[0],...(flags.context?{context:flags.context}:{}),...(options.length?{options}:{}),...(flags.campaign?{campaignId:flags.campaign}:{}),...(flags.task?{taskId:flags.task}:{})};
+ const input={workspaceId:flags.workspace,question:position[0],...(flags.context?{context:flags.context}:{}),...(options.length?{options}:{}),...(flags.campaign?{campaignId:flags.campaign}:{}),...(flags.topic?{topic:flags.topic}:{}),...(flags.task?{taskId:flags.task}:{})};
  console.log(JSON.stringify((await callWorkspace('agent_question_ask',input,configuration(flags.profile))).data));
 }
 export async function questionsCli(args){

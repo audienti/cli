@@ -9,7 +9,7 @@ const path = name => a => {
 export const cohortOperations = {
  workspace_analytics_cohorts: {
   schema: z.object({ ...filters, stage: z.string().min(1).max(100).optional(), cohorts: z.number().int().min(1).max(52).optional(), horizon: z.number().int().min(1).max(26).optional() }).strict(), method: 'GET', path: path('cohorts'), scoped: true,
-  description: `Weekly entry cohorts: people grouped by the UTC week (Monday start) they were admitted to a campaign, and for each week since admission the share that reached a stage. stage is "goal" (default, each approach's goal) or a stage key from the stages list in the response. cohorts is the number of weeks (default 12, at most 52); horizon is the number of weeks since entry shown after week 0 (default 8, at most 26). A cell is empty (null) until every member of the cohort has had that long. ${FILTER_TEXT} Same figures as Analytics > Cohorts.`,
+  description: `Weekly entry cohorts: people grouped by the UTC week (Monday start) they were admitted to a campaign, and for each week since admission the share that reached a stage. stage is "goal" (default, each playbook's goal) or a stage key from the stages list in the response. cohorts is the number of weeks (default 12, at most 52); horizon is the number of weeks since entry shown after week 0 (default 8, at most 26). A cell is empty (null) until every member of the cohort has had that long. ${FILTER_TEXT} Same figures as Analytics > Cohorts.`,
  },
  workspace_stage_aging: {
   schema: z.object({ ...filters, thresholdDays: z.number().int().min(1).max(365).optional() }).strict(), method: 'GET', path: path('stage-aging'), scoped: true,
