@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { callWorkspace, configuration } from './workspaces.mjs';
 export async function recipientsCli(args) {
   const flags = {}, positions = [];
-  const allowed = ['workspace','profile','status','cursor','limit','history-cursor','history-limit','file'];
+  const allowed = ['workspace','profile','status','cursor','limit','history-cursor','history-limit','file','request-id'];
   for (let i=0;i<args.length;i++) {
     const arg=args[i]; if(arg==='--json')continue;
     if(!arg.startsWith('--')){positions.push(arg);continue;}
@@ -12,7 +12,7 @@ export async function recipientsCli(args) {
   }
   const command=positions[2];
   if(positions[0]!=='prospects'||positions[1]!=='contacts'||!['list','get','record','retire'].includes(command)||positions.length!==(['get','retire'].includes(command)?5:4))throw Error('Use prospects contacts list|record PERSON or get|retire PERSON CONTACT --workspace ID.');
-  const valid=['workspace','profile',...(command==='list'?['status','cursor','limit']:command==='get'?['history-cursor','history-limit']:['file'])];
+  const valid=['workspace','profile',...(command==='list'?['status','cursor','limit']:command==='get'?['history-cursor','history-limit']:['file','request-id'])];
   if(Object.keys(flags).some(k=>!valid.includes(k)))throw Error('Option does not apply to this contact command.');
   let input={};
   if(['record','retire'].includes(command)){
@@ -20,6 +20,10 @@ export async function recipientsCli(args) {
     const raw=readFileSync(flags.file);if(raw.length>65536)throw Error('payload_too_large');
     try{input=JSON.parse(raw.toString('utf8'));}catch{throw Error('validation_error');}
     if(!input||typeof input!=='object'||Array.isArray(input)||['workspaceId','prospectId','contactId'].some(k=>Object.hasOwn(input,k)))throw Error('invalid_fields');
+  }
+  if(flags['request-id']!==undefined){
+    if(input.requestId!==undefined&&input.requestId!==flags['request-id'])throw Error('--request-id differs from requestId in the file.');
+    input.requestId=flags['request-id'];
   }
   Object.assign(input,{workspaceId:flags.workspace,prospectId:positions[3]});
   if(['get','retire'].includes(command))input.contactId=positions[4];

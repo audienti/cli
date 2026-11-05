@@ -49,7 +49,7 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience summary [--audience ID]|people ID|companies ID
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
-Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in)
+Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
 Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your user go to Operator, not chat)
            audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
@@ -61,7 +61,7 @@ Offer options: --file FIELDS.json --request-id UUID --expected-revision N --revi
 Account intake: prospects intake --workspace ID --file INPUT.json
                 prospects conversation append|list PERSON --workspace ID
 Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|citation create|evidence create
-           prospects contacts list|record PERSON [--file INPUT.json] --workspace ID
+           prospects contacts list|record PERSON [--file INPUT.json] [--request-id UUID] --workspace ID
            prospects contacts get|retire PERSON CONTACT --workspace ID
            prospects suppression get|set ID --workspace ID
            guardrails show|pause|resume --workspace ID
@@ -69,7 +69,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            dnc import --file LIST.csv --workspace ID  (at most 5,000 rows; reports added, skipped and invalid rows)
            dnc export [--output FILE.csv] --workspace ID
            secret list [--workspace ID]  (names only)
-           secret get NAME [--workspace ID] [--json]  (prints the value; every read is logged)
+           secret get NAME [--workspace ID] [--json]  (prints the value; the secret records who read it last and when)
            budgets show --workspace ID
            budgets alerts --workspace ID [--limit N]
            usage breakdown [--workspace ID] [--since month|7d|30d|90d] [--by tool|provider|model|caller|day] [--format json|csv]
@@ -78,6 +78,8 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
 Qualification: campaigns qualification submit --file INPUT.json
 Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches with the audience filters, checks each person, admits only fits; stops at N fits or the credit cap and reports the spend)
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
+Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
+                  campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
 Playbooks: playbook list|show ID|save --file REQUEST.json|progress ID|record --file REQUEST.json
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
@@ -103,7 +105,7 @@ Start local MCP stdio server: mcp
 
 // Example inputs for the commands that save prospects, so `--help` shows a working shape.
 const examples = {
-  'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'web', url: 'https://example.com/team/jane' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
+  'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'linkedin', url: 'https://www.linkedin.com/in/jane-doe' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
   'prospects citation create': { requestId: 'UUID', source: { kind: 'prospect', id: 'PERSON_PROSPECT_ID' }, target: { kind: 'prospect', id: 'COMPANY_PROSPECT_ID' }, edgeType: 'works_at', roles: [{ roleId: 'role-1', title: 'VP Sales', current: true, observedAt: '2026-01-01T00:00:00Z' }] },
   'prospects evidence create': { requestId: 'UUID', subject: { kind: 'person', prospectId: 'PROSPECT_ID' }, campaignId: 'CAMPAIGN_ID', campaignRevision: 1, kind: 'interpretation', data: { conclusion: 'Leads a 40-person sales team', reason: 'Team page lists her as VP Sales' }, sourceUrl: 'https://example.com/team', observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
   'prospects contacts record': { kind: 'email|linkedin|mobile|phone', value: 'jane@example.com, or +15551234567 for a mobile or a direct office phone', reason: 'Published on https://example.com/contact', requestId: 'UUID', provenance: { observationId: 'OBSERVATION_ID' } },

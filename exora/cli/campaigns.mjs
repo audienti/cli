@@ -3,7 +3,7 @@ import {readJsonFile} from './json-file.mjs';
 export async function campaignCli(args){
  const position=[],flags={};for(let i=0;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}
-  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
+  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url','add','remove','set'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
   flags[key]=args[++i];
  }
  const command=position[1];
@@ -21,8 +21,21 @@ export async function campaignCli(args){
   const {randomUUID}=await import('node:crypto');
   console.log(JSON.stringify(await callWorkspace('campaign_prospect_check',{workspaceId:flags.workspace,campaignId:position[2],url:flags.url,requestId:flags['request-id']??randomUUID()},configuration(flags.profile))));return;
  }
+ if(command==='targets'){
+  if(position.length!==3)throw new Error('Use campaign targets ID [--add a.com,b.com] [--remove a.com] [--set FILE|-] [--expected-revision N].');
+  const config=configuration(flags.profile),input={workspaceId:flags.workspace,campaignId:position[2]};
+  const change=['add','remove','set'].some(k=>flags[k]!==undefined);
+  if(!change){if(flags.limit!==undefined)input.limit=Number(flags.limit);if(flags.after)input.after=flags.after;console.log(JSON.stringify(await callWorkspace('campaign_targets_get',input,config)));return;}
+  if(flags.set!==undefined&&(flags.add!==undefined||flags.remove!==undefined))throw new Error('Use --set on its own, or --add and --remove.');
+  const split=v=>v.split(',').map(x=>x.trim()).filter(Boolean);
+  if(flags.add!==undefined)input.add=split(flags.add);
+  if(flags.remove!==undefined)input.remove=split(flags.remove);
+  if(flags.set!==undefined){const {readFileSync}=await import('node:fs');input.set=readFileSync(flags.set==='-'?0:flags.set,'utf8').split(/\r?\n/).map(x=>x.trim()).filter(x=>x&&!x.startsWith('#'));}
+  input.expectedRevision=flags['expected-revision']!==undefined?Number(flags['expected-revision']):(await callWorkspace('campaign_targets_get',{workspaceId:flags.workspace,campaignId:position[2],limit:1},config)).data.revision;
+  console.log(JSON.stringify(await callWorkspace('campaign_targets_change',input,config)));return;
+ }
  const name={list:'campaign_list',show:'campaign_get',create:'campaign_create',update:'campaign_update',transition:'campaign_transition',successor:'campaign_successor',events:'campaign_events',pace:flags['per-day']===undefined&&flags['max-credits']===undefined?'campaign_pace_get':'campaign_pace_set'}[command];
- if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N --max-credits C|check ID --url URL.');
+ if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N --max-credits C|check ID --url URL|targets ID [--add|--remove|--set].');
  if(flags['per-day']!==undefined&&command!=='pace')throw new Error('Set the pace with campaign pace ID --per-day N|derived, after the campaign is saved.');
  const input={workspaceId:flags.workspace};
  if(position[2])input.campaignId=position[2];

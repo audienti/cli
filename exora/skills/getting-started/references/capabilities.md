@@ -183,6 +183,11 @@ user, but no task requires them yet.
 | `webhook.receive` | none | read | Take a push instead of polling | later |
 | `webhook.send` | none | send | Post events to the user's URL | later |
 
+`owner.notify` means you can reach your user outside Audienti: chat, push, Slack, SMS or email. Report it
+and Audienti puts a **Tell your user about an alert** task in your queue for each alert it records in
+the workspace; the task carries the message and a link, and you mark it done once you delivered it. An
+agent that has not reported `owner.notify` gets no such task.
+
 ### Tools you use for yourself
 
 | Capability | Providers | Access | What it does | Launch |

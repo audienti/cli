@@ -14,7 +14,7 @@ export async function progressCli(args){
  console.log(JSON.stringify(result));
 }
 
-/** Same columns as Export CSV on the Analytics page. Untracked outcome values are left blank. */
+/** Daily analytics rows plus a total row. Untracked outcome values are left blank. */
 export function analyticsCsv(data){
  if(!data||!Array.isArray(data.daily)||!data.total)throw new Error('Analytics response has no daily rows.');
  const cell=value=>{const text=String(value);return /[",\n]/.test(text)?`"${text.replace(/"/g,'""')}"`:text;};

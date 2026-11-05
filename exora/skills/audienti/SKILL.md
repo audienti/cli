@@ -71,9 +71,12 @@ takes `--file INPUT.json`; the request fields are in the API schema at
 `/api/v1/openapi.json`.
 
 1. `audienti prospects observation create --file person.json` saves a person or company
-   profile with its source URL and returns the prospect ID. Add `fields.imageUrl` with
+   profile with its source URL and returns the prospect ID. A person's source is their
+   own LinkedIn profile URL, email, phone or provider ID (or pass the existing person's
+   `prospectId`); a web page that names them goes in `provenance.url`, because a plain
+   `web` source never identifies a person. Add `fields.imageUrl` with
    the LinkedIn profile photo or company logo URL when you have it; People and
-   Companies show it instead of initials.
+   Companies show it instead of initials. A company's source can be its own site.
 2. `audienti prospects citation create --file employment.json` links a person to their
    company (`edgeType` `works_at`, one current role). The first current employer
    becomes the person's company in People.
@@ -101,9 +104,11 @@ value may follow in brackets, never on its own. The command:
 - searches LinkedIn with the audience's titles, locations, industries and keyword, plus
   the campaign's topic signals. With no person location, it searches the company
   locations as where the person is;
-- checks each new person against the campaign's audience rules, using their profile and
-  current company as evidence. A person who fails a person rule is not a fit, and their
-  company is not paid for;
+- checks each new person against the campaign's audience rules, cheapest first: it reads
+  what the workspace already holds, fetches the person only if that is missing or old,
+  and fetches the company only when the audience has company rules or the campaign
+  targets companies. A person who fails a person rule is not a fit, and their company is
+  not paid for. The check also records where the person works as their primary employer;
 - stops at N fits or before the next paid call would pass the cap.
 
 The report lists the fits, the people held for your judgment, the not-fit count and the

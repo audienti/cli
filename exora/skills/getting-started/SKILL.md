@@ -101,6 +101,9 @@ capability report and ask your user to approve it in **Settings → Sending**; t
 Audienti gives you a queue task to send one test email from the mailbox to itself, read it
 back and report its code; the mailbox counts once you do
 ([the mailbox test email](references/mailbox-check.md)). Never ask your user for the code.
+A campaign can run without a mailbox: its people with an email step wait at that step, and their
+LinkedIn steps go on. Nothing is skipped. They go on once a mailbox is confirmed, so the fix is the
+email connector.
 
 ## 2. Introduce yourself and propose a first campaign
 
@@ -209,7 +212,12 @@ Audienti hosted tool and the workspace has no credits left: tell the user once t
 waits on credits and runs when they add credits in Billing, and do not ask again. When
 credits are added or run out, or the user adds or removes one of their own provider keys
 in the Vault, every agent gets a notice task: run `audienti agent capabilities` again,
-then do what its steps say. When the queue is empty, your timer runs it
+then do what its steps say. If you reported an `owner.notify` capability, Audienti puts one
+**Tell your user about an alert** task in your queue for each alert it records. Its steps
+give the message and a link: tell your user that message on whatever channel you use with
+them (chat, push, Slack, SMS or email), include the link, and mark the task done once it
+is delivered. Done means delivered: a done task is not created again for the same alert.
+An agent that did not report `owner.notify` gets no such task. When the queue is empty, your timer runs it
 again after `pollAfterSeconds`; when `ask` or `queue next` returns an `announce` line,
 say it in your chat and point to Operator. Keep machine state in Audienti, not in your
 own memory: `audienti kv set KEY VALUE` stores cursors, change tokens, hashes, ids and

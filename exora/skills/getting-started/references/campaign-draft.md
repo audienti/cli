@@ -23,8 +23,10 @@ Fill this before you ask the user anything. Mark each value with where it came f
 ## Signals: the through line
 
 Prospect finding starts from signals: they find the companies that need the offer
-today. A campaign with no signal and no target list cannot start, so every campaign you
-draft has at least one. A signal is not "they might want to buy". It is an
+today. A campaign with no signal, no target companies and no finding instructions cannot
+start, so every signal campaign you draft has at least one signal. When the user already
+has the people, or a source Audienti does not have, draft a custom campaign instead:
+`method: "custom"`, finding instructions in the user's words and no signals. A signal is not "they might want to buy". It is an
 observable event that shows a company has the problem the offer solves, now. Build the
 line in this order:
 
