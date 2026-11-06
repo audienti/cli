@@ -51,18 +51,6 @@ export const playbookCommands = {
   record: {
     usage: 'playbook record --file REQUEST.json [--workspace ID] [--profile PATH]',
     about: 'Report that a person moved to a stage or off-ramp, or finished the current stage play. The file has participationId, expectedVersion (the version from playbook progress), requestId (a fresh UUID), exactly one of stageKey, offRampKey or finishStage true, reason, and evidence (a list of {kind: observation|conversation, id}).'
-  },
-  suggest: {
-    usage: 'playbook suggest --file REQUEST.json [--workspace ID] [--profile PATH]',
-    about: 'The same request as record, but it asks a person to approve the move in Operator. Nothing changes until they approve.'
-  },
-  suggestions: {
-    usage: 'playbook suggestions [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
-    about: 'Pending suggestions that wait for a person to approve or dismiss them.'
-  },
-  decide: {
-    usage: 'playbook decide --file REQUEST.json [--workspace ID] [--profile PATH]',
-    about: 'Approve or dismiss one pending suggestion: {"id": SUGGESTION_ID, "requestId": UUID, "decision": "approve" or "dismiss"}. People only; an agent cannot approve.'
   }
 };
 const lines = Object.values(playbookCommands).map(command => command.usage);

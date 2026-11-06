@@ -113,7 +113,7 @@ When you or the user have a new idea for how to reach people:
    the old and new campaigns can be compared. Name what changed in the campaign notes.
 5. Ask the user before the successor starts.
 
-## Record progress and ask for review
+## Record progress and ask when the rules cannot decide
 
 Read the playbook before doing work for a campaign pinned to it: `audienti playbook
 show PLAYBOOK_ID`. Stage plays are instructions for you, the external agent; they are
@@ -123,10 +123,9 @@ not a hosted sequence that runs by itself.
   `offRampKey` or `finishStage: true`, the participation's pinned playbook version and
   its current expected progress version, and stored evidence. Do not invent outcomes.
   `audienti playbook` prints the command usage; the API schema has the required fields.
-- Human review: `audienti playbook suggest --file PATH`. The user approves or dismisses
-  it in **Operator → Queue**. A suggestion does not move a stage, and agents cannot
-  approve one. A stay completion records work without moving the stage.
-  `audienti playbook suggestions` lists the suggestions you can see.
+- When you see something that moves a person (a reply, an accept, a booked meeting), record
+  that event; the playbook's rules decide the move. If the rules cannot decide, ask the
+  user with `audienti ask "QUESTION"`. The question appears in Operator.
 - None of these commands sends a message to a provider.
 
 ## Done
