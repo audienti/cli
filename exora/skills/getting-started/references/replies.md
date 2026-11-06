@@ -116,6 +116,41 @@ values and the `next` step. The checks:
 `replies set` records the same labels. Add `"intent": {"quote": "...", "reason": "..."}` next to `classification`
 or `meetingState` and it runs the same checks and stores the words on the event. Without `intent` it works as before.
 
+## Label a message you sent
+
+A message you sent can carry a label too. Today one fits: `meeting_requested`, for a message that asks for a
+meeting or offers a time ("could we find 20 minutes next week?"). Without it Audienti does not know a meeting
+was asked for, so the playbook's meeting wait cannot follow it up. With it the timeline shows the request, the
+wait sends up to 3 follow-ups, and a request nobody answers is marked No answer. No reply is needed.
+
+Do it after the send, in two calls. Store what you sent, then label it:
+
+```
+audienti prospects conversation append PERSON --workspace ID --file ITEM.json
+audienti intent record --person PERSON --evidence EVIDENCE \
+  --label meeting_requested --quote "find 20 minutes next week" --reason "We ask for a call next week."
+```
+
+`ITEM.json` holds a new `requestId` and the sent message. Give it the text exactly as you sent it:
+
+```
+{ "requestId": "<uuid>",
+  "item": {
+    "source": { "provider": "email", "accountRef": "you@yourcompany.com", "itemId": "<the provider's message ID>", "threadId": null },
+    "payload": { "direction": "outbound", "conversationType": "direct", "occurredAt": "2026-11-06T14:00:00Z",
+                 "subject": "Ten minutes on late invoices?", "body": "Hi Jordan, could we find 20 minutes next week?", "participants": null } } }
+```
+
+The call returns `EVIDENCE`. If you stored the message already, to report the send (`account_evidence`) or as
+the `responseEvidenceId` of an answer, use that same ID. The `quote` must be words from what you sent.
+The same checks apply: a message with no stored text, a quote that is not in it, or a label that does not fit a sent message (`interested` fits a reply, not an ask) is refused and writes nothing.
+
+- Label only a message that asks for or offers a meeting. A message that does not is not labeled.
+- A follow-up that asks again needs no label: the request is already on the timeline, so a repeat writes nothing.
+  The same message cannot take the label twice (`already_recorded`).
+- The label goes on the person's running campaign. A person runs in one campaign per workspace, so you need no option; `--participation ID` names the run if you want it explicit. The answer to `work execution send` or `report` carries that `participationId` when the send started a playbook step and the person still runs in the campaign run the send started, also when you repeat the call. A person who left and rejoined has a new run: a repeat of the old send names none. The label works without it.
+- An answer to a reply that offers times is labeled the same way, with the evidence of the answer you sent.
+
 ## Stop, bounce and referral
 
 These three need no decision from the user. Classify the reply, report the typed
@@ -187,7 +222,8 @@ report it as a stop.
 A `work.execute` task with `action: send_reply` follows. Claim it, send the answer in
 the thread the prospect wrote in, report the result, then close the reply with status
 `handled`, outcome `response_recorded` and the sent message's evidence as
-`responseEvidenceId`.
+`responseEvidenceId`. If your answer offers times for a meeting, label that sent message
+`meeting_requested` with the same evidence ("Label a message you sent").
 
 ## When a meeting is booked
 
@@ -204,9 +240,11 @@ the thread the prospect wrote in, report the result, then close the reply with s
 
 ## Before a meeting is booked
 
-Record where an unbooked meeting stands with `"meetingState"` in a `replies set` result:
+Record where an unbooked meeting stands. When the prospect writes about it, use `"meetingState"` in a
+`replies set` result. When you ask for the meeting in a message you sent, label that message
+`meeting_requested` (see "Label a message you sent"):
 
-- `requested`: a time was asked for or offered.
+- `requested`: a time was asked for or offered, by them or by you.
 - `accepted`: they agreed, and no time is fixed yet.
 - `declined`: they said no to the meeting. A plain no is not a request to stop; classify the
   reply on its own.
