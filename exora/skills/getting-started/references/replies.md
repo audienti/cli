@@ -7,7 +7,8 @@ approved: inbound wins, and you record it. What the user approves is your answer
 
 1. Read the conversation: `audienti prospects conversation list PERSON --workspace ID`.
 2. Classify the reply as one of `interested`, `question`, `later`, `out_of_office`,
-   `stop`, `bounce` or `referral`. A stop, a bounce or a referral must carry its typed
+   `stop`, `bounce`, `referral` or `wrong_person` (the prospect is the wrong person and
+   names no one else). A stop, a bounce or a referral must carry its typed
    `result`, or the report is refused; see [Stop, bounce and referral](#stop-bounce-and-referral).
 3. Draft the answer from the mailbox or LinkedIn account the reply came to (the assignee's).
    - Bind the recipient and the sender, or the answer waits in Blocked: the recipient's
@@ -58,6 +59,12 @@ approved: inbound wins, and you record it. What the user approves is your answer
 
 The classification records a `replied` event on the person's active campaigns, except
 for `bounce` and `out_of_office`, which are not replies from the person.
+An `out_of_office` reply records an auto-reply instead. The playbook's out-of-office rule
+snoozes the person: the wait and the next step hold for 7 days, or until the return date
+when you pass `returnsOn`. Nothing is sent meanwhile and the person does not move. A
+`wrong_person` reply that names no one stops the sends and leaves the reply for the user to
+settle: ask who the right person is. When the reply names the right person, classify it as a
+`referral` with its typed `result`.
 
 ## Stop, bounce and referral
 
@@ -144,6 +151,24 @@ the thread the prospect wrote in, report the result, then close the reply with s
   assignee's calendar and records `"source": "received_invite"`. If the assignee has no
   such agent, no task appears.
 - The meeting moves the person to the playbook's goal stage. Record it once.
+
+## Before a meeting is booked
+
+Record where an unbooked meeting stands with `"meetingState"` in a `replies set` result:
+
+- `requested`: a time was asked for or offered.
+- `accepted`: they agreed, and no time is fixed yet.
+- `declined`: they said no to the meeting. A plain no is not a request to stop; classify the
+  reply on its own.
+
+Each state is written once, and only when it differs from the last one. Nothing is written after
+a booking. If a playbook step waits for a meeting and the wait runs out while the request is
+`requested` or `accepted`, Audienti first asks you for a follow-up, up to 3 times (the playbook
+can change the count and the wait; the default wait is 5 days). Write each follow-up yourself
+after you read the whole conversation, and send it on the thread's channel. Do not use a fixed
+template unless the user put one in your instructions. Save it as a plan action with the
+`playbookStepKey` the task names. After the last wait runs out, Audienti records
+`meeting_no_answer` itself and tells the owner. Do not record it.
 
 ## Taken over
 

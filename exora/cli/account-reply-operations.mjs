@@ -5,7 +5,7 @@ const item = { ...scope, evidenceId: uuid };
 const status = z.enum(['needs_handling', 'handled', 'not_reply']);
 const outcome = z.enum(['response_recorded', 'closed_without_response', 'suppressed']);
 const limit = z.number().int().min(1).max(100);
-const classification = z.enum(['interested', 'question', 'later', 'out_of_office', 'stop', 'bounce', 'referral']);
+const classification = z.enum(['interested', 'question', 'later', 'out_of_office', 'stop', 'bounce', 'referral', 'wrong_person']);
 const slot = z.object({ start: z.string().describe('UTC start, ending in Z.'), end: z.string().describe('UTC end, ending in Z.'), timeZone: z.string().describe("The user's IANA time zone, for display.") }).strict();
 const draft = z.object({
   type: z.enum(['email.send', 'linkedin.send']),
@@ -34,11 +34,13 @@ export const accountReplyOperations = {
   workspace_reply_set: {
     schema: z.object({ ...item, requestId: uuid, expectedVersion: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), status,
       outcome: outcome.nullable().describe("Null for needs_handling/not_reply; a handling outcome is required for handled."), reason: z.string().meta({ minLength: 1, maxLength: 2000 }).describe("Required trimmed NFC reason, 1–2000 codepoints. Interior control characters including newline and tab are rejected."), responseEvidenceId: uuid.nullable().describe("Required for response_recorded; null otherwise. Must identify matching outbound account evidence."),
-      classification: classification.optional().describe("What the reply is. Records a replied event on the person's active campaigns, except for bounce and out_of_office."),
+      classification: classification.optional().describe("What the reply is. Records a replied event on the person's active campaigns, except for bounce and out_of_office. An out_of_office reply snoozes the person instead; a wrong_person reply with no name given stops the sends and asks who the right person is. Someone who names the right person is a referral."),
+      returnsOn: z.string().datetime().optional().describe("Only with out_of_office: the date the person is back (UTC, ending in Z). The snooze lasts until then; with no date it follows the playbook's out-of-office rule, 7 days by default."),
       invite: z.literal(true).optional().describe("The prospect sent a calendar invite you have not processed yet. Requires a classification; a meetings.confirm task follows."),
       draft: draft.optional().describe("Your drafted answer. Saved as a reply plan revision the user reviews in Operator; requires status needs_handling. Never sent until approved."),
       result: result.optional().describe("Brief 12: the typed detail for a bounce, stop or referral. Its type must match the classification."),
-      meeting: z.object({ at: z.string().datetime(), source: z.enum(['sent_invite', 'received_invite']) }).strict().optional().describe("A booked meeting: when, and whether the user's calendar sent the invite or the prospect did. Records meeting_booked.") }).strict().describe("Explicit inbound classification. needs_handling/not_reply require null outcome and responseEvidenceId. handled requires an outcome; response_recorded requires matching outbound evidence, closed_without_response an explicit closure reason, and suppressed active DNC or Reject."),
+      meeting: z.object({ at: z.string().datetime(), source: z.enum(['sent_invite', 'received_invite']) }).strict().optional().describe("A booked meeting: when, and whether the user's calendar sent the invite or the prospect did. Records meeting_booked."),
+      meetingState: z.enum(['requested', 'accepted', 'declined']).optional().describe("Where a meeting that is not booked yet stands after this reply: requested (a time was asked for), accepted (they agreed, no time yet) or declined. Records the matching meeting event once. Ignored once a meeting is booked.") }).strict().describe("Explicit inbound classification. needs_handling/not_reply require null outcome and responseEvidenceId. handled requires an outcome; response_recorded requires matching outbound evidence, closed_without_response an explicit closure reason, and suppressed active DNC or Reject."),
     method: 'POST', scoped: true, path: detail,
     body: ({ workspaceId, prospectId, evidenceId, ...rest }) => rest,
   },

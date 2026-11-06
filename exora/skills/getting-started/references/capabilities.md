@@ -72,7 +72,8 @@ it. Audienti shows it to the user on the LinkedIn account's page and plans aroun
       "provider": "linkedin",
       "account": "linkedin.com/in/owner",
       "checkEverySeconds": 21600,
-      "inmail": { "available": true, "quotaPerMonth": 15 },
+      "plan": "premium_business",
+      "inmail": { "available": true, "quotaPerMonth": 15, "creditsLeft": 11 },
       "limits": { "connectionRequestsPerDay": 20, "connectionRequestsPerWeek": 100, "messagesPerDay": 50, "inmailPerMonth": 15 }
     }
   ]
@@ -83,8 +84,15 @@ it. Audienti shows it to the user on the LinkedIn account's page and plans aroun
 - `checkEverySeconds`: how often you can check this LinkedIn account's sent invitations, at least
   3600 (one hour). Audienti schedules outcome checks at this cadence; every 6 hours
   when you leave it out. The user never changes it.
-- `inmail`: whether the LinkedIn account can send InMail, and its monthly quota. Report
-  `profile.inmail.send` as well; a LinkedIn account counts as InMail-capable only with both.
+- `plan`: the LinkedIn plan the account has, as the LinkedIn interface shows it: `free`,
+  `premium_career`, `premium_business`, `premium_all_in_one`, `sales_navigator_core`,
+  `sales_navigator_advanced` or `recruiter_lite`. Leave it out when you cannot tell; never guess.
+  The plan sets the InMail allowance. Audienti keeps connection notes to 200 characters for
+  now, whatever the plan.
+- `inmail`: whether the LinkedIn account can send InMail, its monthly quota, and `creditsLeft`,
+  the balance the interface shows now (Sales Navigator shows it in the compose window and on
+  Settings). With a balance, Audienti plans an InMail only while `creditsLeft` is above 0.
+  Report `profile.inmail.send` as well; a LinkedIn account counts as InMail-capable only with both.
 - `limits`: the safe limits for this LinkedIn account. Audienti never plans more LinkedIn sends on
   it than its per-day and per-week limits. The user can lower a limit, never
   raise it above the one you report.
@@ -141,6 +149,7 @@ user, but no task requires them yet.
 | `profile.message.send` | email, linkedin, whatsapp, phone, x, instagram | send | Send an approved message | email, linkedin |
 | `profile.inbox.read` | email, linkedin, whatsapp | read | Watch the user's inbox for replies | email, linkedin |
 | `profile.invitations.read` | linkedin | read | Read the user's sent invitations, to see which were accepted or closed | yes |
+| `profile.invitations.received` | linkedin | read | Read the invitations people sent to the user (as the user) | linkedin |
 | `profile.inmail.send` | linkedin | send | Send an approved InMail | yes |
 | `profile.connection.request` | linkedin | send | Send an approved connection request | yes |
 | `profile.connection.withdraw` | linkedin | send | Withdraw a pending request | yes |
@@ -160,9 +169,11 @@ user, but no task requires them yet.
 | `post.read` | linkedin, x, instagram, tiktok | read | Fetch one post with its type | yes |
 | `post.comments.list` | linkedin, x, instagram, tiktok | read | Who commented, and what they said | yes |
 | `post.reactions.list` | linkedin, x, instagram, tiktok | read | Who reacted | yes |
-| `post.comment` | linkedin, x, instagram, tiktok | send | Comment as the user (as the user) | later |
-| `post.react` | linkedin, x, instagram, tiktok | send | React as the user (as the user) | later |
-| `post.publish` | linkedin, x, instagram, tiktok | send | Publish a post as the user (as the user) | later |
+| `post.comment` | linkedin, x, instagram, tiktok | send | Comment as the user (as the user) | linkedin |
+| `post.react` | linkedin, x, instagram, tiktok | send | React as the user (as the user) | linkedin |
+| `post.publish` | linkedin, x, instagram, tiktok | send | Publish a post as the user (as the user) | linkedin |
+| `profile.visit` | linkedin | read | Visit a profile as a person would (as the user) | linkedin |
+| `profile.views.read` | linkedin | read | Read who viewed the user's profile (as the user) | linkedin |
 
 ### Web, calendar, records, owner, integration
 
@@ -178,7 +189,7 @@ user, but no task requires them yet.
 | `meeting.cancel` | google, microsoft | write | Cancel a booked meeting | later |
 | `crm.records.search` | hubspot, salesforce, pipedrive, other | read | Find records in the user's CRM | yes |
 | `crm.record.read` | hubspot, salesforce, pipedrive, other | read | Read one CRM record | yes |
-| `crm.record.write` | hubspot, salesforce, pipedrive, other | write | Write back to one CRM record | later |
+| `crm.record.write` | hubspot, salesforce, pipedrive, other | write | Write back to one CRM record | yes |
 | `owner.notify` | push, slack, sms, email | send | Reach the user on their own channel | yes |
 | `webhook.receive` | none | read | Take a push instead of polling | later |
 | `webhook.send` | none | send | Post events to the user's URL | later |
@@ -217,3 +228,10 @@ Translated inventory reports match fewer queue tasks than before:
 - `people_data` alone no longer matches verify tasks.
 - `email` and `linkedin` match send tasks only for their own provider and only with
   `send` access; `social` matches no send task.
+
+A LinkedIn message can carry a file. Upload it first with `audienti attachments upload FILE` (an image up to 5 MB,
+or a voice note up to 5 MB and 2 minutes; Audienti reads a WAV, M4A, OGG or MP3 voice note's length from the file; add `--duration SECONDS` only for a file it cannot read). Name the returned id in
+`content.attachments` of the `linkedin.send` action, and tag that action `profile.message.send`. A connection
+request carries no file. A voice note goes only to a connection. When you send from your own account, run
+`audienti attachments get ID --out PATH` to fetch the file, then attach it in LinkedIn. A managed account sends it
+for you.

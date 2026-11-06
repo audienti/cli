@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { isAssignmentCommand, assignmentCli } from './assignment.mjs';
+import { playbookHelp } from './playbook-help.mjs';
 // The CLI is an HTTP client. It has no database access or separate business rules.
 const args = process.argv.slice(2);
 const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
@@ -24,9 +25,9 @@ Required environment:
   AUDIENTI_API_TOKEN  Account API token (create it from your Account page)
 
 Use HTTPS for remote hosts. Local HTTP is supported on loopback only.
-Agent commands: agent connect --name NAME [--capabilities find,enrich,listen,approve]|poll|cancel|list|revoke ID --profile PATH
+Agent commands: agent connect --name NAME [--capabilities find,enrich,expand,research,engage,sync,notify,approve]|poll|cancel|list|revoke ID --profile PATH
 Owner permission change: agent permission ID --scope workspace:read|workspace:access --profile USER_PROFILE
-Owner capability change: agent capabilities ID --set find,enrich,listen,approve --profile USER_PROFILE (agents are refused outside this set)
+Owner capability change: agent capabilities ID --set find,enrich,expand,research,engage,sync,notify,approve --profile USER_PROFILE (agents are refused outside this set)
 Agent capabilities: agent capabilities report --file CAPABILITIES.json --profile AGENT_PROFILE (capability rows; the old per-account shape still works)
 What the agent can do: agent capabilities [--workspace ID] [--json] --profile AGENT_PROFILE (works now, and works with Audienti tools)
 Read capabilities: agent capabilities show [--id AGENT_ID] --profile PROFILE
@@ -50,6 +51,7 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
 Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
+Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
 Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your user go to Operator, not chat)
            audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
@@ -80,7 +82,7 @@ Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches w
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
-Playbooks: playbook list|show ID|save --file REQUEST.json|progress ID|record --file REQUEST.json
+Playbooks: playbook list [--limit N --cursor ID]|show ID [--revision N]|save --file REQUEST.json|progress PARTICIPATION_ID|record --file REQUEST.json|suggest --file REQUEST.json|suggestions|decide --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]
@@ -97,7 +99,7 @@ Read state: workspace notification-read --workspace ID --key KEY --read true|fal
 Search: workspace search --workspace ID --query TEXT [--people-only true] [--recent FILE.json]
 Invitation commands: workspace invitation show|accept|decline|retry|cancel ID
 Options: --workspace ID --name NAME --request-id UUID --email EMAIL --generation N
-Optional private profile: --profile PATH (outside this repository)
+Optional private profile: --profile PATH (outside this repository), or the AUDIENTI_PROFILE variable. --profile wins.
 Save an environment token: profile save --scope account:read|workspace:access|agents:manage --profile PATH
 Start local MCP stdio server: mcp
 --json writes the API response envelope.
@@ -126,6 +128,7 @@ function commandHelp() {
 }
 
 async function main() {
+  if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : args[1])); return; }
   if (args.length > 1 && args.slice(1).some(value => value === '--help' || value === '-h') && !['tools', 'call', 'skills'].includes(args[0])) { commandHelp(); return; }
   if(args[0]==='prospects'&&['intake','conversation'].includes(args[1])){const {accountIntakeCli}=await import('./account-intake.mjs');await accountIntakeCli(args);return;}
   if(args[0]==='sender'){const {senderAccountsCli}=await import('./sender-accounts.mjs');await senderAccountsCli(args);return;}
@@ -154,6 +157,7 @@ async function main() {
   if(args[0]==='ask'){const {askCli}=await import('./questions.mjs');await askCli(args);return;}
   if(args[0]==='questions'){const {questionsCli}=await import('./questions.mjs');await questionsCli(args);return;}
   if(args[0]==='queue'){const {queueCli}=await import('./queue.mjs');await queueCli(args);return;}
+  if(args[0]==='attachments'){const {attachmentsCli}=await import('./attachments.mjs');await attachmentsCli(args);return;}
   if(args[0]==='outcomes'){const {outcomesCli}=await import('./outcomes.mjs');await outcomesCli(args);return;}
   if(args[0]==='rooms'){const {roomsCli}=await import('./rooms.mjs');await roomsCli(args);return;}
   if(args[0]==='kv'){const {kvCli}=await import('./kv.mjs');await kvCli(args);return;}
@@ -172,11 +176,16 @@ async function main() {
     profileConfig = configuration(args[profileIndex + 1], 'account:read');
     if (!profileConfig.token) throw new Error('whoami needs a human account token. Agents confirm their connection with: audienti workspace list --profile PATH');
     args.splice(profileIndex, 2);
+  } else if (args[0] === 'whoami' && profileIndex < 0 && process.env.AUDIENTI_PROFILE && !(process.env.AUDIENTI_API_URL && process.env.AUDIENTI_API_TOKEN)) {
+    // The profile named by AUDIENTI_PROFILE (#448), unless the URL and token are in the environment.
+    const { configuration } = await import('./workspaces.mjs');
+    profileConfig = configuration(undefined, 'account:read');
+    if (!profileConfig.token) throw new Error('whoami needs a human account token, and AUDIENTI_PROFILE holds none. Agents confirm their connection with: audienti workspace list');
   }
   if (args[0] !== 'whoami' || args.length > 2 || (args[1] && args[1] !== '--json')) throw new Error('Unknown command or option. Use audienti --help.');
   const rawUrl = profileConfig ? profileConfig.url : process.env.AUDIENTI_API_URL;
   const token = profileConfig ? profileConfig.token : process.env.AUDIENTI_API_TOKEN;
-  if (!rawUrl || !token) throw new Error('Set AUDIENTI_API_URL and AUDIENTI_API_TOKEN. Create a token from your Account page.');
+  if (!rawUrl || !token) throw new Error('Set AUDIENTI_API_URL and AUDIENTI_API_TOKEN, or pass --profile PATH (or set AUDIENTI_PROFILE) to a profile with an account:read token. Create a token from your Account page.');
   let base;
   try { base = new URL(rawUrl); } catch { throw new Error('AUDIENTI_API_URL must be a valid API base URL.'); }
   if (base.username || base.password || base.search || base.hash) throw new Error('The API URL must not contain credentials, query parameters, or a fragment.');
@@ -202,4 +211,4 @@ async function main() {
   console.log(args[1] === '--json' ? JSON.stringify({ data: profile }) : `${profile.email ?? profile.username ?? profile.id}\nAccount ID: ${profile.id}`);
 }
 
-main().catch(error => { console.error(error.toJSON ? JSON.stringify({ error: error.toJSON() }) : `Audienti: ${error.message}`); process.exitCode = 1; });
+main().catch(error => { console.error(JSON.stringify({ error: error.toJSON ? error.toJSON() : { code: 'client_error', message: error.message } })); process.exitCode = 1; });

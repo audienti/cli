@@ -1,14 +1,16 @@
-import { readProfile, writeProfile, validateUrl, configuration, WorkspaceRequestError } from './workspaces.mjs';
+import { readProfile, writeProfile, validateUrl, configuration, profileFrom, WorkspaceRequestError } from './workspaces.mjs';
 import { z } from 'zod';
 import {readJsonFile} from './json-file.mjs';
 
 export const agentManagementOperations = ['agent_list','agent_revoke','agent_permission','agent_capabilities_set','agent_capabilities_get','agent_inventory_get','agent_capability_sharing_get','agent_capability_sharing_set','agent_account_authorizations_get','agent_account_authorization_set'];
+// The seven capability groups and the 'approve' guardrail (#120). 'listen' is the retired name of 'research'; the server still accepts it.
+const capabilityKeys=['find','enrich','expand','research','engage','sync','notify','approve','listen'];
 const inventoryLabel=z.string().trim().min(1).max(80);
 // Capability rows (ADR 015). The server checks ids, providers and access against the catalog; the client checks the shape.
 const capabilityRow=z.object({capability:z.string().min(1).max(64),provider:z.string().min(1).max(32).optional(),via:z.string().min(1).max(140),account:z.string().min(1).max(200).optional(),access:z.enum(['read','write','send']),cost:z.enum(['owner','credits']).optional(),status:z.enum(['connected','needs_sign_in','unavailable']),limits:z.object({daily:z.number().int().min(0).max(100000).optional(),hourly:z.number().int().min(0).max(100000).optional()}).strict().optional(),identity:z.object({namespace:z.string().min(1).max(64),accountId:z.string().min(1).max(256)}).strict().optional()}).strict();
 // A LinkedIn seat's cadence, InMail and safe limits (brief 09); the server checks the bounds.
 const seatLimit=z.number().int().min(0).max(100000);
-const seatFacts={checkEverySeconds:z.number().int().min(3600).max(604800).optional(),inmail:z.object({available:z.boolean(),quotaPerMonth:seatLimit.optional()}).strict().optional(),limits:z.object({connectionRequestsPerDay:seatLimit.optional(),connectionRequestsPerWeek:seatLimit.optional(),messagesPerDay:seatLimit.optional(),inmailPerMonth:seatLimit.optional()}).strict().optional()};
+const seatFacts={checkEverySeconds:z.number().int().min(3600).max(604800).optional(),inmail:z.object({available:z.boolean(),quotaPerMonth:seatLimit.optional(),creditsLeft:seatLimit.optional()}).strict().optional(),plan:z.enum(['free','premium_career','premium_business','premium_all_in_one','sales_navigator_core','sales_navigator_advanced','recruiter_lite']).optional(),limits:z.object({connectionRequestsPerDay:seatLimit.optional(),connectionRequestsPerWeek:seatLimit.optional(),messagesPerDay:seatLimit.optional(),inmailPerMonth:seatLimit.optional()}).strict().optional()};
 const accountEntry=z.object({capability:z.string(),tools:z.array(z.string()).min(1).max(8)}).strict();
 const accountReport=z.object({provider:z.enum(['email','linkedin']),accountRef:z.string().min(1).max(200),status:z.enum(['healthy','unavailable','disconnected']),accountIdentity:z.object({namespace:z.string(),accountId:z.string()}).strict().optional(),capabilities:z.array(accountEntry).max(16),...seatFacts}).strict();
 const capabilityReport=z.object({runtime:z.object({name:z.string().trim().min(1).max(80),model:z.string().trim().min(1).max(80).optional()}).strict(),capabilities:z.array(capabilityRow).max(64),seats:z.array(z.object({provider:z.literal('linkedin'),account:z.string().min(1).max(200),...seatFacts}).strict()).max(50).optional()}).strict();
@@ -24,13 +26,13 @@ export const agentOperations = {
  agent_capability_sharing_get: {schema:z.object({id:z.string().uuid()}).strict()},
  agent_capability_sharing_set: {schema:z.object({id:z.string().uuid(),provider:z.enum(['email','linkedin']),accountRef:z.string().min(1).max(200),workspaceId:z.string().uuid(),shared:z.boolean()}).strict()},
  // One object schema for MCP clients; callAgent then requires exactly one of the two report shapes.
- agent_capabilities_report: {description:'Getting started step 2: report what this agent can do as capability rows ({ runtime, capabilities: [{ capability, provider?, via, account?, access, cost?, status, limits?, identity? }], seats?: [{ provider: "linkedin", account, checkEverySeconds?, inmail?, limits? }] }), ids from the capability catalog. A LinkedIn account sends only when its rows carry identity { namespace: "linkedin", accountId: the member id }; a mailbox without one is matched by its address. Replaces the previous report. The old per-account shape (provider, accountRef, status, capabilities) is still accepted. Never use via "audienti" and never include credentials. Requires an active agent profile.',schema:z.object({runtime:capabilityReport.shape.runtime.optional(),provider:accountReport.shape.provider.optional(),accountRef:accountReport.shape.accountRef.optional(),status:accountReport.shape.status.optional(),accountIdentity:accountReport.shape.accountIdentity,capabilities:z.array(z.union([capabilityRow,accountEntry])).max(64),seats:capabilityReport.shape.seats,...seatFacts}).strict(),shape:eitherReport},
+ agent_capabilities_report: {description:'Getting started step 2: report what this agent can do as capability rows ({ runtime, capabilities: [{ capability, provider?, via, account?, access, cost?, status, limits?, identity? }], seats?: [{ provider: "linkedin", account, checkEverySeconds?, plan?, inmail?, limits? }] }), ids from the capability catalog. A LinkedIn account sends only when its rows carry identity { namespace: "linkedin", accountId: the member id }; a mailbox without one is matched by its address. Replaces the previous report. The old per-account shape (provider, accountRef, status, capabilities) is still accepted. Never use via "audienti" and never include credentials. Requires an active agent profile.',schema:z.object({runtime:capabilityReport.shape.runtime.optional(),provider:accountReport.shape.provider.optional(),accountRef:accountReport.shape.accountRef.optional(),status:accountReport.shape.status.optional(),accountIdentity:accountReport.shape.accountIdentity,capabilities:z.array(z.union([capabilityRow,accountEntry])).max(64),seats:capabilityReport.shape.seats,...seatFacts}).strict(),shape:eitherReport},
  agent_capabilities_list: {description:'Read what this agent can do now: its own capability rows plus Audienti hosted rows for the workspace (when the workspace has credits and the user approved the group). Uses the profile workspace unless workspaceId is given. Requires an active agent profile.',schema:z.object({workspaceId:z.string().uuid().optional()}).strict()},
  agent_capabilities_show: {schema:z.object({}).strict()},
  agent_capabilities_get: {schema:z.object({id:z.string().uuid()}).strict()},
  agent_permission: {schema:z.object({id:z.string().uuid(),scope:z.enum(['workspace:read','workspace:access'])}).strict()},
- agent_capabilities_set: {schema:z.object({id:z.string().uuid(),capabilities:z.array(z.enum(['find','enrich','listen','approve'])).min(1).max(4)}).strict()},
- agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(['find','enrich','listen','approve'])).max(4).optional() }).strict() },
+ agent_capabilities_set: {schema:z.object({id:z.string().uuid(),capabilities:z.array(z.enum(capabilityKeys)).min(1).max(9)}).strict()},
+ agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(capabilityKeys)).max(9).optional() }).strict() },
  agent_poll: { schema: z.object({}).strict() },
  agent_cancel: { schema: z.object({}).strict() },
  agent_list: { schema: z.object({}).strict() },
@@ -139,7 +141,7 @@ export async function agentCli(args) {
   else if (positions[2] === undefined && !flags.file && !flags.id) {name='agent_capabilities_list';input=flags.workspace ? {workspaceId:flags.workspace} : {};}
   else throw new Error('Use agent capabilities [--workspace ID] [--json], report --file PATH or show [--id ID].');
  }
- const result = await callAgent(name, input, configuration(flags.profile, agentManagementOperations.includes(name) ? 'agents:manage' : 'workspace:access'), flags.profile);
+ const result = await callAgent(name, input, configuration(flags.profile, agentManagementOperations.includes(name) ? 'agents:manage' : 'workspace:access'), profileFrom(flags.profile));
  console.log(name === 'agent_capabilities_list' && !json ? capabilityText(result.data) : JSON.stringify(result));
 }
 

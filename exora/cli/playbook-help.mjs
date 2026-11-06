@@ -1,0 +1,62 @@
+// One text for every playbook command, shared by `audienti --help`, `audienti playbook --help`,
+// `audienti playbook SUBCOMMAND --help` and the usage error (#449). The runnable field reference is the
+// playbook-design skill: audienti skills read playbook-design references/fields.md.
+export const playbookCommands = {
+  list: {
+    usage: 'playbook list [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
+    about: 'One page of summaries, 50 by default: id, name, currentRevision, system, systemKey, stages, steps, recommended, updatedAt. Starters have system true and cannot be changed; clone one by saving its fields without an id. Use nextCursor as --cursor for the next page. Full fields come from playbook show.'
+  },
+  show: {
+    usage: 'playbook show PLAYBOOK_ID [--revision N] [--workspace ID] [--profile PATH]',
+    about: 'The whole playbook (fields) and the campaigns that use it. Without --revision it returns the current one. PLAYBOOK_ID comes from playbook list.'
+  },
+  save: {
+    usage: 'playbook save --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'Create a playbook or save a new revision. The file is {"requestId": UUID, "expectedRevision": N, "id": PLAYBOOK_ID, "fields": {...}}. requestId: a fresh UUID; reuse it only to retry the same save. id: leave it out for a new playbook. expectedRevision: 0 for a new playbook, otherwise currentRevision from playbook show. A save from a stale revision is refused with revision_conflict and the response gives currentRevision. fields: name, stages (2 or more, each with a UUID key), goalKey (a stage key after the first stage), offRamps. Field rules: audienti skills read playbook-design references/fields.md',
+    example: {
+      requestId: 'UUID',
+      expectedRevision: 0,
+      fields: {
+        name: 'Email only',
+        stages: [
+          { key: 'STAGE_A_UUID', name: 'Ready', owner: 'Agent', goalDays: 3, steps: [{ key: 'UUID', channel: 'Email', action: 'Email 1', condition: 'Always', instructions: 'Three sentences.', wait: { until: 'reply', days: 4 } }], completion: { kind: 'next' } },
+          { key: 'STAGE_B_UUID', name: 'Meeting booked', on: ['meeting'], owner: 'Assignee', goalDays: 0, steps: [], completion: { kind: 'stay' } }
+        ],
+        goalKey: 'STAGE_B_UUID',
+        offRamps: [{ key: 'UUID', name: 'Unresponsive', reason: 'unresponsive' }]
+      }
+    }
+  },
+  progress: {
+    usage: 'playbook progress PARTICIPATION_ID [--workspace ID] [--profile PATH]',
+    about: 'The stage and outcome history of one person in one campaign. It takes a participation ID, not a playbook ID. A participation exists once a person is admitted to a campaign. Each person in the output of pipeline show has a participationId.'
+  },
+  record: {
+    usage: 'playbook record --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'Report that a person moved to a stage or off-ramp, or finished the current stage play. The file has participationId, expectedVersion (the version from playbook progress), requestId (a fresh UUID), exactly one of stageKey, offRampKey or finishStage true, reason, and evidence (a list of {kind: observation|conversation, id}).'
+  },
+  suggest: {
+    usage: 'playbook suggest --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'The same request as record, but it asks a person to approve the move in Operator. Nothing changes until they approve.'
+  },
+  suggestions: {
+    usage: 'playbook suggestions [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
+    about: 'Pending suggestions that wait for a person to approve or dismiss them.'
+  },
+  decide: {
+    usage: 'playbook decide --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'Approve or dismiss one pending suggestion: {"id": SUGGESTION_ID, "requestId": UUID, "decision": "approve" or "dismiss"}. People only; an agent cannot approve.'
+  }
+};
+const lines = Object.values(playbookCommands).map(command => command.usage);
+export const playbookUsageError = `Unknown or missing playbook subcommand. Usage:\n${lines.map(line => `  audienti ${line}`).join('\n')}\nRun audienti playbook SUBCOMMAND --help for the request shape.`;
+/** Help for `audienti playbook [SUBCOMMAND] --help`. */
+export function playbookHelp(subcommand) {
+  const names = playbookCommands[subcommand] ? [subcommand] : Object.keys(playbookCommands);
+  const text = names.map(name => {
+    const command = playbookCommands[name];
+    return `audienti ${command.usage}\n  ${command.about}${command.example ? `\n\nExample REQUEST.json (replace each UUID with a fresh one; reuse the same UUID where a key repeats):\n${JSON.stringify(command.example, null, 2)}` : ''}`;
+  }).join('\n\n');
+  const conflict = names.includes('save') ? ' A revision_conflict from save also gives currentRevision.' : '';
+  return `${text}\n\nErrors are JSON on stderr: {"error": {"code", "message"}}, and the exit code is 1.${conflict} Errors from the server also give status.`;
+}

@@ -62,6 +62,31 @@ audienti outcomes report TASK_ID --file RESULTS.json
   you read on the profile (1, 2 or 3). A 1 means connected; report it as an accept as
   well when you know the time.
 
+A `steps.run` task (a comment, react, withdraw, follow or unfollow step of a playbook, for one person) takes these
+results instead. The task names the step in `detail.step` and tells you how to find the post.
+
+- `linkedin.comment {person, postUrl}`: you commented on the post. Comment only when you can add
+  material value; otherwise react.
+- `linkedin.reaction {person, postUrl, reaction}`: you reacted. `reaction` is `like` (the default),
+  `celebrate`, `support`, `love`, `insightful` or `funny`.
+- `linkedin.follow {person}` and `linkedin.unfollow {person}`: for a follow or unfollow step. Audienti records
+  that your account now follows the person, or no longer does. It skips a later Follow step for someone you
+  already follow, and an Unfollow step for someone you do not.
+- `linkedin.step_skipped {person, reason}`: nothing to engage with, or your user declined.
+- `linkedin.invite_closed {person, reason: withdrawn}`: for a withdraw step.
+
+Audienti records the step as run, and the playbook goes on to its next step.
+
+An `invitations.receive` task (every 6 hours, only on a seat whose connector can read received invitations)
+asks you to read the connection requests people sent to your user. Read only the pending received list. Never
+accept, decline or open anyone. Report each pending request:
+
+- `linkedin.invitation_received {ref, profileUrl, name, sentAt}`: give `ref` (the request id your connector shows,
+  otherwise the person's profile address) or `profileUrl`; `name` and `sentAt` when you have them. Audienti records
+  each request once and tells your user once. Report the same request again and it returns `already_recorded`.
+
+Report done with no results when no request is pending.
+
 Leave out anyone still pending. They stay on the next check until they accept or the
 wait times out.
 

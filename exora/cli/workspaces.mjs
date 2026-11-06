@@ -4,6 +4,7 @@ import {roomsOperations} from './rooms-operations.mjs';
 import {queueOperations} from './queue-operations.mjs';
 import {kvOperations} from './kv-operations.mjs';
 import {outcomeOperations} from './outcome-operations.mjs';
+import {attachmentOperations} from './attachment-operations.mjs';
 import {questionOperations} from './question-operations.mjs';
 import {searchOperations} from './search-operations.mjs';
 import {fileOperations,uploadFileContent} from './file-operations.mjs';
@@ -43,6 +44,7 @@ export const operations = {
  ...queueOperations,
  ...kvOperations,
  ...outcomeOperations,
+ ...attachmentOperations,
  ...questionOperations,
  ...fileOperations,
  ...playbookOperations,
@@ -116,7 +118,11 @@ export function writeProfile(path, profile) {
  const target=profilePath(path); const temporary=`${target}.${process.pid}.tmp`;
  writeFileSync(temporary,JSON.stringify(profile)+'\n',{mode:0o600,flag:'wx'}); renameSync(temporary,target);
 }
+/** The profile path: --profile wins, then AUDIENTI_PROFILE (the variable the MCP server reads), else none (#448). */
+export const profileFrom = flag => flag ?? (process.env.AUDIENTI_PROFILE || undefined);
+export const profileHint = 'Pass --profile PATH, or set AUDIENTI_PROFILE to the profile file.';
 export function configuration(path, scope='workspace:access') {
+ path=profileFrom(path);
  const profile=readProfile(path);
  const agentProfile = Boolean(profile.agent || profile.pendingAgent || profile.connectionSecret);
  return { url:agentProfile ? profile.url : process.env.AUDIENTI_API_URL ?? profile.url, token:agentProfile ? (scope === 'workspace:access' ? profile.tokens?.['workspace:read'] : undefined) : process.env.AUDIENTI_API_TOKEN ?? (scope === 'workspace:access' ? profile.tokens?.['workspace:read'] ?? profile.tokens?.[scope] : profile.tokens?.[scope]), workspaceId:profile.workspaceId, profile };
@@ -127,9 +133,13 @@ export function validateUrl(value) {
  if(url.protocol!=='https:' && !(url.protocol==='http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) throw new Error('Use HTTPS for remote API hosts.');
  return url;
 }
+// A refused request that never left this machine. It prints like an API error, so a caller reads one format (#451).
+export class InvalidArguments extends Error {
+ toJSON() { return {code:'invalid_arguments',message:this.message}; }
+}
 export class WorkspaceRequestError extends Error {
  constructor(status, code, message, retryAt, blockers, requestTraceId) { super(message); this.status = status; this.code = code; this.retryAt = retryAt; this.blockers = blockers; this.requestTraceId = requestTraceId; }
- toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}), ...(this.charged ? {charged:this.charged} : {}) }; }
+ toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.currentRevision!==undefined ? {currentRevision:this.currentRevision} : {}), ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}), ...(this.charged ? {charged:this.charged} : {}) }; }
 }
 export class HostedResponseUnknown extends Error {
  constructor(requestId, reason, requestTraceId) { super('The server response is unknown. Paid work may have started. Retry using the same requestId and principal; never generate a new ID to recover this call.'); this.requestId=requestId; this.reason=reason; this.requestTraceId=requestTraceId; }
@@ -137,12 +147,12 @@ export class HostedResponseUnknown extends Error {
 }
 export async function callWorkspace(name, args, config) {
  const operation=operations[name]; if(!operation) throw new Error('Unknown workspace operation.');
- const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new Error(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`);
+ const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new InvalidArguments(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`);
  const input={...parsed.data};
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  // #333: an agent's own queue covers all its workspaces; a user's reads the selected workspace, as before.
- if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error('Select a workspace or supply --workspace ID.'); }
- const url=validateUrl(config.url); if(!config.token) throw new Error('A workspace:access token is required. Configure the environment or a private profile.');
+ if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error(`Select a workspace or supply --workspace ID. ${config.profile&&Object.keys(config.profile).length?'Run workspace use WORKSPACE_ID once for this profile.':profileHint}`); }
+ const url=validateUrl(config.url); if(!config.token) throw new Error(`A workspace:access token is required. ${profileHint} Or set AUDIENTI_API_URL and AUDIENTI_API_TOKEN.`);
  const target=new URL(`/api/v1${operation.path(input)}`,url);
  let response;try {response=await fetch(target,{method:operation.method,headers:{Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json',...((operation.traced||name.startsWith('tools_'))?{'X-Audienti-Interface':config.interface==='mcp'?'mcp':'cli'}:{})},...(['POST','PUT','PATCH'].includes(operation.method)?{body:JSON.stringify(operation.body?.(input)??{})}:{}),redirect:'error',signal:AbortSignal.timeout(operation.timeoutMs ?? 10000)});}catch(error){if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,['TimeoutError','AbortError'].includes(error?.name)?'timeout':'transport_failure');throw new Error('Could not reach the API. Redirects are not followed.');}
  const headerTrace=(operation.traced||name.startsWith('tools_'))&&uuid.safeParse(response.headers.get('x-request-trace-id')).success?response.headers.get('x-request-trace-id'):undefined;
@@ -151,9 +161,10 @@ export async function callWorkspace(name, args, config) {
  if(!response.ok) {
   const code = typeof result?.error?.code==='string' && /^[a-z_]+$/.test(result.error.code) ? result.error.code : 'request_failed';
   const retryAt = typeof result?.error?.retryAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.error.retryAt) ? result.error.retryAt : undefined;
-  const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===409 && (code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready' || code==='campaign_not_paced'))) && typeof result?.error?.message==='string' && result.error.message.length<=1000 && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
+  const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===404 && code==='not_found') || (response.status===409 && (code==='revision_conflict' || code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready' || code==='campaign_not_paced'))) && typeof result?.error?.message==='string' && result.error.message.length<=1000 && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
   const blockers = (code==='execution_blocked' || code==='campaign_not_ready') && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
   const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId);
+  if(code==='revision_conflict'&&Number.isInteger(result?.error?.currentRevision)&&result.error.currentRevision>=0)error.currentRevision=result.error.currentRevision;
   // What a failed paid check already spent (pico USD), so a caller counting its spend never loses it.
   if(typeof result?.error?.charged==='string'&&/^\d{1,20}$/.test(result.error.charged))error.charged=result.error.charged;
   if(isPaidToolOperation(name,input)){error.requestId=input.requestId;error.recovery=response.status>=500?'retry_same_request_id':'inspect_rejection';}
@@ -175,7 +186,7 @@ export async function workspaceCli(args) {
  if(position[0]==='profile' && position[1]==='save') {
   if(!['account:read','workspace:access','agents:manage'].includes(flags.scope)) throw new Error('Specify --scope account:read, workspace:access or agents:manage.');
   const url=validateUrl(process.env.AUDIENTI_API_URL).toString().replace(/\/$/,'');const token=process.env.AUDIENTI_API_TOKEN;if(!token) throw new Error('Set AUDIENTI_API_TOKEN.');
-  const profile=readProfile(flags.profile);if(profile.agent || profile.pendingAgent || profile.connectionSecret) throw new Error('Use a separate user profile; agent profiles cannot store user API tokens.');writeProfile(flags.profile,{...profile,url,tokens:{...profile.tokens,[flags.scope]:token}});console.log('Profile saved.');return;
+  const profile=readProfile(profileFrom(flags.profile));if(profile.agent || profile.pendingAgent || profile.connectionSecret) throw new Error('Use a separate user profile; agent profiles cannot store user API tokens.');writeProfile(profileFrom(flags.profile),{...profile,url,tokens:{...profile.tokens,[flags.scope]:token}});console.log('Profile saved.');return;
  }
  const config=configuration(flags.profile);const command=position.slice(1).join(' ');
  let name, input={};
@@ -205,6 +216,6 @@ export async function workspaceCli(args) {
  if(!name) throw new Error('Unknown workspace command. Use audienti --help.');
  const result=await callWorkspace(name,input,config);
 
- if(name==='workspace_select') writeProfile(flags.profile,{...config.profile,workspaceId:config.workspaceId});
+ if(name==='workspace_select') writeProfile(profileFrom(flags.profile),{...config.profile,workspaceId:config.workspaceId});
  console.log(JSON.stringify(result));
 }

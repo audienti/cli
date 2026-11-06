@@ -18,7 +18,7 @@
 | `goalKey` | The `key` of the goal stage. Not the first stage. |
 | `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive`, `taken_over`, `bounced`, `skipped` or `other`. "Bad data" and "repair" are not off-ramps. |
 | `voice` | How messages should sound, in the user's style. |
-| `rules` | Optional: `autoMove`, `flagOverdue`, `allowBackward` (booleans), `emailWindow` (`weekdays_morning`, `weekdays`, `any_day`), `nurtureDays` (60, 90, 180 or null). |
+| `rules` | Optional: `flagOverdue`, `allowBackward` (booleans), `emailWindow` (`weekdays_morning`, `weekdays`, `any_day`), `nurtureDays` (60, 90, 180 or null). Approval of a move is a setting on the account, not a playbook rule. An `autoMove` in an older playbook is ignored. |
 
 ## Stage
 
@@ -40,7 +40,7 @@
 | Field | Rule |
 | --- | --- |
 | `key` | A UUID, unique in the playbook. A plan action that runs this step carries it as `playbookStepKey`; actions without it change no playbook progress. |
-| `channel` | `LinkedIn`, `Email` or `Phone`. |
+| `channel` | `LinkedIn` or `Email`. |
 | `action` | A short label, for example "Send connection request". |
 | `condition` | `Always`, `Only if viable` or `Only if connected`. Audienti does not check a connection itself: put an `Only if connected` step in a stage that opens on `accept`, so entering the stage on the accept is what gates it. |
 | `viability` | Required with `Only if viable`: when the step makes sense. An Email step is skipped, without a card, for a person with no email on record, whatever its condition. |
@@ -48,8 +48,10 @@
 | `wait` | Optional: `{ "until": U, "days": N }`. `until` is `accept` (LinkedIn steps only), `reply`, `meeting` or `timeout`; `days` is 1 to 60. The wait starts when the agent reports the step's result with its step key: a plan action carries the step's `key` as `playbookStepKey`, and a succeeded result for that action starts the wait. A reply or a booked meeting ends every wait early; an accept ends only a wait until `accept`. Older playbooks used `waitDays: N`, which still reads as `{ "until": "timeout", "days": N }`. |
 | `side` | Defaults to false. A side step runs while the main step before it waits, for example a profile view or a like. A stage with side steps needs a main step. |
 | `onTimeout` | `next` (default) or `off_ramp`. With `off_ramp`, a main step whose wait runs out leaves the prospect through the `unresponsive` off-ramp. When nothing is left in the stage, its completion decides. |
+| `routes` | Optional: `{ "accept"?: T, "reply"?: T, "meeting"?: T }`, where `T` is `{ "kind": "stage", "stageKey": "<uuid>" }` or `{ "kind": "off_ramp", "offRampKey": "<uuid>" }`. Where an event that reaches the person after this step ran sends them. The step's route wins over the stage's `on` list; an event with no route follows the stage. A main step only; `accept` only on a LinkedIn step. A route to an earlier stage needs `rules.allowBackward`. |
+| `actionId` | Optional: an action id from the outreach rulebook, for example `linkedin.message.send`. The `action` text stays the label the person reads. |
 
-A LinkedIn step whose action names InMail runs only when the LinkedIn account reports InMail available. Otherwise it is skipped without a card.
+A LinkedIn step whose `actionId` is `linkedin.inmail.send` runs only when the LinkedIn account reports InMail available. Otherwise it is skipped without a card.
 
 ## Example request
 
@@ -83,7 +85,7 @@ Use the same UUID wherever the same placeholder letter appears.
     "goalKey": "<F>",
     "offRamps": [{ "key": "<R>", "name": "Unresponsive", "reason": "unresponsive" }],
     "voice": "Write like a founder. Lead with their signal, offer something useful, and ask one short question.",
-    "rules": { "autoMove": true, "flagOverdue": true, "allowBackward": false, "emailWindow": "weekdays_morning", "nurtureDays": 90 }
+    "rules": { "flagOverdue": true, "allowBackward": false, "emailWindow": "weekdays_morning", "nurtureDays": 90 }
   }
 }
 ```

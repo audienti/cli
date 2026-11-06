@@ -23,7 +23,7 @@ Use this skill when:
 ## Rules
 
 - Reuse before you create. Most new campaigns fit a playbook that already exists.
-- Use only channels you can cover with accounts you reported (LinkedIn, Email, Phone).
+- Use only channels you can cover with accounts you reported (LinkedIn, Email).
   Do not draft a phone step if no one can call.
 - One playbook is one strategy. A correction to the same strategy (a wait, a step's
   wording, a missing off-ramp) is a new revision. A different strategy is a new
@@ -39,7 +39,8 @@ Use this skill when:
 
 ## 1. Reuse first
 
-1. `audienti playbook list` shows the workspace's playbooks and their latest revision.
+1. `audienti playbook list` shows one page of summaries: name, latest revision and stage and step
+   counts. Follow `nextCursor` for more; `--limit N` sets the page size.
    Every workspace has three starter playbooks (`system: true`): Email first, LinkedIn
    first and Email only. When your reported channels point to one, the list marks it
    `recommended: true` and returns a `recommendation` with its `reason`. A confirmed
@@ -83,8 +84,8 @@ field and the rules Audienti checks.
    Keep the same keys when you revise, so progress already recorded stays on its stage.
 2. `audienti playbook save --file REQUEST.json`. Over MCP use `playbook_save`.
 3. If the save fails, read the error, fix that field and retry with the same
-   `requestId`. If it reports a revision conflict, run `playbook show ID` and apply your
-   change to the newer revision.
+   `requestId`. If it reports a revision conflict, the error gives `currentRevision`: run
+   `playbook show ID`, apply your change to that revision and save with that `expectedRevision`.
 
 ## 4. Ask the user and pin it
 
