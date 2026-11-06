@@ -14,12 +14,28 @@
 | Field | Rule |
 | --- | --- |
 | `name` | 1 to 120 characters. Name the strategy, not the campaign. |
-| `stages` | 2 to 30 stages, in order. |
-| `goalKey` | The `key` of the goal stage. Not the first stage. |
+| `stages` | 2 to 30 stages, in order. Leave it out for the default skeleton (see Defaults). |
+| `goalKey` | The `key` of the goal stage. Not the first stage. Left out, it is the last stage (with `stages` left out too, the skeleton's last stage). |
 | `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not off-ramps. |
 | `voice` | How messages should sound, in the user's style. |
 | `eventRules` | Optional: what happens when an event reaches a person, for any stage and step. A new playbook starts with three (below); leave the field out to keep them, or send the whole list to replace it. See Event rules. |
 | `rules` | Optional: `allowBackward` (boolean, default false): let a move go to an earlier stage. Approval of a move is a setting on the account, not a playbook rule. |
+
+## Defaults
+
+When you change a playbook you already have, a part you leave out (`stages`, `goalKey`, `offRamps`, `voice`) stays as it is. For a new playbook, leave a field out and the server fills the best-practice value, the same on the CLI, MCP, REST and in the editor. What you write is kept, even a weak choice; the Playbook check warns about those.
+
+| Left out | Value |
+| --- | --- |
+| `stages` | Ready, Outreach underway (no steps; people who finish it leave as Unresponsive), In conversation (worked by a person) and Meeting booked as the goal. `playbook save` with only a `name` makes this. |
+| `offRamps` | Unresponsive, Not interested and Not a fit. |
+| an off-ramp `reason` | Guessed from the name (Not interested is `rejected`, Not a fit is `not_fit`, Unresponsive is `unresponsive`), else `other`. |
+| `voice` | One plain, short sentence. A blank voice gets it too. |
+| a stage `goalDays` | The waits of its main steps plus 2 days, at least 3. The goal stage gets 0. |
+| a stage `completion` | A stage with steps that an agent works, other than the goal, closes people out as Unresponsive. Other stages stay. |
+| a step `condition` | `Only if connected` for a LinkedIn message, else `Always`. |
+| a step `instructions` | One coaching sentence for the kind of action. |
+| a main step `wait` | Only for a step that is new in this save. A step that sends waits 3 days for a reply; a connection request waits 7 days for the accept; a step that sends nothing has no wait. A step the playbook already has keeps what it has, and `"wait": null` means no wait. |
 
 ## The Playbook check
 
@@ -58,12 +74,12 @@ The other items are warnings; read them after each save and clear them:
 | Field | Rule |
 | --- | --- |
 | `key` | A UUID, unique in the playbook. A plan action that runs this step carries it as `playbookStepKey`; actions without it change no playbook progress. |
-| `channel` | `LinkedIn` or `Email`. A phone call or a gift is not a step yet (#433): tell your user, and use an Email step with the call in its instructions. |
+| `channel` | `LinkedIn`, `Email` or `Custom`. A `Custom` step is something you cannot do, for example a phone call, a voicemail, a handwritten note, a video or a gift. You prepare the script, note or choice, and a person does it by hand and records what happened on the Hand tasks page. A Custom step is never a side step and sends nothing. |
 | `action` | A short label, for example "Send connection request". |
-| `condition` | `Always`, `Only if viable` or `Only if connected`. Audienti does not check a connection itself: put an `Only if connected` step in a stage that opens on `accept`, so entering the stage on the accept is what gates it. |
+| `condition` | `Always`, `Only if viable` or `Only if connected`. `Only if connected` is checked: a person who was sent a connection request and has not accepted is skipped for the step; a person with no request on record is not blocked, because they may already be connected. A stage that opens on `accept` gates the same way. Left out, a LinkedIn message gets `Only if connected` and everything else `Always`. |
 | `viability` | Required with `Only if viable`: when the step makes sense. An Email step is skipped, without a card, for a person with no email on record, whatever its condition. |
 | `instructions` | Coaching for whoever does the step. |
-| `wait` | Optional: `{ "until": U, "days": N }`. `until` is `accept` (LinkedIn steps only), `reply`, `meeting` or `timeout`; `days` is 1 to 60. The wait starts when the agent reports the step's result with its step key: a plan action carries the step's `key` as `playbookStepKey`, and a succeeded result for that action starts the wait. A reply or a booked meeting ends every wait early; an accept ends only a wait until `accept`. Older playbooks used `waitDays: N`, which still reads as `{ "until": "timeout", "days": N }`. |
+| `wait` | Optional: `{ "until": U, "days": N }`. `until` is `accept` (LinkedIn steps only), `reply`, `meeting`, `timeout` or `event` (Custom steps only); `days` is 1 to 60. An `event` wait also needs `"event": "Gift delivered"` (the name of what the person records); the person records it on the Hand tasks page and that ends the wait, and so does a reply, a booked meeting or the days running out. The wait starts when the agent reports the step's result with its step key: a plan action carries the step's `key` as `playbookStepKey`, and a succeeded result for that action starts the wait. A reply or a booked meeting ends every wait early; an accept ends only a wait until `accept`. Older playbooks used `waitDays: N`, which still reads as `{ "until": "timeout", "days": N }`. |
 | `side` | Defaults to false. A side step runs while the main step before it waits, for example a profile view or a like. A stage with side steps needs a main step. |
 | `onTimeout` | `next` (default) or `off_ramp`. With `off_ramp`, a main step whose wait runs out leaves the prospect through the `unresponsive` off-ramp. When nothing is left in the stage, its completion decides. |
 | `routes` | Optional: `{ "accept"?: T, "reply"?: T, "meeting"?: T }`, where `T` is `{ "kind": "stage", "stageKey": "<uuid>" }` or `{ "kind": "off_ramp", "offRampKey": "<uuid>" }`. Where an event that reaches the person after this step ran sends them. The step's route wins over the stage's `on` list; an event with no route follows the stage. A main step only; `accept` only on a LinkedIn step. A route to an earlier stage needs `rules.allowBackward`. |

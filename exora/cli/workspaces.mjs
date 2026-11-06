@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {notificationOperations} from './notification-operations.mjs';
 import {roomsOperations} from './rooms-operations.mjs';
 import {queueOperations} from './queue-operations.mjs';
+import {handTaskOperations} from './hand-task-operations.mjs';
 import {kvOperations} from './kv-operations.mjs';
 import {outcomeOperations} from './outcome-operations.mjs';
 import {attachmentOperations} from './attachment-operations.mjs';
@@ -42,6 +43,7 @@ export const operations = {
  ...notificationOperations,
  ...roomsOperations,
  ...queueOperations,
+ ...handTaskOperations,
  ...kvOperations,
  ...outcomeOperations,
  ...attachmentOperations,
@@ -150,7 +152,7 @@ export function localGuidance(name, issues, args) {
  const shown = typeof given === 'string' ? `"${given.slice(0, 60)}"` : 'that value';
  if(issue.code === 'invalid_value') {
   const allowed = issue.values.filter(value => typeof value === 'string' && value.length <= 80).slice(0, 60);
-  const phone = playbook && last === 'channel' ? ' A phone call, voicemail or gift is not a step channel yet (#433): tell your user, and use an Email or LinkedIn step with what you would have done in its instructions.' : '';
+  const phone = playbook && last === 'channel' ? ' A phone call, voicemail or gift is a Custom step: use channel Custom and write in its instructions what the person does by hand. Your agent prepares the script or text and the person records the outcome.' : '';
   const more = playbook && last === 'actionId' ? ' List every action id with its channel: audienti playbook actions.' : playbook && last === 'when' ? ' List the event names: audienti playbook actions.' : '';
   return {field, ...(allowed.length ? {allowed} : {}), next: `Use one of the allowed values in place of ${shown}.${phone}${more}`};
  }
@@ -192,7 +194,7 @@ export async function callWorkspace(name, args, config) {
  if(!response.ok) {
   const code = typeof result?.error?.code==='string' && /^[a-z_]+$/.test(result.error.code) ? result.error.code : 'request_failed';
   const retryAt = typeof result?.error?.retryAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.error.retryAt) ? result.error.retryAt : undefined;
-  const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===404 && code==='not_found') || (response.status===422 && code==='playbook_cannot_work') || (response.status===409 && (code==='revision_conflict' || code==='playbook_in_use' || code==='definition_archived' || code==='playbook_archived' || code==='starter_playbook' || code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready' || code==='campaign_not_paced'))) && typeof result?.error?.message==='string' && result.error.message.length<=(code==='playbook_cannot_work'?2000:1000) && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
+  const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===404 && code==='not_found') || (response.status===422 && code==='playbook_cannot_work') || (response.status===409 && (code==='revision_conflict' || code==='playbook_in_use' || code==='definition_archived' || code==='playbook_archived' || code==='starter_playbook' || code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready' || code==='campaign_not_paced' || code==='wrong_event_name' || code==='mark_task_done_first' || code==='no_event' || code==='prepare_first' || code==='task_closed' || code==='not_claimed'))) && typeof result?.error?.message==='string' && result.error.message.length<=(code==='playbook_cannot_work'?2000:1000) && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
   const blockers = (code==='execution_blocked' || code==='campaign_not_ready') && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
   const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId, errorGuidance(result?.error, config.token));
   if(code==='playbook_cannot_work'&&Array.isArray(result?.error?.errors)&&result.error.errors.length<=30)error.errors=result.error.errors.filter(item=>item&&typeof item.id==='string'&&typeof item.message==='string').map(item=>({id:item.id,level:item.level,message:item.message,...(typeof item.stageKey==='string'?{stageKey:item.stageKey}:{}),...(item.fix&&typeof item.fix.label==='string'?{fix:{id:item.fix.id,label:item.fix.label}}:{})}));

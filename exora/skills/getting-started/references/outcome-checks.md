@@ -77,6 +77,17 @@ results instead. The task names the step in `detail.step` and tells you how to f
 
 Audienti records the step as run, and the playbook goes on to its next step.
 
+A `handtasks.prepare` task (a Custom step of a playbook: something you cannot do, such as a phone call, a voicemail, a
+handwritten note, a video or a gift) asks you to prepare the step for a person who will do it by hand. The task names the
+step in `detail.step`. You do not contact the person. Write everything the person needs yourself, from the step's text, with
+no fixed template, and report it.
+
+- `handtask.prepared {person, items}`: `items` is 1 to 12 pieces of `{label, text}`, such as a call script, a voicemail
+  script, the text of a note, a video outline, or a gift choice and its message. Add how to reach the person (a
+  phone number if you have one) as an item. Audienti puts them in the user's Hand
+  tasks list. The person does the step, records what happened and marks it done, and the playbook goes on. If you report
+  again while the person has not started, the new material replaces the old.
+
 An `invitations.receive` task (every 6 hours, only on a seat whose connector can read received invitations)
 asks you to read the connection requests people sent to your user. Read only the pending received list. Never
 accept, decline or open anyone. Report each pending request:

@@ -154,7 +154,14 @@ export function capabilityText(data) {
  return [
   `Works now${data?.stale ? ' (report is over seven days old; report again)' : ''}:`, ...(own.length ? own.map(line) : ['  nothing reported yet: audienti agent capabilities report --file CAPABILITIES.json']),
   'Works with Audienti tools:', ...(hosted.length ? hosted.map(line) : [data?.workspaceId ? '  none: the workspace has no credits or the user has not approved these groups' : '  pick a workspace to see them: --workspace ID']),
+  ...managedText(data?.managedAccounts),
  ].join('\n');
+}
+
+/** #444: what each LinkedIn account connected through Audienti may do. Off means the agent may not do it, which is not a missing tool. */
+function managedText(accounts) {
+ if (!Array.isArray(accounts) || !accounts.length) return [];
+ return ['Accounts connected through Audienti (what each action is set to):', ...accounts.flatMap(account => [`  ${account.name ?? account.accountRef}`, ...(account.modes ?? []).map(mode => `    ${mode.label}: ${mode.modeName} (${mode.meaning})`)]), '  Off means the agent may not do it. Do not look for a tool for it.'];
 }
 
 function readCapabilityFile(path) {return readJsonFile(path,32768,'Capability file');}

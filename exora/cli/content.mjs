@@ -10,6 +10,7 @@ const help = `Usage:
 
 Topic input: {"name":"Topic name","slug":"optional-slug","description":"optional"}.
 These commands read saved records or create a topic; they do not call a paid provider.
+Each post names the tool run that last saved it in savedByOperationId; read the run with audienti tools runs get OPERATION_ID.
 Retrieve fresh data with audienti tools posts.fetch|posts.search|posts.comments|posts.reactions|profiles.posts.
 Use audienti tools describe NAME --json for the exact contract.
 All commands accept --profile PATH, --workspace UUID and --json.`;

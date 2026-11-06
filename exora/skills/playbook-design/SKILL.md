@@ -23,7 +23,7 @@ Use this skill when:
 ## Rules
 
 - Reuse before you create. Most new campaigns fit a playbook that already exists.
-- Use only channels you can cover with accounts you reported (LinkedIn, Email).
+- Use only channels you can cover with accounts you reported (LinkedIn, Email). For anything you cannot do yourself, such as a call, a voicemail, a handwritten note, a video or a gift, use a `Custom` step: you prepare it and a person does it. A Custom step can wait for a named event the person records (`wait.until` `event`), for example "Gift delivered".
   Do not draft a phone step if no one can call.
 - One playbook is one strategy. A correction to the same strategy (a wait, a step's
   wording, a missing off-ramp) is a new revision. A different strategy is a new

@@ -191,6 +191,7 @@ user, but no task requires them yet.
 | `crm.record.read` | hubspot, salesforce, pipedrive, other | read | Read one CRM record | yes |
 | `crm.record.write` | hubspot, salesforce, pipedrive, other | write | Write back to one CRM record | yes |
 | `owner.notify` | push, slack, sms, email | send | Reach the user on their own channel | yes |
+| `handtask.prepare` | any | write | Prepare a step a person does by hand: script, note text, outline, gift choice | yes |
 | `webhook.receive` | none | read | Take a push instead of polling | later |
 | `webhook.send` | none | send | Post events to the user's URL | later |
 

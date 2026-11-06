@@ -7,12 +7,14 @@ const result=z.discriminatedUnion('kind',[
  z.object({kind:z.literal('linkedin.invite_closed'),person:uuid,reason:z.enum(['withdrawn','expired']),at:time.optional()}).strict(),
  z.object({kind:z.literal('linkedin.profile_degree'),person:uuid,degree:z.number().int().min(1).max(3),at:time.optional()}).strict(),
  // #413: a steps.run task (a comment, react or withdraw step): the post engaged with, or why the step was skipped.
- z.object({kind:z.literal('linkedin.comment'),person:uuid,postUrl:z.string().url().max(500),at:time.optional()}).strict(),
+ z.object({kind:z.literal('linkedin.comment'),person:uuid,postUrl:z.string().url().max(500),text:z.string().trim().min(1).max(1250).optional(),at:time.optional()}).strict(),
  z.object({kind:z.literal('linkedin.reaction'),person:uuid,postUrl:z.string().url().max(500),reaction:z.enum(['like','celebrate','support','love','insightful','funny']).optional(),at:time.optional()}).strict(),
  z.object({kind:z.literal('linkedin.follow'),person:uuid,at:time.optional()}).strict(),
  z.object({kind:z.literal('linkedin.unfollow'),person:uuid,at:time.optional()}).strict(),
  z.object({kind:z.literal('linkedin.invitation_received'),ref:z.string().trim().min(1).max(300).optional(),profileUrl:z.string().trim().url().max(500).optional(),name:z.string().trim().min(1).max(200).optional(),sentAt:time.optional()}).strict().refine(value=>!!(value.ref??value.profileUrl),{message:'Give the request id (ref) or the profile address (profileUrl).'}),
  z.object({kind:z.literal('linkedin.step_skipped'),person:uuid,reason:z.string().min(1).max(500),at:time.optional()}).strict(),
+ // #443: a handtasks.prepare task (a Custom step): what the agent prepared for the person to use. Each item is a labelled piece, such as a call script.
+ z.object({kind:z.literal('handtask.prepared'),person:uuid,items:z.array(z.object({label:z.string().trim().min(1).max(120),text:z.string().trim().min(1).max(8000)}).strict()).min(1).max(12)}).strict(),
  // #279: a replies.check task (was there a reply to the email).
  z.object({kind:z.literal('email.no_reply'),person:uuid}).strict(),
  z.object({kind:z.literal('email.reply'),person:uuid,evidence:uuid}).strict(),

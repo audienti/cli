@@ -1,6 +1,6 @@
 import {callWorkspace,configuration} from './workspaces.mjs';
 import {readJsonFile} from './json-file.mjs';
-const help='Use outcomes report TASK_ID --file RESULTS.json [--workspace ID] [--profile PATH]. RESULTS.json is {"results":[{"kind":"linkedin.accept","person":"PERSON_ID","at":"ISO"}]}, or for a mailbox test email {"results":[{"kind":"mailbox.received","code":"CODE","sentTo":"ADDRESS","message":"MESSAGE_ID","receivedAt":"ISO"}]}.';
+const help='Use outcomes report TASK_ID --file RESULTS.json [--workspace ID] [--profile PATH]. RESULTS.json is {"results":[{"kind":"linkedin.accept","person":"PERSON_ID","at":"ISO"}]}, for a comment {"results":[{"kind":"linkedin.comment","person":"PERSON_ID","postUrl":"URL","text":"COMMENT"}]}, or for a mailbox test email {"results":[{"kind":"mailbox.received","code":"CODE","sentTo":"ADDRESS","message":"MESSAGE_ID","receivedAt":"ISO"}]}, or for a Hand task (handtasks.prepare) {"results":[{"kind":"handtask.prepared","person":"PERSON_ID","items":[{"label":"Call script","text":"..."},{"label":"Phone number","text":"..."}]}]}.';
 export async function outcomesCli(args){
  const position=[],flags={};for(let i=1;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}

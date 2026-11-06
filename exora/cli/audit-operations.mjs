@@ -5,13 +5,13 @@ export const auditOperations = {
   schema: z.object({
    workspaceId: z.string().uuid().optional(),
    actor: z.enum(['person', 'agent']).optional(),
-   category: z.enum(['guardrails', 'budgets', 'approvals', 'suppression', 'members', 'agents']).optional(),
+   category: z.enum(['guardrails', 'budgets', 'approvals', 'suppression', 'members', 'agents', 'replies', 'billing', 'playbooks']).optional(),
    since: z.string().datetime().optional(),
    until: z.string().datetime().optional(),
    cursor: z.string().max(500).optional(),
    limit: z.number().int().min(1).max(200).optional(),
   }).strict(),
   method: 'GET', path: a => `/workspaces/${a.workspaceId}/audit-events?${query(a)}`, scoped: true,
-  description: 'List the read-only workspace audit log: who changed guardrails, budgets, approvals, suppression, members and agent access, newest first. Admin only. Page with cursor.',
+  description: 'List the read-only workspace audit log: who changed guardrails, budgets, approvals, suppression, members, agent access and playbooks (who saved which version), newest first. Admin only. Page with cursor.',
  },
 };

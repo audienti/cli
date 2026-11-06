@@ -51,6 +51,7 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience summary [--audience ID]|people ID|companies ID
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
+Hand tasks: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID --outcome TEXT [--notes TEXT] [--result replied|meeting_booked]|skip ID --reason TEXT|event ID [--name TEXT]  (a person does a Custom step by hand and records what happened)
 Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
 Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
@@ -159,6 +160,7 @@ async function main() {
   if(args[0]==='file'){const {fileCli}=await import('./files.mjs');await fileCli(args);return;}
   if(args[0]==='ask'){const {askCli}=await import('./questions.mjs');await askCli(args);return;}
   if(args[0]==='questions'){const {questionsCli}=await import('./questions.mjs');await questionsCli(args);return;}
+  if(args[0]==='hand-tasks'){const {handTasksCli}=await import('./hand-tasks.mjs');await handTasksCli(args);return;}
   if(args[0]==='queue'){const {queueCli}=await import('./queue.mjs');await queueCli(args);return;}
   if(args[0]==='attachments'){const {attachmentsCli}=await import('./attachments.mjs');await attachmentsCli(args);return;}
   if(args[0]==='outcomes'){const {outcomesCli}=await import('./outcomes.mjs');await outcomesCli(args);return;}
