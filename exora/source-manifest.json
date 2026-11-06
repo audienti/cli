@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "9673ca0c2e8c98a117672f0ba0181e66a1a5c556",
+  "sourceCommit": "3f1aed65bd8abf5e19c78316d93d979b268f7b7b",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -8,7 +8,7 @@
     "cli/account-intake-operations.mjs": "b43d764c628beabafad753d711ddb2af2c64276e4a6506ed0b854839091ea5db",
     "cli/account-intake.mjs": "aa77f2f96fd030f8830d6de278932186aea7c82cfda086a5a6cf569202feebc8",
     "cli/account-replies.mjs": "699e34e5c736ba316df8f164b4c50f82a7e4e2d5e51303e6b13944c3f2c854ab",
-    "cli/account-reply-operations.mjs": "4359096dbf75d8c3602266588d2aea2b6cdecd903e2a094dbf25d26e2fab22b2",
+    "cli/account-reply-operations.mjs": "21f1441e708d9de8af83ec8f7444a5ca5d686fab90be669b904dbe1454eb7a13",
     "cli/agents.mjs": "e311dd08d1dc09648881a37eb9765bf6d155786f0b713204f51de29bc8134293",
     "cli/assignment-operations.mjs": "fc74e3fd79975cfcbac14891d5dec5f25e662777050fc46a8ad3aae5cf361c59",
     "cli/assignment.mjs": "90cb85e0df8aadca2ff8391c99e778b41261183b5f38e8c6c32afee2f98f871a",
@@ -16,7 +16,7 @@
     "cli/attachments.mjs": "2fee6b4abbf82da9847d4a927a3d4d3ca947a198a903a78927596a2ea858cbf4",
     "cli/audience-operations.mjs": "133b72dc6b9e3a6b4f173ce28f1524163f9c7b049505b885115f83b9e4af7170",
     "cli/audiences.mjs": "3c377346efc1a8bdde432a16c2d19a3f51f34f3333d344d3a2bfa94c188a017d",
-    "cli/audienti.mjs": "d78b513ea58026f8f2f2eb6c70f4cd00c589b6b6520be53ebd1332377a8d6a78",
+    "cli/audienti.mjs": "5bd178c033a5dfde80f50db18f9e81c13d2b7427de3bbff6ba421a73d08ae08c",
     "cli/audit-operations.mjs": "afaf87d592a1e5f6bff2a8649a6a64a8f471950b7d99e98995d9205aa5910398",
     "cli/audit.mjs": "a7becaed67c58b063e668b5e66844b6dc15c11a63b428faa171b542ad922c001",
     "cli/budget-operations.mjs": "d74916551ef393e29734c6e13cf9021251e0ed126eeaa529e18cf2332146e1e0",
@@ -36,8 +36,8 @@
     "cli/guardrails.mjs": "e8b9c0a19956a9eab84475d3c56a4b6c77baf7ed9a55e8686d660ef1ad562aa8",
     "cli/hand-task-operations.mjs": "473473fe95324c8c8733e037feab5ac468c07b0658fabd739cfd7d400a7faa83",
     "cli/hand-tasks.mjs": "2c895cf6b30c594a7e27cc4ec4b7eddeb39f941cd195b9255c6e0d6b4a56371f",
-    "cli/intent-operations.mjs": "e3151e71e9064c8de0953e666e23e4d2c4681b1f3900ef79569b6a074d48ab8c",
-    "cli/intent.mjs": "3f31297a09d144204fb04b5d54f67172fc39d3d3833bf4e8ad34469295b22fea",
+    "cli/intent-operations.mjs": "104e883319b4e9c2fb43de373fcf9d5df537871995a0b81b4ee86fa206ba6707",
+    "cli/intent.mjs": "db0ccb85977fca26f865970dacd0538e81b070d7c0ec078f38358f33c458a96a",
     "cli/json-file.mjs": "96431b18215834c2531f5901e2526875c634dd2e85a9465fcffc937fbec52150",
     "cli/kv-operations.mjs": "505d79d0d535d3441883f8a37817c30c73367216a35dddb07181f0f0e799df79",
     "cli/kv.mjs": "05783610001dd002af07a4bb8f26e64d74aa4981bbe38a2100552b810cb3bc72",
@@ -51,7 +51,7 @@
     "cli/outcomes.mjs": "765ccb112a90fc4d228b2a41e5e19c5e1f3e2fe14bc1d8128b0090fc95cdbf3f",
     "cli/owner-account-client.mjs": "e7912f7c67571676cb94bcc9424b7d4a3bf9ef1461c9a5d6c31a2651e546a9ea",
     "cli/playbook-help.mjs": "56a5b6ba4c94022931f9c751c954133239404048aba99d1ff28cd290eac22f41",
-    "cli/playbook-operations.mjs": "f5a90688c266d2445fc69500ed39aa0eb0548c8894a710130190bf8177dcbfb1",
+    "cli/playbook-operations.mjs": "dcf4df1d0e9d9b9ed62f98c646405e070d3ec727201e2c0e0275df30c4e832a5",
     "cli/profiles.mjs": "45929b224ffc916b6dbd7a94e06ac09a1ff7feec430633b10d160c1608fc2d32",
     "cli/progress.mjs": "aeca47f4e59be306dac4592cf2e4209a30e322fc13e4e103e64e09faa370f5a8",
     "cli/prospecting-settings-operations.mjs": "37b881a867c19d9e5f2d02316038284ea0cf09de4f37b6dee2370a1faedf245e",
@@ -83,8 +83,8 @@
     "cli/work-feedback.mjs": "f3b77ecfd7ea1aba9c9f03c9d894137547e9c5575d9daa359ed94505ad025852",
     "cli/work-operations.mjs": "8b3a84ca15e8e4ad79ef92ced4c5adaffd5129f630e3bfc2c74a844a90867600",
     "cli/work.mjs": "751107ecc3de5a6be9db4a068cddc41f3ad8e77c87e59686eaf522862caf9e9f",
-    "cli/workspaces.mjs": "0f75d41387e0dd1aa9e20a70fba5298e0d9ac6c86c04f050723c31e04479ad83",
-    "package.json": "b5e0afb3718de66a76c5106f1a9bef5bec9447d33f26b7d1def3e7936b6e8e6d",
+    "cli/workspaces.mjs": "5694825a763008bf0dcfa4e17bfe79a1d593207099f500bfa21184f899e83971",
+    "package.json": "5d97a043a8fd4d3fdc6f2c3ba4890e048ae50102fc2ca6cb47fe8acf1be29073",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "8f2124065bfc3a005b44e194e7dcce9bbf14062ab332e7db66d441eeccb518ed",
@@ -100,9 +100,9 @@
     "skills/getting-started/references/capabilities.md": "982e3583a47ba4ac832efae2f6af3a4d8c0c18cace159c76b2a4ad1a8d8e910e",
     "skills/getting-started/references/mailbox-check.md": "113574bb5a573125620dcde4e65ebf44164f7b0727cc936fb41234f5d57bba73",
     "skills/getting-started/references/outcome-checks.md": "094d09d231b38d4935aa9eb8ac089e46ba8e698489852fa97040e6b5eac77a9b",
-    "skills/getting-started/references/replies.md": "865c97bea9c4bbecc2aba15be933356d11c37f3239be2cd436442230b5e0501e",
+    "skills/getting-started/references/replies.md": "d085b7353f13d70a1b0333d851fe573fd2c99e6bb57923cf8717982d77a0504b",
     "skills/getting-started/references/reply-checks.md": "85fe692ad6b7bc73e204de313b27d225be3da1a0af71e8e7bb9945ae511a0dc3",
     "skills/playbook-design/SKILL.md": "86d77069a73d5c21c43623d2faa84a3957cfb1f30f7fae45f239b32e249f892a",
-    "skills/playbook-design/references/fields.md": "41b20ab4a82501def62f8138fc218f48180a46c37fcf68d47f6a5802c5a747bf"
+    "skills/playbook-design/references/fields.md": "7d4a22451c3b77bb21a76d211d25a44b84a1bc46cc6524472ed121e77d2866aa"
   }
 }

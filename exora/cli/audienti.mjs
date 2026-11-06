@@ -81,6 +81,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            usage breakdown [--workspace ID] [--since month|7d|30d|90d] [--by tool|provider|model|caller|day] [--format json|csv]
            workspace usage summary|callers|calls [--after ID] [--caller user:ID|agent:ID|key:ID] [--status all|succeeded|failed|pending]|call ID [--workspace ID]  (paid tool use, last 30 days, and single calls)
            intent list [--workspace ID]  (the closed set of message labels: name, direction, event, channels, typed detail; output is JSON)
+           intent record --person ID --evidence ID --label NAME --quote TEXT --reason TEXT [--confidence high|medium|low] [--request-id UUID] [--participation ID] [--workspace ID]  (what a stored message means; get EVIDENCE from prospects conversation append|list; --file LABELS.json for several labels or a typed detail such as a stop result or a meeting time; every label is checked and a refusal says what to fix)
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
@@ -114,6 +115,7 @@ Start local MCP stdio server: mcp
 
 // Example inputs for the commands that save prospects, so `--help` shows a working shape.
 const examples = {
+  'intent record': [{ label: 'stop', quote: 'please stop writing to me', reason: 'They ask us to stop.', result: { type: 'reply.stop', scope: 'person' } }],
   'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'linkedin', url: 'https://www.linkedin.com/in/jane-doe' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
   'prospects citation create': { requestId: 'UUID', source: { kind: 'prospect', id: 'PERSON_PROSPECT_ID' }, target: { kind: 'prospect', id: 'COMPANY_PROSPECT_ID' }, edgeType: 'works_at', roles: [{ roleId: 'role-1', title: 'VP Sales', current: true, observedAt: '2026-01-01T00:00:00Z' }] },
   'prospects evidence create': { requestId: 'UUID', subject: { kind: 'person', prospectId: 'PROSPECT_ID' }, campaignId: 'CAMPAIGN_ID', campaignRevision: 1, kind: 'interpretation', data: { conclusion: 'Leads a 40-person sales team', reason: 'Team page lists her as VP Sales' }, sourceUrl: 'https://example.com/team', observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
@@ -130,8 +132,8 @@ function commandHelp() {
     shown = lines.filter(line => line.includes(prefix));
   }
   console.log(shown.length ? shown.map(line => line.trim()).join('\n') : usage);
-  const example = Object.entries(examples).find(([command]) => words.join(' ').startsWith(command));
-  if (example) console.log(`\nExample --file INPUT.json for ${example[0]}:\n${JSON.stringify(example[1], null, 1)}\nSteps and rules: the "Save prospects and contacts" section of llms.txt.`);
+  const example = Object.entries(examples).find(([command]) => words.join(' ').startsWith(command) || (words.length > 0 && command.startsWith(words.join(' '))));
+  if (example) console.log(`\nExample --file INPUT.json for ${example[0]}:\n${JSON.stringify(example[1], null, 1)}\n${example[0].startsWith('intent') ? 'Rules: the "Label a message with its words" section of the getting-started replies reference.' : 'Steps and rules: the "Save prospects and contacts" section of llms.txt.'}`);
 }
 
 async function main() {

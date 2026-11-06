@@ -75,6 +75,47 @@ when you pass `returnsOn`. Nothing is sent meanwhile and the person does not mov
 settle: ask who the right person is. When the reply names the right person, classify it as a
 `referral` with its typed `result`.
 
+## Label a message with its words
+
+A label says what a message means. Read the names with `audienti intent list`. A label goes on a message
+that is stored as evidence. Get its `EVIDENCE` ID from `audienti prospects conversation append` (when you
+store the message yourself) or `audienti prospects conversation list PERSON` (for one already stored); intake
+returns it too. Record one to three labels, each with the `quote` that supports it (at most 300 characters,
+copied from the message) and a plain `reason` (at most 200 characters, no IDs or error codes):
+
+```
+audienti intent record --person PERSON --evidence EVIDENCE \
+  --label interested --quote "we are interested in a demo" --reason "They ask for a demo next week."
+```
+
+Flags carry one label. Use `--file LABELS.json` for several labels or a typed detail (the `result` of a
+stop, bounce or referral; `meeting` for `meeting_booked`; `returnsOn` for `out_of_office`). A stop that
+asks for everything to end looks like this:
+
+```
+[{"label": "stop", "quote": "please stop writing to me", "reason": "They ask us to stop.",
+  "result": {"type": "reply.stop", "scope": "person"}}]
+```
+
+`audienti intent --help` prints this example. Give the same `--request-id` to repeat a call safely. Add
+`confidence` (`high`, `medium` or `low`) when you are unsure; it is stored only when you give it, and it
+does not change what the label does yet. A message keeps the labels it has: a second request that repeats
+one is refused with `already_recorded`, and one that would give the message a second reading is refused.
+
+Audienti checks every label and writes nothing if one fails. A refusal names the `field`, the `allowed`
+values and the `next` step. The checks:
+
+- The message is stored with its text. A message stored without a body cannot carry a label: submit the text as evidence.
+- The name is on the list, and fits the message direction and channel (`bounce` is email only).
+- The quote is in the message (subject and body), ignoring case and spacing.
+- The reason is plain words a person can read.
+- The labels fit together: `stop`, `bounce` and `out_of_office` stand alone; a message has one reading of the
+  reply and at most one meeting label.
+- The typed detail is present: a `stop`, `bounce` or `referral` needs its `result`; `meeting_booked` needs `meeting`.
+
+`replies set` records the same labels. Add `"intent": {"quote": "...", "reason": "..."}` next to `classification`
+or `meetingState` and it runs the same checks and stores the words on the event. Without `intent` it works as before.
+
 ## Stop, bounce and referral
 
 These three need no decision from the user. Classify the reply, report the typed

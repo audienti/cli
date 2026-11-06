@@ -47,7 +47,7 @@ The other items are warnings; read them after each save and clear them:
 | Item `id` | Meaning and default fix |
 | --- | --- |
 | `stage_never_ends` | A stage with steps and `completion` `stay`. Use `off_ramp` with the Unresponsive off-ramp. |
-| `stage_by_hand_only` | Nothing opens a stage but a person or agent. Give it an `on` event or finish the stage before it with `next`. |
+| `stage_by_hand_only` | Nothing opens a stage but a person or agent. Give it an `on` event ("Jump forward to here when") or finish the stage before it with `next`. The first stage after Ready is not flagged. |
 | `send_without_wait` | A send step with no `wait`, followed by another send on the same channel. Add a wait. |
 | `goal_shorter_than_waits` | `goalDays` is below the waits added up. Use the waits plus 2 days. |
 | `send_in_person_stage` | A send step in the goal stage or an `Assignee` stage writes to someone who already answered. Remove it. |
@@ -61,8 +61,7 @@ The other items are warnings; read them after each save and clear them:
 | --- | --- |
 | `key` | A UUID, unique in the playbook. Keep it across revisions. |
 | `name` | Unique in the playbook. |
-| `movesInWhen` | What moves a prospect into this stage, for example "They replied". Shown to people; `on` decides. |
-| `on` | The events that open this stage: `accept`, `reply`, `meeting` or `manual`. Defaults to `["manual"]`. An event moves the prospect to the furthest later stage that opens on it; the stages passed over are recorded as skipped, never as done. |
+| `on` | The events that jump a prospect forward to this stage: `accept` (they accept your LinkedIn connection request, not a meeting invite), `reply` or `meeting` (a booked meeting). Do not list `accept` or `reply` on the goal stage unless a reply or an accept should count as a win. An event moves the prospect to the furthest later stage that lists it; the stages passed over are recorded as skipped, never as done. Leave it out for a stage people reach when the stage before it finishes, or when a person moves them. Do not set it on the first stage. People and the pipeline read "Starts when they reply" from it. The older `movesInWhen` text and the value `manual` are accepted and ignored. |
 | `owner` | `Agent` or `Assignee` (the person assigned to the prospect). |
 | `goalDays` | 0 to 365. The days after which a prospect in this stage is overdue (the pipeline card turns orange). 0 means never overdue. |
 | `enabled` | Defaults to true. `false` skips the stage: no one is moved into it. The first stage and the goal stage cannot be skipped. |
@@ -131,7 +130,7 @@ Use the same UUID wherever the same placeholder letter appears.
         { "key": "<uuid>", "channel": "LinkedIn", "action": "Send message", "condition": "Only if connected", "instructions": "Lead with their signal and offer something useful.", "wait": { "until": "reply", "days": 5 } },
         { "key": "<uuid>", "channel": "Email", "action": "Email 1", "condition": "Always", "instructions": "Three sentences: signal, offer, one short question.", "wait": { "until": "reply", "days": 4 }, "onTimeout": "off_ramp" }
       ], "completion": { "kind": "off_ramp", "offRampKey": "<R>" } },
-      { "key": "<D>", "name": "In conversation", "movesInWhen": "They replied", "on": ["reply"], "owner": "Assignee", "goalDays": 3, "steps": [
+      { "key": "<D>", "name": "In conversation", "on": ["reply"], "owner": "Assignee", "goalDays": 3, "steps": [
         { "key": "<uuid>", "channel": "Email", "action": "Draft a reply", "condition": "Always", "instructions": "Answer their question first. Propose a time only if they asked.", "wait": { "until": "reply", "days": 2 } }
       ], "completion": { "kind": "stay" } },
       { "key": "<E>", "name": "Meeting requested", "owner": "Assignee", "goalDays": 3, "steps": [], "completion": { "kind": "next" } },
