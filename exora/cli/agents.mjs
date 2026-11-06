@@ -1,4 +1,4 @@
-import { readProfile, writeProfile, validateUrl, configuration, profileFrom, WorkspaceRequestError } from './workspaces.mjs';
+import { readProfile, writeProfile, validateUrl, configuration, profileFrom, WorkspaceRequestError, errorGuidance } from './workspaces.mjs';
 import { z } from 'zod';
 import {readJsonFile} from './json-file.mjs';
 
@@ -32,7 +32,7 @@ export const agentOperations = {
  agent_capabilities_get: {schema:z.object({id:z.string().uuid()}).strict()},
  agent_permission: {schema:z.object({id:z.string().uuid(),scope:z.enum(['workspace:read','workspace:access'])}).strict()},
  agent_capabilities_set: {schema:z.object({id:z.string().uuid(),capabilities:z.array(z.enum(capabilityKeys)).min(1).max(9)}).strict()},
- agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(capabilityKeys)).max(9).optional() }).strict() },
+ agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(capabilityKeys)).max(9).optional(), write: z.boolean().optional() }).strict() },
  agent_poll: { schema: z.object({}).strict() },
  agent_cancel: { schema: z.object({}).strict() },
  agent_list: { schema: z.object({}).strict() },
@@ -49,7 +49,7 @@ async function request(config, path, body, authenticated = false, method = body 
   // A refused report says why (ADR 015), with the same safety checks as the workspace client.
   const message = result?.error?.message;
   const detail = response.status === 400 && (code === 'validation_error' || code === 'hosted_via_reserved') && typeof message === 'string' && message.length <= 300 && !/[\u0000-\u001f\u007f]/.test(message) && !(config.token && message.includes(config.token)) ? ` ${message}` : '';
-  throw new WorkspaceRequestError(response.status, code, `Agent request failed: ${code} (HTTP ${response.status}).${detail}`);
+  throw new WorkspaceRequestError(response.status, code, `Agent request failed: ${code} (HTTP ${response.status}).${detail}`, undefined, undefined, undefined, errorGuidance(result?.error, config.token));
  }
  if (!result || !Object.hasOwn(result, 'data')) throw new Error('The API returned an invalid response.');
  return result.data;
@@ -116,12 +116,13 @@ export async function agentCli(args) {
   if (args[i] === '--json') { json = true; continue; }
   if (args[i].startsWith('--')) {
    const key = args[i].slice(2);
+   if (key === 'write') { flags.write = true; continue; }
    if (!['profile', 'name','capabilities','scope','file','id','provider','account','workspace','shared','authorized','set'].includes(key) || !args[i+1] || args[i+1].startsWith('--')) throw new Error('Unknown or incomplete agent option.');
    flags[key] = args[++i];
   } else positions.push(args[i]);
  }
  let name = `agent_${positions[1]}`;
- let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name, ...(flags.capabilities ? { capabilities: flags.capabilities.split(',').map(key => key.trim()).filter(Boolean) } : {}) } : positions[1] === 'revoke' ? { id: positions[2] } : {};
+ let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name, ...(flags.write ? { write: true } : {}), ...(flags.capabilities ? { capabilities: flags.capabilities.split(',').map(key => key.trim()).filter(Boolean) } : {}) } : positions[1] === 'revoke' ? { id: positions[2] } : {};
  if(positions[1]==='accounts') {
   if(positions[2]==='show') {name=flags.id ? 'agent_account_authorizations_get' : 'agent_account_authorizations_show';input=flags.id ? {id:flags.id} : {};}
   else if(positions[2]==='authorize' && ['true','false'].includes(flags.authorized)) {name='agent_account_authorization_set';input={id:flags.id,provider:flags.provider,accountRef:flags.account,authorized:flags.authorized==='true'};}

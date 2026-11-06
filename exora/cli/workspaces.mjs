@@ -135,11 +135,42 @@ export function validateUrl(value) {
 }
 // A refused request that never left this machine. It prints like an API error, so a caller reads one format (#451).
 export class InvalidArguments extends Error {
- toJSON() { return {code:'invalid_arguments',message:this.message}; }
+ constructor(message, guidance = {}) { super(message); this.field = guidance.field; this.allowed = guidance.allowed; this.next = guidance.next; }
+ toJSON() { return {code:'invalid_arguments',message:this.message,...(this.field ? {field:this.field} : {}),...(this.allowed ? {allowed:this.allowed} : {}),...(this.next ? {next:this.next} : {})}; }
+}
+// The same field, allowed values and next step the server gives (#483), for a mistake the CLI refuses before sending.
+const pathText = path => path.reduce((text, part) => typeof part === 'number' ? `${text}[${part}]` : text ? `${text}.${part}` : String(part), '');
+const FIELD_RULES = 'audienti skills read playbook-design references/fields.md';
+export function localGuidance(name, issues, args) {
+ const issue = issues[0]; if(!issue) return {};
+ const playbook = name.startsWith('playbook_');
+ const path = issue.code === 'unrecognized_keys' ? [...issue.path, issue.keys?.[0] ?? ''] : issue.path;
+ const fieldText = pathText(path).slice(0, 200), field = /^[A-Za-z0-9_.[\]-]+$/.test(fieldText) ? fieldText : undefined, last = String(path[path.length - 1] ?? '');
+ const given = path.reduce((value, part) => value?.[part], args);
+ const shown = typeof given === 'string' ? `"${given.slice(0, 60)}"` : 'that value';
+ if(issue.code === 'invalid_value') {
+  const allowed = issue.values.filter(value => typeof value === 'string' && value.length <= 80).slice(0, 60);
+  const phone = playbook && last === 'channel' ? ' A phone call, voicemail or gift is not a step channel yet (#433): tell your user, and use an Email or LinkedIn step with what you would have done in its instructions.' : '';
+  const more = playbook && last === 'actionId' ? ' List every action id with its channel: audienti playbook actions.' : playbook && last === 'when' ? ' List the event names: audienti playbook actions.' : '';
+  return {field, ...(allowed.length ? {allowed} : {}), next: `Use one of the allowed values in place of ${shown}.${phone}${more}`};
+ }
+ if(issue.code === 'unrecognized_keys') return {field, next: `Remove ${issue.keys.map(key => `"${key}"`).join(', ')} or fix the spelling. ${playbook ? `The fields a playbook has are in the example of: audienti playbook save --help. Field rules: ${FIELD_RULES}` : 'Run audienti --help for the options of this command.'}`};
+ if(issue.code === 'invalid_type') return {field, next: given === undefined ? `Add ${last || 'the value'}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}` : `Send a ${issue.expected} for ${last || field}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`};
+ return field ? {field, next: `Fix this value and send the command again.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`} : {};
+}
+// The next step an error gives an agent (#483): one sentence, the path of the wrong value and the values that would have worked.
+// Checked here too, so a response never puts the token or control text into the agent's context.
+export function errorGuidance(error, token) {
+ const clean = text => typeof text === 'string' && !/[\u0000-\u001f\u007f]/.test(text) && !(token && text.includes(token));
+ return {
+  next: clean(error?.next) && error.next.length <= 600 ? error.next : undefined,
+  field: clean(error?.field) && /^[A-Za-z0-9_.[\]-]{1,200}$/.test(error.field) ? error.field : undefined,
+  allowed: Array.isArray(error?.allowed) && error.allowed.length > 0 && error.allowed.length <= 60 && error.allowed.every(value => clean(value) && value.length <= 80) ? error.allowed : undefined
+ };
 }
 export class WorkspaceRequestError extends Error {
- constructor(status, code, message, retryAt, blockers, requestTraceId) { super(message); this.status = status; this.code = code; this.retryAt = retryAt; this.blockers = blockers; this.requestTraceId = requestTraceId; }
- toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.currentRevision!==undefined ? {currentRevision:this.currentRevision} : {}), ...(this.campaigns ? {campaigns:this.campaigns,campaignCount:this.campaignCount} : {}), ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}), ...(this.errors ? {errors:this.errors} : {}), ...(this.charged ? {charged:this.charged} : {}) }; }
+ constructor(status, code, message, retryAt, blockers, requestTraceId, guidance = {}) { super(message); this.status = status; this.code = code; this.retryAt = retryAt; this.blockers = blockers; this.requestTraceId = requestTraceId; this.next = guidance.next; this.field = guidance.field; this.allowed = guidance.allowed; }
+ toJSON() { return { ...(this.requestId ? {requestId:this.requestId,recovery:this.recovery} : {}), ...(this.requestTraceId ? {requestTraceId:this.requestTraceId} : {}), code:this.code, status:this.status, message:this.message, ...(this.field ? {field:this.field} : {}), ...(this.allowed ? {allowed:this.allowed} : {}), ...(this.next ? {next:this.next} : {}), ...(this.currentRevision!==undefined ? {currentRevision:this.currentRevision} : {}), ...(this.campaigns ? {campaigns:this.campaigns,campaignCount:this.campaignCount} : {}), ...(this.retryAt ? {retryAt:this.retryAt} : {}), ...(this.blockers ? {blockers:this.blockers} : {}), ...(this.errors ? {errors:this.errors} : {}), ...(this.charged ? {charged:this.charged} : {}) }; }
 }
 export class HostedResponseUnknown extends Error {
  constructor(requestId, reason, requestTraceId) { super('The server response is unknown. Paid work may have started. Retry using the same requestId and principal; never generate a new ID to recover this call.'); this.requestId=requestId; this.reason=reason; this.requestTraceId=requestTraceId; }
@@ -147,7 +178,7 @@ export class HostedResponseUnknown extends Error {
 }
 export async function callWorkspace(name, args, config) {
  const operation=operations[name]; if(!operation) throw new Error('Unknown workspace operation.');
- const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new InvalidArguments(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`);
+ const parsed=operation.schema.safeParse(args);if(!parsed.success) throw new InvalidArguments(`Invalid workspace arguments. Check IDs and required fields: ${parsed.error.issues.slice(0,5).map(i=>`${i.path.join('.')||'input'}: ${i.message}`).join('; ')}.`,localGuidance(name,parsed.error.issues,args));
  const input={...parsed.data};
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  // #333: an agent's own queue covers all its workspaces; a user's reads the selected workspace, as before.
@@ -163,7 +194,7 @@ export async function callWorkspace(name, args, config) {
   const retryAt = typeof result?.error?.retryAt === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(result.error.retryAt) ? result.error.retryAt : undefined;
   const detail = ((response.status===400 && (code==='invalid_fields' || code==='validation_error' || code==='secret_rejected')) || (response.status===404 && code==='not_found') || (response.status===422 && code==='playbook_cannot_work') || (response.status===409 && (code==='revision_conflict' || code==='playbook_in_use' || code==='definition_archived' || code==='playbook_archived' || code==='starter_playbook' || code==='identity_conflict' || code==='task_not_for_you' || code==='version_conflict' || code==='request_conflict' || code==='campaign_not_ready' || code==='campaign_not_paced'))) && typeof result?.error?.message==='string' && result.error.message.length<=(code==='playbook_cannot_work'?2000:1000) && !/[\u0000-\u001f\u007f]/.test(result.error.message) && !/^Workspace request failed/.test(result.error.message) && !(config.token && result.error.message.includes(config.token)) ? result.error.message.trim() : '';
   const blockers = (code==='execution_blocked' || code==='campaign_not_ready') && Array.isArray(result?.error?.blockers) && result.error.blockers.length<=28 && result.error.blockers.every(v=>typeof v==='string' && /^[a-z_]+$/.test(v)) ? result.error.blockers : undefined;
-  const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId);
+  const error = new WorkspaceRequestError(response.status, code, `Workspace request failed: ${code} (HTTP ${response.status}).${detail ? ` ${detail}` : ''}${retryAt ? ` Retry after ${retryAt}.` : ''}`, retryAt, blockers, requestTraceId, errorGuidance(result?.error, config.token));
   if(code==='playbook_cannot_work'&&Array.isArray(result?.error?.errors)&&result.error.errors.length<=30)error.errors=result.error.errors.filter(item=>item&&typeof item.id==='string'&&typeof item.message==='string').map(item=>({id:item.id,level:item.level,message:item.message,...(typeof item.stageKey==='string'?{stageKey:item.stageKey}:{}),...(item.fix&&typeof item.fix.label==='string'?{fix:{id:item.fix.id,label:item.fix.label}}:{})}));
   if(code==='revision_conflict'&&Number.isInteger(result?.error?.currentRevision)&&result.error.currentRevision>=0)error.currentRevision=result.error.currentRevision;
   // A playbook that is in use names the campaigns that use it (#459).

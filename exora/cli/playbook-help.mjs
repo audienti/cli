@@ -6,24 +6,29 @@ export const playbookCommands = {
     usage: 'playbook list [--archived] [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
     about: 'One page of summaries, 50 by default: id, name, currentRevision, system, systemKey, archivedAt, stages, steps, recommended, updatedAt. Archived playbooks are hidden; --archived lists them instead. Starters have system true and cannot be changed; clone one by saving its fields without an id. Use nextCursor as --cursor for the next page. Full fields come from playbook show.'
   },
+  actions: {
+    usage: 'playbook actions [--workspace ID] [--profile PATH]',
+    about: 'What a playbook step may name: the step actions (id, channel, label), the step channels (LinkedIn, Email) and the event-rule names. Run it before playbook save. A step\'s actionId must be one of these ids and match the step channel. A save that names something else is refused with the wrong value, the allowed values (allowed) and this command (next).'
+  },
   show: {
     usage: 'playbook show PLAYBOOK_ID [--revision N] [--workspace ID] [--profile PATH]',
     about: 'The whole playbook (fields) and the campaigns that use it. Without --revision it returns the current one. PLAYBOOK_ID comes from playbook list. warnings is the Playbook check: what is wrong with the playbook (level error or warning, a message, the stage and step, and the default fix). An empty list means nothing to look at.'
   },
   save: {
     usage: 'playbook save --file REQUEST.json [--workspace ID] [--profile PATH]',
-    about: 'Create a playbook or save a new revision. The file is {"requestId": UUID, "expectedRevision": N, "id": PLAYBOOK_ID, "fields": {...}}. requestId: a fresh UUID; reuse it only to retry the same save. id: leave it out for a new playbook. expectedRevision: 0 for a new playbook, otherwise currentRevision from playbook show. A save from a stale revision is refused with revision_conflict and the response gives currentRevision. A playbook that cannot work (no off-ramp, or a stage nobody can reach) is refused with playbook_cannot_work and the list in errors. A saved playbook comes back with warnings, the Playbook check, for things that are legal but probably wrong. fields: name, stages (2 or more, each with a UUID key), goalKey (a stage key after the first stage), offRamps. Field rules: audienti skills read playbook-design references/fields.md',
+    about: 'Create a playbook or save a new revision. Step action ids and channels: audienti playbook actions. The file is {"requestId": UUID, "expectedRevision": N, "id": PLAYBOOK_ID, "fields": {...}}. requestId: a fresh UUID; reuse it only to retry the same save. id: leave it out for a new playbook. expectedRevision: 0 for a new playbook, otherwise currentRevision from playbook show. A save from a stale revision is refused with revision_conflict and the response gives currentRevision. A playbook that cannot work (no off-ramp, or a stage nobody can reach) is refused with playbook_cannot_work and the list in errors. A saved playbook comes back with warnings, the Playbook check, for things that are legal but probably wrong. fields: name, stages (2 or more, each with a UUID key), goalKey (a stage key after the first stage), offRamps, and optionally eventRules (the example shows one). The actionId of a step is one of the ids from playbook actions. Field rules: audienti skills read playbook-design references/fields.md',
     example: {
       requestId: 'UUID',
       expectedRevision: 0,
       fields: {
         name: 'Email only',
         stages: [
-          { key: 'STAGE_A_UUID', name: 'Ready', owner: 'Agent', goalDays: 3, steps: [{ key: 'UUID', channel: 'Email', action: 'Email 1', condition: 'Always', instructions: 'Three sentences.', wait: { until: 'reply', days: 4 } }], completion: { kind: 'next' } },
+          { key: 'STAGE_A_UUID', name: 'Ready', owner: 'Agent', goalDays: 3, steps: [{ key: 'UUID', channel: 'Email', actionId: 'email.send', action: 'Email 1', condition: 'Always', instructions: 'Three sentences.', wait: { until: 'reply', days: 4 } }], completion: { kind: 'next' } },
           { key: 'STAGE_B_UUID', name: 'Meeting booked', on: ['meeting'], owner: 'Assignee', goalDays: 0, steps: [], completion: { kind: 'stay' } }
         ],
         goalKey: 'STAGE_B_UUID',
-        offRamps: [{ key: 'UUID', name: 'Unresponsive', reason: 'unresponsive' }]
+        offRamps: [{ key: 'UUID', name: 'Unresponsive', reason: 'unresponsive' }],
+        eventRules: [{ key: 'UUID', when: 'reply.interested', do: ['stop_wait'], goto: { kind: 'stage', stageKey: 'STAGE_B_UUID' } }]
       }
     }
   },
@@ -70,5 +75,5 @@ export function playbookHelp(subcommand) {
     return `audienti ${command.usage}\n  ${command.about}${command.example ? `\n\nExample REQUEST.json (replace each UUID with a fresh one; reuse the same UUID where a key repeats):\n${JSON.stringify(command.example, null, 2)}` : ''}`;
   }).join('\n\n');
   const conflict = names.includes('save') ? ' A revision_conflict from save also gives currentRevision.' : '';
-  return `${text}\n\nErrors are JSON on stderr: {"error": {"code", "message"}}, and the exit code is 1.${conflict} Errors from the server also give status.`;
+  return `${text}\n\nErrors are JSON on stderr: {"error": {"code", "message"}}, and the exit code is 1.${conflict} Errors from the server also give status, and when there is a next step they give next (what to do, or what to tell your user), field (the path of the wrong value) and allowed (the values that would work).`;
 }

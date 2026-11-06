@@ -18,6 +18,7 @@
 | `goalKey` | The `key` of the goal stage. Not the first stage. |
 | `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not off-ramps. |
 | `voice` | How messages should sound, in the user's style. |
+| `eventRules` | Optional: what happens when an event reaches a person, for any stage and step. A new playbook starts with three (below); leave the field out to keep them, or send the whole list to replace it. See Event rules. |
 | `rules` | Optional: `allowBackward` (boolean, default false): let a move go to an earlier stage. Approval of a move is a setting on the account, not a playbook rule. |
 
 ## The Playbook check
@@ -57,7 +58,7 @@ The other items are warnings; read them after each save and clear them:
 | Field | Rule |
 | --- | --- |
 | `key` | A UUID, unique in the playbook. A plan action that runs this step carries it as `playbookStepKey`; actions without it change no playbook progress. |
-| `channel` | `LinkedIn` or `Email`. |
+| `channel` | `LinkedIn` or `Email`. A phone call or a gift is not a step yet (#433): tell your user, and use an Email step with the call in its instructions. |
 | `action` | A short label, for example "Send connection request". |
 | `condition` | `Always`, `Only if viable` or `Only if connected`. Audienti does not check a connection itself: put an `Only if connected` step in a stage that opens on `accept`, so entering the stage on the accept is what gates it. |
 | `viability` | Required with `Only if viable`: when the step makes sense. An Email step is skipped, without a card, for a person with no email on record, whatever its condition. |
@@ -66,7 +67,28 @@ The other items are warnings; read them after each save and clear them:
 | `side` | Defaults to false. A side step runs while the main step before it waits, for example a profile view or a like. A stage with side steps needs a main step. |
 | `onTimeout` | `next` (default) or `off_ramp`. With `off_ramp`, a main step whose wait runs out leaves the prospect through the `unresponsive` off-ramp. When nothing is left in the stage, its completion decides. |
 | `routes` | Optional: `{ "accept"?: T, "reply"?: T, "meeting"?: T }`, where `T` is `{ "kind": "stage", "stageKey": "<uuid>" }` or `{ "kind": "off_ramp", "offRampKey": "<uuid>" }`. Where an event that reaches the person after this step ran sends them. The step's route wins over the stage's `on` list; an event with no route follows the stage. A main step only; `accept` only on a LinkedIn step. A route to an earlier stage needs `rules.allowBackward`. |
-| `actionId` | Optional: an action id from the outreach rulebook, for example `linkedin.message.send`. The `action` text stays the label the person reads. |
+| `actionId` | Optional: an action id from the outreach rulebook, for example `linkedin.message.send`. It must match the step's `channel`. List the valid ids with their channel and label: `audienti playbook actions` (MCP `playbook_actions_list`). The `action` text stays the label the person reads. |
+| `eventRules` | Optional, up to 10: event rules for this step only. See Event rules. |
+
+## Event rules
+
+An event rule says what happens when an event reaches a person: do these things, then go here. It lives on the playbook (`fields.eventRules`, up to 30), on a stage (`eventRules`, up to 10) or on a step (up to 10). The nearest place wins, then the most specific event: a reply kind beats any reply. A step `routes` entry is the older form of the same thing.
+
+| Field | Rule |
+| --- | --- |
+| `key` | A UUID, unique in the playbook. |
+| `when` | The event: `accepted`, `replied`, `meeting_booked`, `wait_timeout`, `inbound_connection_request`, or a reply kind `reply.interested`, `reply.question`, `reply.later`, `reply.out_of_office`, `reply.wrong_person`, `reply.referral`. An unknown name is refused with the allowed names; `audienti playbook actions` lists them under `eventRules.when`. |
+| `do` | Optional list of `stop_wait`, `snooze`, `redirect_to_named_person`, `ask_who_is_right`, `tell_me`, `hand_to_user`, `withdraw_pending_request`. Also under `eventRules.do`. |
+| `snoozeDays` | 1 to 90. For `snooze`. |
+| `goto` | Where the person goes after: `{ "kind": "stay" }`, `{ "kind": "gate" }` (the stage's own next step; the default), or `{ "kind": "stage", "stageKey": KEY }`, `{ "kind": "off_ramp", "offRampKey": KEY }` or `{ "kind": "step", "stepKey": KEY }`. |
+
+Every new playbook starts with these three on the playbook, when you send no `eventRules`:
+
+- `reply.interested`: `stop_wait`, then `gate`.
+- `reply.out_of_office`: `snooze` for 7 days, then `stay`.
+- `reply.wrong_person`: `stop_wait`, `redirect_to_named_person`, `ask_who_is_right`, then `stay`.
+
+Taking someone off the list and a bounce always run first; no rule changes them.
 
 A LinkedIn step whose `actionId` is `linkedin.inmail.send` runs only when the LinkedIn account reports InMail available. Otherwise it is skipped without a card.
 

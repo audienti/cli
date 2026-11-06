@@ -26,7 +26,7 @@ Required environment:
   AUDIENTI_API_TOKEN  Account API token (create it from your Account page)
 
 Use HTTPS for remote hosts. Local HTTP is supported on loopback only.
-Agent commands: agent connect --name NAME [--capabilities find,enrich,expand,research,engage,sync,notify,approve]|poll|cancel|list|revoke ID --profile PATH
+Agent commands: agent connect --name NAME [--write (ask for Allow workspace changes up front)] [--capabilities find,enrich,expand,research,engage,sync,notify,approve]|poll|cancel|list|revoke ID --profile PATH
 Owner permission change: agent permission ID --scope workspace:read|workspace:access --profile USER_PROFILE
 Owner capability change: agent capabilities ID --set find,enrich,expand,research,engage,sync,notify,approve --profile USER_PROFILE (agents are refused outside this set)
 Agent capabilities: agent capabilities report --file CAPABILITIES.json --profile AGENT_PROFILE (capability rows; the old per-account shape still works)
@@ -85,7 +85,7 @@ Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches w
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
-Playbooks: playbook list [--archived] [--limit N --cursor ID]|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|suggest --file REQUEST.json|suggestions|decide --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
+Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|suggest --file REQUEST.json|suggestions|decide --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]

@@ -83,8 +83,11 @@ field and the rules Audienti checks.
    `requestId` (a UUID) and fresh UUIDs for every stage, step and off-ramp `key`.
    Keep the same keys when you revise, so progress already recorded stays on its stage.
 2. `audienti playbook save --file REQUEST.json`. Over MCP use `playbook_save`.
-3. If the save fails, read the error, fix that field and retry with the same
-   `requestId`. If it reports a revision conflict, the error gives `currentRevision`: run
+3. If the save fails, read the error: `field` is the path of the wrong value, `allowed` the
+   values that work and `next` what to do. Fix that field and retry with the same
+   `requestId`. Run `audienti playbook actions` for the step action ids, channels and event
+   names. If `next` says to ask your user (for example to turn on Allow workspace changes),
+   ask with `audienti ask` and carry on with what you can. If it reports a revision conflict, the error gives `currentRevision`: run
    `playbook show ID`, apply your change to that revision and save with that `expectedRevision`.
 
 ## 4. Ask the user and pin it
