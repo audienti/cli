@@ -16,9 +16,27 @@
 | `name` | 1 to 120 characters. Name the strategy, not the campaign. |
 | `stages` | 2 to 30 stages, in order. |
 | `goalKey` | The `key` of the goal stage. Not the first stage. |
-| `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive`, `taken_over`, `bounced`, `skipped` or `other`. "Bad data" and "repair" are not off-ramps. |
+| `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not off-ramps. |
 | `voice` | How messages should sound, in the user's style. |
-| `rules` | Optional: `flagOverdue`, `allowBackward` (booleans), `emailWindow` (`weekdays_morning`, `weekdays`, `any_day`), `nurtureDays` (60, 90, 180 or null). Approval of a move is a setting on the account, not a playbook rule. An `autoMove` in an older playbook is ignored. |
+| `rules` | Optional: `allowBackward` (boolean, default false): let a move go to an earlier stage. Approval of a move is a setting on the account, not a playbook rule. |
+
+## The Playbook check
+
+Every read and save of a playbook returns `warnings`, a deterministic check that needs no agent. An item
+is `{ id, level, message, stageKey, stepKey, fix }`. A save is refused with `playbook_cannot_work` (422,
+the list in `errors`) when `offRamps` is empty or a stage has `on: []` and nothing sends people to it.
+The other items are warnings; read them after each save and clear them:
+
+| Item `id` | Meaning and default fix |
+| --- | --- |
+| `stage_never_ends` | A stage with steps and `completion` `stay`. Use `off_ramp` with the Unresponsive off-ramp. |
+| `stage_by_hand_only` | Nothing opens a stage but a person or agent. Give it an `on` event or finish the stage before it with `next`. |
+| `send_without_wait` | A send step with no `wait`, followed by another send on the same channel. Add a wait. |
+| `goal_shorter_than_waits` | `goalDays` is below the waits added up. Use the waits plus 2 days. |
+| `send_in_person_stage` | A send step in the goal stage or an `Assignee` stage writes to someone who already answered. Remove it. |
+| `steps_after_break_up` | A step after the break-up email. Put it before the break-up step. |
+| `message_without_connection` | A LinkedIn message with condition `Always` and no connection request before it. Use `Only if connected`. |
+| `stages_loop` | Routes or rules send people between stages in a circle. |
 
 ## Stage
 
@@ -29,9 +47,8 @@
 | `movesInWhen` | What moves a prospect into this stage, for example "They replied". Shown to people; `on` decides. |
 | `on` | The events that open this stage: `accept`, `reply`, `meeting` or `manual`. Defaults to `["manual"]`. An event moves the prospect to the furthest later stage that opens on it; the stages passed over are recorded as skipped, never as done. |
 | `owner` | `Agent` or `Assignee` (the person assigned to the prospect). |
-| `goalDays` | 0 to 365. How long a prospect should stay before it is overdue. |
-| `optional` | Only an optional stage can be disabled. |
-| `enabled` | Defaults to true. |
+| `goalDays` | 0 to 365. The days after which a prospect in this stage is overdue (the pipeline card turns orange). 0 means never overdue. |
+| `enabled` | Defaults to true. `false` skips the stage: no one is moved into it. The first stage and the goal stage cannot be skipped. |
 | `steps` | Up to 20 steps. |
 | `completion` | `{ "kind": "next" }`, `{ "kind": "stay" }` or `{ "kind": "off_ramp", "offRampKey": KEY }`. The last enabled stage cannot use `next`. |
 
@@ -66,7 +83,7 @@ Use the same UUID wherever the same placeholder letter appears.
     "name": "Founder-led outbound",
     "stages": [
       { "key": "<A>", "name": "Ready", "owner": "Agent", "goalDays": 3, "steps": [], "completion": { "kind": "next" } },
-      { "key": "<B>", "name": "Warming", "owner": "Agent", "goalDays": 7, "optional": true, "steps": [
+      { "key": "<B>", "name": "Warming", "owner": "Agent", "goalDays": 7, "steps": [
         { "key": "<uuid>", "channel": "LinkedIn", "action": "View profile", "condition": "Always", "instructions": "Read their recent activity for a signal to mention." },
         { "key": "<uuid>", "channel": "LinkedIn", "action": "Like a recent post", "condition": "Always", "instructions": "Only a post about their work.", "wait": { "until": "timeout", "days": 3 } }
       ], "completion": { "kind": "next" } },
@@ -85,7 +102,7 @@ Use the same UUID wherever the same placeholder letter appears.
     "goalKey": "<F>",
     "offRamps": [{ "key": "<R>", "name": "Unresponsive", "reason": "unresponsive" }],
     "voice": "Write like a founder. Lead with their signal, offer something useful, and ask one short question.",
-    "rules": { "flagOverdue": true, "allowBackward": false, "emailWindow": "weekdays_morning", "nurtureDays": 90 }
+    "rules": { "allowBackward": false }
   }
 }
 ```

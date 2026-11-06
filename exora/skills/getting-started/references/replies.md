@@ -57,6 +57,15 @@ approved: inbound wins, and you record it. What the user approves is your answer
    not decided yet.
 5. Report the task done.
 
+The owner can also close a reply in Operator with "Mark handled" or "Not a reply". That records the same
+state as `replies set` with status `handled` or `not_reply`, and withdraws any answer you drafted for it
+that no agent has claimed to send. Read `replies get` before you set a reply again.
+
+To close a reply for the owner by CLI, pass the version you read as `expectedVersion`. Handled with no
+answer is `{"requestId":"<uuid>","expectedVersion":1,"status":"handled","outcome":"closed_without_response","reason":"The owner answered by phone."}`.
+Not a reply is `{"requestId":"<uuid>","expectedVersion":1,"status":"not_reply","reason":"An automatic message."}`;
+it has no outcome. Give `--file` an absolute path.
+
 The classification records a `replied` event on the person's active campaigns, except
 for `bounce` and `out_of_office`, which are not replies from the person.
 An `out_of_office` reply records an auto-reply instead. The playbook's out-of-office rule

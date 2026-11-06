@@ -7,7 +7,8 @@ const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|a
 Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|balance [--help]
 Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|automation|activity report [--profile PATH]
-Managed LinkedIn: audienti sender managed list|connect [--profile PATH] (connect: the user only; returns a sign-in link)
+Managed LinkedIn: audienti sender managed list|connect [--workspace ID] [--profile PATH] (connect: the user only; returns a sign-in link)
+                  audienti sender managed plan MANAGED_ACCOUNT_ID --plan free|premium_career|premium_business|premium_all_in_one|sales_navigator_core|sales_navigator_advanced|recruiter_lite|none [--workspace ID]  (the user only; sets the connection note length; none clears it)
 Prospecting: audienti prospecting settings show|save|accounts|account-show|account-save|history [--profile PATH]
 Usage: audienti whoami [--json]
        audienti workspace assignments list [--workspace ID]
@@ -75,14 +76,16 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            budgets show --workspace ID
            budgets alerts --workspace ID [--limit N]
            usage breakdown [--workspace ID] [--since month|7d|30d|90d] [--by tool|provider|model|caller|day] [--format json|csv]
+           workspace usage summary|callers|calls [--after ID] [--caller user:ID|agent:ID|key:ID] [--status all|succeeded|failed|pending]|call ID [--workspace ID]  (paid tool use, last 30 days, and single calls)
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
+Campaign summary: campaign summary [--workspace ID]  (campaign counts per state, and per campaign its audience, offer, playbook, goal stage, people, engaged and at-goal counts)
 Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches with the audience filters, checks each person, admits only fits; stops at N fits or the credit cap and reports the spend)
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
-Playbooks: playbook list [--limit N --cursor ID]|show ID [--revision N]|save --file REQUEST.json|progress PARTICIPATION_ID|record --file REQUEST.json|suggest --file REQUEST.json|suggestions|decide --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
+Playbooks: playbook list [--archived] [--limit N --cursor ID]|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|suggest --file REQUEST.json|suggestions|decide --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]

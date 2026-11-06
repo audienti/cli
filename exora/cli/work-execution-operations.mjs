@@ -31,6 +31,7 @@ export const workspaceExecutionOperations={
 // LinkedIn accounts connected through Audienti. Only the user connects one; agents list them and send through work send.
 export const managedAccountOperations={
  workspace_managed_accounts_list:{schema:z.object({workspaceId:uuid.optional()}).strict(),scoped:true,method:'GET',path:a=>`/workspaces/${a.workspaceId}/managed-accounts`,description:'List the LinkedIn accounts connected through Audienti in this workspace, with their sending account IDs and status.'},
+ workspace_managed_account_plan_set:{schema:z.object({workspaceId:uuid.optional(),managedAccountId:uuid,plan:z.enum(['free','premium_career','premium_business','premium_all_in_one','sales_navigator_core','sales_navigator_advanced','recruiter_lite']).nullable()}).strict(),scoped:true,method:'PUT',path:a=>`/workspaces/${a.workspaceId}/managed-accounts/${a.managedAccountId}/plan`,body:a=>({plan:a.plan}),description:'The user only, not agents. States the LinkedIn plan of a managed account, which sets how long a connection note may be. Pass plan null to clear it; the safer figures then apply. Returns the account.'},
  workspace_managed_account_connect:{schema:z.object({workspaceId:uuid.optional()}).strict(),scoped:true,method:'POST',path:a=>`/workspaces/${a.workspaceId}/managed-accounts/connect`,body:()=>({}),description:'The user only, not agents. Returns a sign-in link, valid 15 minutes, where the user connects a LinkedIn account through Audienti.'},
 };
 export const narrowExecutionOperations={

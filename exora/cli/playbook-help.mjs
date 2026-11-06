@@ -3,16 +3,16 @@
 // playbook-design skill: audienti skills read playbook-design references/fields.md.
 export const playbookCommands = {
   list: {
-    usage: 'playbook list [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
-    about: 'One page of summaries, 50 by default: id, name, currentRevision, system, systemKey, stages, steps, recommended, updatedAt. Starters have system true and cannot be changed; clone one by saving its fields without an id. Use nextCursor as --cursor for the next page. Full fields come from playbook show.'
+    usage: 'playbook list [--archived] [--limit 1..100] [--cursor ID] [--workspace ID] [--profile PATH]',
+    about: 'One page of summaries, 50 by default: id, name, currentRevision, system, systemKey, archivedAt, stages, steps, recommended, updatedAt. Archived playbooks are hidden; --archived lists them instead. Starters have system true and cannot be changed; clone one by saving its fields without an id. Use nextCursor as --cursor for the next page. Full fields come from playbook show.'
   },
   show: {
     usage: 'playbook show PLAYBOOK_ID [--revision N] [--workspace ID] [--profile PATH]',
-    about: 'The whole playbook (fields) and the campaigns that use it. Without --revision it returns the current one. PLAYBOOK_ID comes from playbook list.'
+    about: 'The whole playbook (fields) and the campaigns that use it. Without --revision it returns the current one. PLAYBOOK_ID comes from playbook list. warnings is the Playbook check: what is wrong with the playbook (level error or warning, a message, the stage and step, and the default fix). An empty list means nothing to look at.'
   },
   save: {
     usage: 'playbook save --file REQUEST.json [--workspace ID] [--profile PATH]',
-    about: 'Create a playbook or save a new revision. The file is {"requestId": UUID, "expectedRevision": N, "id": PLAYBOOK_ID, "fields": {...}}. requestId: a fresh UUID; reuse it only to retry the same save. id: leave it out for a new playbook. expectedRevision: 0 for a new playbook, otherwise currentRevision from playbook show. A save from a stale revision is refused with revision_conflict and the response gives currentRevision. fields: name, stages (2 or more, each with a UUID key), goalKey (a stage key after the first stage), offRamps. Field rules: audienti skills read playbook-design references/fields.md',
+    about: 'Create a playbook or save a new revision. The file is {"requestId": UUID, "expectedRevision": N, "id": PLAYBOOK_ID, "fields": {...}}. requestId: a fresh UUID; reuse it only to retry the same save. id: leave it out for a new playbook. expectedRevision: 0 for a new playbook, otherwise currentRevision from playbook show. A save from a stale revision is refused with revision_conflict and the response gives currentRevision. A playbook that cannot work (no off-ramp, or a stage nobody can reach) is refused with playbook_cannot_work and the list in errors. A saved playbook comes back with warnings, the Playbook check, for things that are legal but probably wrong. fields: name, stages (2 or more, each with a UUID key), goalKey (a stage key after the first stage), offRamps. Field rules: audienti skills read playbook-design references/fields.md',
     example: {
       requestId: 'UUID',
       expectedRevision: 0,
@@ -26,6 +26,18 @@ export const playbookCommands = {
         offRamps: [{ key: 'UUID', name: 'Unresponsive', reason: 'unresponsive' }]
       }
     }
+  },
+  archive: {
+    usage: 'playbook archive PLAYBOOK_ID [--workspace ID] [--profile PATH]',
+    about: 'Hide a playbook from the list and the campaign picker. It cannot be edited or newly chosen for a campaign until you restore it. Campaigns that already use it keep running on their version. Safe to repeat. Starters can be archived.'
+  },
+  restore: {
+    usage: 'playbook restore PLAYBOOK_ID [--workspace ID] [--profile PATH]',
+    about: 'Bring an archived playbook back. Find archived playbooks with playbook list --archived. Safe to repeat.'
+  },
+  delete: {
+    usage: 'playbook delete PLAYBOOK_ID [--workspace ID] [--profile PATH]',
+    about: 'Delete a playbook and all its versions. This cannot be undone. A playbook that any campaign uses, in any state, is refused with playbook_in_use and the campaigns are named; archive it instead. Starters cannot be deleted.'
   },
   progress: {
     usage: 'playbook progress PARTICIPATION_ID [--workspace ID] [--profile PATH]',
