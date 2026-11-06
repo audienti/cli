@@ -90,7 +90,7 @@ Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches w
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
-Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
+Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json  (audienti playbook SUBCOMMAND --help for the request shape)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]
@@ -109,10 +109,17 @@ Invitation commands: workspace invitation show|accept|decline|retry|cancel ID
 Options: --workspace ID --name NAME --request-id UUID --email EMAIL --generation N
 Optional private profile: --profile PATH (outside this repository), or the AUDIENTI_PROFILE variable. --profile wins.
 Save an environment token: profile save --scope account:read|workspace:access|agents:manage --profile PATH
-Start local MCP stdio server: mcp
+Start local MCP stdio server: mcp  (audienti mcp --help for the settings)
 --json writes the API response envelope.
 `;
 
+const MCP_HELP = `audienti mcp starts the MCP server on stdio. An agent app runs it as a command; do not type it in a shell.
+Settings come from the environment of that command:
+  AUDIENTI_PROFILE   the profile file made by agent connect or profile save (the usual way)
+  AUDIENTI_API_URL and AUDIENTI_API_TOKEN   instead of a profile: the API URL ending in /api/v1 and a token
+The workspace: a tool that works in a workspace takes workspaceId in its input. Call workspace_select once with a workspaceId to set a default for the session.
+Tool names follow the commands: playbook_get for playbook show, playbook_draft_get for playbook draft show.
+Errors name the MCP tool to call next, not the command.`;
 // Example inputs for the commands that save prospects, so `--help` shows a working shape.
 const examples = {
   'intent record': [{ label: 'stop', quote: 'please stop writing to me', reason: 'They ask us to stop.', result: { type: 'reply.stop', scope: 'person' } }],
@@ -146,7 +153,8 @@ function unknownCommandMessage(words) {
 }
 
 async function main() {
-  if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : args[1])); return; }
+  if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : args[1] === 'draft' && args[2] && !args[2].startsWith('-') ? `draft_${args[2]}` : args[1])); return; }
+  if (args[0] === 'mcp' && args.length === 2 && (args[1] === '--help' || args[1] === '-h')) { console.log(MCP_HELP); return; }
   if (args.length > 1 && args.slice(1).some(value => value === '--help' || value === '-h') && !['tools', 'call', 'skills'].includes(args[0])) { commandHelp(); return; }
   if(args[0]==='prospects'&&['intake','conversation'].includes(args[1])){const {accountIntakeCli}=await import('./account-intake.mjs');await accountIntakeCli(args);return;}
   if(args[0]==='sender'){const {senderAccountsCli}=await import('./sender-accounts.mjs');await senderAccountsCli(args);return;}

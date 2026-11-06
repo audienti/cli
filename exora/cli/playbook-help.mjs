@@ -40,6 +40,22 @@ export const playbookCommands = {
     usage: 'playbook restore PLAYBOOK_ID [--workspace ID] [--profile PATH]',
     about: 'Bring an archived playbook back. Find archived playbooks with playbook list --archived. Safe to repeat.'
   },
+  draft_show: {
+    usage: 'playbook draft show PLAYBOOK_ID [--workspace ID] [--profile PATH]',
+    about: 'Your draft of a playbook: {draft: {baseRevision, fields, updatedAt, savedBy}} (savedBy is person or agent), or {draft: null} when there is none. The draft is the unsaved work in the playbook editor. It belongs to one person; an agent reads and changes the draft of the person who owns the agent. A campaign cannot use a draft, and playbook show and playbook save never touch it.'
+  },
+  draft_save: {
+    usage: 'playbook draft save PLAYBOOK_ID --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'Keep your edits as the draft. The file is {"baseRevision": N, "expectedUpdatedAt": T, "fields": {...}}. expectedUpdatedAt is the updatedAt that playbook draft show returned, or null when it returned {draft: null}. If the draft changed since (another tab, your agent or the person), nothing is replaced: you get draft_conflict with currentUpdatedAt. Run playbook draft show, combine the changes, and save again. baseRevision is the version the edits start from: currentRevision from playbook show, or baseRevision from playbook draft show. A lower baseRevision than the current version is kept; publish checks it and refuses a draft that started from an older version (revision_conflict). The draft is replaced as a whole, so send every field (take them from playbook draft show, or playbook show when there is no draft). It never makes a version. The person sees the change in the editor within a few seconds. Fields follow the same rules as playbook save. The answer carries check: the problems and warnings a publish would see. They never stop a draft save. The draft is not fully checked until publish. Starter and archived playbooks are refused.'
+  },
+  draft_discard: {
+    usage: 'playbook draft discard PLAYBOOK_ID [--expected-updated-at T] [--workspace ID] [--profile PATH]',
+    about: 'Throw your draft away. The saved versions stay. Safe to repeat: discarded says whether a draft existed. With --expected-updated-at T (the updatedAt from playbook draft show), a draft saved since is kept and you get draft_conflict with currentUpdatedAt.'
+  },
+  draft_publish: {
+    usage: 'playbook draft publish PLAYBOOK_ID [--request-id UUID] [--workspace ID] [--profile PATH]',
+    about: 'Save your draft as the next version and remove the draft. It returns the new version, as playbook save does. If a newer version was saved after the draft started, nothing is saved: you get revision_conflict with currentRevision. Run playbook draft show, then playbook draft save with baseRevision set to currentRevision and your changes applied to the newer version, then publish again. No draft gives no_draft. Without --request-id a fresh one is made and printed to stderr. To retry a call that may have worked, pass the same --request-id: a repeat of a finished publish returns the same version. If a draft was saved while this ran you get draft_conflict: read it with playbook draft show and publish again.'
+  },
   delete: {
     usage: 'playbook delete PLAYBOOK_ID [--workspace ID] [--profile PATH]',
     about: 'Delete a playbook and all its versions. This cannot be undone. A playbook that any campaign uses, in any state, is refused with playbook_in_use and the campaigns are named; archive it instead. Starters cannot be deleted.'
@@ -57,7 +73,7 @@ const lines = Object.values(playbookCommands).map(command => command.usage);
 export const playbookUsageError = `Unknown or missing playbook subcommand. Usage:\n${lines.map(line => `  audienti ${line}`).join('\n')}\nRun audienti playbook SUBCOMMAND --help for the request shape.`;
 /** Help for `audienti playbook [SUBCOMMAND] --help`. */
 export function playbookHelp(subcommand) {
-  const names = playbookCommands[subcommand] ? [subcommand] : Object.keys(playbookCommands);
+  const names = playbookCommands[subcommand] ? [subcommand] : subcommand === 'draft' ? Object.keys(playbookCommands).filter(name => name.startsWith('draft_')) : Object.keys(playbookCommands);
   const text = names.map(name => {
     const command = playbookCommands[name];
     return `audienti ${command.usage}\n  ${command.about}${command.example ? `\n\nExample REQUEST.json (replace each UUID with a fresh one; reuse the same UUID where a key repeats):\n${JSON.stringify(command.example, null, 2)}` : ''}`;
