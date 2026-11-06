@@ -22,6 +22,7 @@ import { recipientOperations } from './recipient-operations.mjs';
 import { suppressionOperations } from './suppression-operations.mjs';
 import { guardrailsOperations } from './guardrails-operations.mjs';
 import { auditOperations } from './audit-operations.mjs';
+import { intentOperations } from './intent-operations.mjs';
 import { usageOperations } from './usage-operations.mjs';
 import { outboundOperations } from './outbound-operations.mjs';
 import { cohortOperations } from './cohort-operations.mjs';
@@ -61,6 +62,7 @@ export const operations = {
  ...suppressionOperations,
  ...guardrailsOperations,
  ...auditOperations,
+ ...intentOperations,
  ...usageOperations,
  ...outboundOperations,
  ...cohortOperations,

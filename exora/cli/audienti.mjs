@@ -55,6 +55,8 @@ Hand tasks: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID 
 Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
 Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
+Saved posts: audienti posts list [--topic-id ID]|get ID  (savedByOperationId names the tool run that saved a post; read it with audienti tools runs get ID)
+Saved topics: audienti topics list|get ID|create --input FILE --request-id UUID
 Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your user go to Operator, not chat)
            audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
 Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|read|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
@@ -78,6 +80,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            budgets alerts --workspace ID [--limit N]
            usage breakdown [--workspace ID] [--since month|7d|30d|90d] [--by tool|provider|model|caller|day] [--format json|csv]
            workspace usage summary|callers|calls [--after ID] [--caller user:ID|agent:ID|key:ID] [--status all|succeeded|failed|pending]|call ID [--workspace ID]  (paid tool use, last 30 days, and single calls)
+           intent list [--workspace ID]  (the closed set of message labels: name, direction, event, channels, typed detail; output is JSON)
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
@@ -140,6 +143,7 @@ async function main() {
   if(args[0]==='prospects'&&args[1]==='replies'){const {accountRepliesCli}=await import('./account-replies.mjs');await accountRepliesCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='contacts'){const {recipientsCli}=await import('./recipients.mjs');await recipientsCli(args);return;}
   if(args[0]==='usage'){const {usageCli}=await import('./usage.mjs');await usageCli(args);return;}
+  if(args[0]==='intent'){const {intentCli}=await import('./intent.mjs');await intentCli(args);return;}
   if(args[0]==='audit'){const {auditCli}=await import('./audit.mjs');await auditCli(args);return;}
   if(args[0]==='secret'||args[0]==='secrets'){const {secretsCli}=await import('./secrets.mjs');await secretsCli(args);return;}
   if(args[0]==='budgets'){const {budgetsCli}=await import('./budgets.mjs');await budgetsCli(args);return;}

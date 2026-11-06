@@ -22,6 +22,7 @@ export async function contentCli(argv) {
   let args = values.workspace ? { workspaceId: values.workspace } : {};
   if (verb === 'list' && positionals.length === 1) args = { ...args, cursor: values.cursor, ...(kind === 'posts' ? { topicId: values['topic-id'] } : {}) };
   else if (verb === 'get' && positionals.length === 2) args.id = id;
+  else if (verb === 'get') throw new Error(`Name the ${kind === 'posts' ? 'post' : 'topic'} to read: audienti ${kind} get ID.`);
   else if (kind === 'topics' && verb === 'create' && positionals.length === 1) {
     if (!values.input || !values['request-id']) throw new Error('Topic create requires --input FILE and --request-id UUID.');
     args = { ...readJsonFile(values.input, 32768, 'Topic input'), ...args, requestId: values['request-id'] };
