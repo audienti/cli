@@ -33,7 +33,7 @@ for (const [name, operation] of Object.entries(prospectingSettingsOperations)) {
  });
 }
 for(const [name,operation] of Object.entries(senderAccountOperations)){
- server.registerTool(name,{description:`${name.replaceAll('_',' ')}. Owner-scoped sender assertions; no workspace scope or provider calls. ${operation.ownerOnly?'Human agents:manage profile required.':name==='sender_activity_report'?'Authorized agent reports past ordinary activity for a matching bound sender; never invokes a provider.':'Agent reads only senders matching its own reports; no owner history.'}`,inputSchema:operation.schema},async args=>{
+ server.registerTool(name,{description:`${name.replaceAll('_',' ')}. ${operation.description??'Sender account assertion; never calls a provider.'} ${operation.ownerOnly?'Owner profile only.':name==='sender_activity_report'?'An authorized agent reports past activity for a matching bound sender.':'An agent reads only senders matching its own reports.'}`,inputSchema:operation.schema},async args=>{
   try{return {content:[{type:'text',text:JSON.stringify(await callSenderAccounts(name,args))}]};}
   catch(error){return {isError:true,content:[{type:'text',text:JSON.stringify({error:error.toJSON?error.toJSON():{code:'client_error',message:error.message}})}]};}
  });
