@@ -10,7 +10,7 @@ const bundles = {
     helpers: true,
   },
   'getting-started': {
-    version: '1.5.1',
+    version: '1.5.2',
     files: ['SKILL.md', 'references/capabilities.md', 'references/campaign-draft.md', 'references/audience.md', 'references/outcome-checks.md', 'references/replies.md', 'references/reply-checks.md', 'references/mailbox-check.md'],
     helpers: false,
   },

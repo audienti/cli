@@ -15,7 +15,7 @@ Fill this before you ask the user anything. Mark each value with where it came f
 | Premise | Campaign premise | One sentence: why these people, why now. It names the signal and why the signal means they need the offer. |
 | Playbook | Campaign playbook pin | One playbook from `playbook list`, or a new one drafted with the playbook-design skill, with one line on why. When the list returns a `recommendation`, start from that starter playbook and name it with its `reason` in one line. |
 | Channels | Campaign channels | `email` and `linkedin`, only for accounts you reported. |
-| Pace | Campaign pace | New people a day. Take the number and its reason from the **Pace line** in your queue task for the channels you propose: 25 a day per confirmed LinkedIn account, or the campaign's own number (50 by default) for email only. Write it as `Pace: 25 a day · 1 LinkedIn account · about 100 people a week`. Once the campaign is saved, `audienti campaign pace ID` returns its own line: use that line, so the card and the campaign page show the same number. The user can change it in their answer. |
+| Pace | Campaign pace | New people a day. Take the number and its reason from the **Pace line** in your queue task for the channels you propose: 20 a day per confirmed LinkedIn account, or the campaign's own number (50 by default) for email only. Write it as `Pace: 20 a day · 1 LinkedIn account · about 100 people a week`. Once the campaign is saved, `audienti campaign pace ID` returns its own line: use that line, so the card and the campaign page show the same number. The user can change it in their answer. |
 | Test length | Campaign `schedule.endAt`, `schedule.maxCompanies` | 30 days from activation or a company cap, whichever comes first. |
 | Success measure | Playbook goal stage | Meetings booked. |
 | Waits | Playbook step `wait` | What each step waits for (`accept`, `reply`, `meeting` or `timeout`) and for how many days; their sum fits the test length. A wait starts only when the agent reports a succeeded result for the plan action that carries the step's key as `playbookStepKey`, and any reply ends every wait (playbook-design `references/fields.md`). |
@@ -74,7 +74,7 @@ The shape of a first proposal, not fixed copy:
 > company runs its own truck or freight fleet. Signal: the company is hiring a credit
 > controller or accounts receivable clerk. Premise: a company hiring for collections
 > has late invoices piling up now, and recovery gets cash back faster than a new hire. Playbook: problem-led email, then LinkedIn
-> follow-up. Pace: 25 a day · 1 LinkedIn account · about 100 people a week. Success:
+> follow-up. Pace: 20 a day · 1 LinkedIn account · about 100 people a week. Success:
 > meetings booked. Two questions: is the UK the right first region, and is there a
 > customer result I may cite? Answer "Go" to save it as a draft, or write your changes.
 > Nothing is sent until you approve it.
