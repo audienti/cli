@@ -40,8 +40,9 @@ When you change a playbook you already have, a part you leave out (`stages`, `go
 ## The Playbook check
 
 Every read and save of a playbook returns `warnings`, a deterministic check that needs no agent. An item
-is `{ id, level, message, stageKey, stepKey, fix }`. A save is refused with `playbook_cannot_work` (422,
-the list in `errors`) when `offRamps` is empty or a stage has `on: []` and nothing sends people to it.
+is `{ id, level, message, stageKey, stepKey, ruleKey, fix }`. A save is refused with `playbook_cannot_work` (422,
+the list in `errors`) when `offRamps` is empty, a stage has `on: []` and nothing sends people to it, or a rule
+holds an action that does not run yet (`rule_action_not_built`; see Event rules).
 The other items are warnings; read them after each save and clear them:
 
 | Item `id` | Meaning and default fix |
@@ -54,6 +55,10 @@ The other items are warnings; read them after each save and clear them:
 | `steps_after_break_up` | A step after the break-up email. Put it before the break-up step. |
 | `message_without_connection` | A LinkedIn message with condition `Always` and no connection request before it. Use `Only if connected`. |
 | `stages_loop` | Routes or rules send people between stages in a circle. |
+| `rule_never_fires` | A rule that an earlier rule for the same event in the same place hides. Remove it or change its event. |
+| `rule_event_not_read` | A rule on an event that nothing reads yet, so it cannot fire. |
+| `rule_wait_contradiction` | A rule that does both `stop_wait` and `snooze`. Remove `snooze`. |
+| `rule_moves_back` | A playbook rule that sends people to a stage with stages after it while `rules.allowBackward` is false. Turn it on, or send them to a later stage. |
 
 ## Stage
 
@@ -87,13 +92,13 @@ The other items are warnings; read them after each save and clear them:
 
 ## Event rules
 
-An event rule says what happens when an event reaches a person: do these things, then go here. It lives on the playbook (`fields.eventRules`, up to 30), on a stage (`eventRules`, up to 10) or on a step (up to 10). The nearest place wins, then the most specific event: a reply kind beats any reply. A step `routes` entry is the older form of the same thing.
+An event rule says what happens when an event reaches a person: do these things, then go here. It lives on the playbook (`fields.eventRules`, up to 30), on a stage (`eventRules`, up to 10) or on a step (up to 10). When more than one rule fits, the most specific event wins first: a reply kind such as `reply.interested` beats `replied`. For the same event, the nearest place wins: the step, then the stage, then the playbook. After that the first rule in the list wins, so a later rule for the same event in the same place never fires. A step `routes` entry is the older form of the same thing.
 
 | Field | Rule |
 | --- | --- |
 | `key` | A UUID, unique in the playbook. |
 | `when` | The event: `accepted`, `replied`, `meeting_booked`, `wait_timeout`, `inbound_connection_request`, or a reply kind `reply.interested`, `reply.question`, `reply.later`, `reply.out_of_office`, `reply.wrong_person`, `reply.referral`. An unknown name is refused with the allowed names; `audienti playbook actions` lists them under `eventRules.when`. |
-| `do` | Optional list of `stop_wait`, `snooze`, `redirect_to_named_person`, `ask_who_is_right`, `tell_me`, `hand_to_user`, `withdraw_pending_request`. Also under `eventRules.do`. |
+| `do` | Optional list, each once. The screen's words are in brackets: `stop_wait` (End their wait), `snooze` (Wait before the next step), `redirect_to_named_person` (Add the person they name), `ask_who_is_right` (Ask who the right person is), `tell_me` (Tell me), `hand_to_user` (Put it in my queue), `withdraw_pending_request` (Withdraw the pending request). `ask_who_is_right` and `withdraw_pending_request` do not run yet: a rule that holds either cannot be published or saved as a version. Also under `eventRules.do`. |
 | `snoozeDays` | 1 to 90. For `snooze`. |
 | `goto` | Where the person goes after: `{ "kind": "stay" }`, `{ "kind": "gate" }` (the stage's own next step; the default), or `{ "kind": "stage", "stageKey": KEY }`, `{ "kind": "off_ramp", "offRampKey": KEY }` or `{ "kind": "step", "stepKey": KEY }`. |
 
@@ -101,9 +106,11 @@ Every new playbook starts with these three on the playbook, when you send no `ev
 
 - `reply.interested`: `stop_wait`, then `gate`.
 - `reply.out_of_office`: `snooze` for 7 days, then `stay`.
-- `reply.wrong_person`: `stop_wait`, `redirect_to_named_person`, `ask_who_is_right`, then `stay`.
+- `reply.wrong_person`: `stop_wait`, `redirect_to_named_person`, then `stay`.
 
 Taking someone off the list and a bounce always run first; no rule changes them.
+
+A refused rule or route says which one it is and what to change, in the words the screen uses, for example: `The rule for "a meeting is booked" in the stage "Reaching out" goes back to "Ready", but moving back a stage is off. Change that rule first.`
 
 A LinkedIn step whose `actionId` is `linkedin.inmail.send` runs only when the LinkedIn account reports InMail available. Otherwise it is skipped without a card.
 

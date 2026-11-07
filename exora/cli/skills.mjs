@@ -15,7 +15,7 @@ const bundles = {
     helpers: false,
   },
   'playbook-design': {
-    version: '1.1.0',
+    version: '1.2.0',
     files: ['SKILL.md', 'references/fields.md'],
     helpers: false,
   },
