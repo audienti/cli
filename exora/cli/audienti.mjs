@@ -9,6 +9,9 @@ Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|bal
 Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|workspaces|automation|activity report [--profile PATH]
 Managed LinkedIn: audienti sender managed list|connect [--workspace ID] [--profile PATH] (connect: the user only; returns a sign-in link)
                   audienti sender managed plan MANAGED_ACCOUNT_ID --plan free|premium_career|premium_business|premium_all_in_one|sales_navigator_core|sales_navigator_advanced|recruiter_lite|none [--workspace ID]  (the user only; sets the connection note length; none clears it)
+                  audienti sender managed post create MANAGED_ACCOUNT_ID (--text TEXT|--text-file PATH) [--attachment ID] [--reason TEXT] [--request-id UUID]  (publish a post you wrote; to retry after a timeout, repeat the same --request-id so it never posts twice; the account's Publish posts mode decides: Automatic posts it, Draft for approval saves it for the owner, Off refuses)
+                  audienti sender managed post list [--account ID] [--state draft|approved|posting|published|rejected|failed|unknown]; post get POST_ID
+                  audienti sender managed post approve POST_ID [--text TEXT]; post reject POST_ID [--reason TEXT]  (the account owner, a person, only)
 Prospecting: audienti prospecting settings show|save|accounts|account-show|account-save|history [--profile PATH]
 Usage: audienti whoami [--json]
        audienti workspace assignments list [--workspace ID]
