@@ -163,6 +163,10 @@ export function localGuidance(name, issues, args) {
   const more = playbook && last === 'actionId' ? ' List every action id with its channel: audienti playbook actions.' : playbook && last === 'when' ? ' List the event names: audienti playbook actions.' : '';
   return {field, ...(allowed.length ? {allowed} : {}), next: `Use one of the allowed values in place of ${shown}.${phone}${more}`};
  }
+ if(issue.code === 'invalid_union' && issue.discriminator && Array.isArray(issue.options)) {
+  const allowed = issue.options.filter(value => typeof value === 'string' && value.length <= 80).slice(0, 60);
+  return {field, ...(allowed.length ? {allowed} : {}), next: `Use one of the allowed values in place of ${shown}, spelled exactly.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`};
+ }
  if(issue.code === 'unrecognized_keys') return {field, next: `Remove ${issue.keys.map(key => `"${key}"`).join(', ')} or fix the spelling. ${playbook ? `The fields a playbook has are in the example of: audienti playbook save --help. Field rules: ${FIELD_RULES}` : 'Run audienti --help for the options of this command.'}`};
  if(issue.code === 'invalid_type' && given === undefined && last === 'expectedUpdatedAt') return {field, next: 'Add expectedUpdatedAt (null when there is no draft; otherwise the updatedAt that playbook draft show returned).'};
  if(issue.code === 'invalid_type') return {field, next: given === undefined ? `Add ${last || 'the value'}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}` : `Send a ${issue.expected} for ${last || field}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`};

@@ -35,7 +35,7 @@ When you change a playbook you already have, a part you leave out (`stages`, `go
 | a stage `completion` | A stage with steps that an agent works, other than the goal, closes people out as Unresponsive. Other stages stay. |
 | a step `condition` | `Only if connected` for a LinkedIn message, else `Always`. |
 | a step `instructions` | One coaching sentence for the kind of action. |
-| a main step `wait` | Only for a step that is new in this save. A step that sends waits 3 days for a reply; a connection request waits 7 days for the accept; a step that sends nothing has no wait. A step the playbook already has keeps what it has, and `"wait": null` means no wait. |
+| a main step `wait` | Only for a step that is new in this save. A step that sends waits 3 days for a reply; a connection request waits 7 days for the accept; a step that sends nothing has no wait. A step the playbook already has keeps what it has, and `"wait": null` means no wait. The saved step carries the wait it got, so `playbook show` and the API read give the actual days. |
 
 ## The Playbook check
 
@@ -66,7 +66,7 @@ The other items are warnings; read them after each save and clear them:
 | `goalDays` | 0 to 365. The days after which a prospect in this stage is overdue (the pipeline card turns orange). 0 means never overdue. |
 | `enabled` | Defaults to true. `false` skips the stage: no one is moved into it. The first stage and the goal stage cannot be skipped. |
 | `steps` | Up to 20 steps. |
-| `completion` | `{ "kind": "next" }`, `{ "kind": "stay" }` or `{ "kind": "off_ramp", "offRampKey": KEY }`. The last enabled stage cannot use `next`. |
+| `completion` | `{ "kind": "next" }`, `{ "kind": "stay" }` or `{ "kind": "off_ramp", "offRampKey": KEY }`. The last enabled stage cannot use `next`. Spell the kind exactly: `off_ramp`, not `offRamp`. A kind that matches none is refused with the list of kinds that work. |
 
 ## Step
 
