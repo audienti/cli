@@ -1,5 +1,6 @@
 import { callWorkspace, configuration } from './workspaces.mjs';
 // audienti prospects duplicates list | get ID | merge ID [--primary PROFILE_ID | --keep-both] | dismiss ID   (all with --workspace ID)
+// audienti prospects outreach-profile ID --primary PROFILE_ID --workspace ID   (change the LinkedIn profile outreach uses for a person)
 export async function duplicatesCli(args) {
   const flags = {}, positions = [], allowed = ['workspace', 'profile', 'primary'];
   for (let i = 0; i < args.length; i++) {
@@ -10,6 +11,11 @@ export async function duplicatesCli(args) {
     const key = arg.slice(2);
     if (!allowed.includes(key) || Object.hasOwn(flags, key) || args[i + 1] === undefined || args[i + 1].startsWith('--')) throw Error('Unknown, repeated or incomplete duplicates option.');
     flags[key] = args[++i];
+  }
+  if (positions[0] === 'prospects' && positions[1] === 'outreach-profile') {
+    if (positions.length !== 3 || flags.primary === undefined || flags.keepBoth) throw Error('Use prospects outreach-profile PERSON --primary PROFILE_ID --workspace ID.');
+    console.log(JSON.stringify(await callWorkspace('workspace_prospect_outreach_profile', { workspaceId: flags.workspace, prospectId: positions[2], profileId: flags.primary }, configuration(flags.profile))));
+    return;
   }
   const verb = positions[2];
   const usage = 'Use prospects duplicates list --workspace ID, or prospects duplicates get|merge|dismiss PERSON --workspace ID [--primary PROFILE_ID | --keep-both].';
