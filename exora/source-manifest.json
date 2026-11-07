@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "6907118d81f1af4545d3760097a2bef2822260ef",
+  "sourceCommit": "eda80d40e1ded64be97ac3b846531ef4a6a17a9a",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -36,8 +36,9 @@
     "cli/duplicates.mjs": "f114cc269ee9deace7c128e7f6fe5788720b91e14fea3564fb5b3dd7d5e8757c",
     "cli/file-operations.mjs": "564f334dd9d52e9c56f44d58b5c3b0bda59ff72f54126b755bc472144069349e",
     "cli/files.mjs": "2221b067d6ade7ef5cc8965929aea2eb485781953d3f2b50600995b65fbdedae",
+    "cli/guardrails-normalize.mjs": "fe01f0ad24eff7348cbb3e1440e34e45ba4952f29e5c44fce361e130bb76c8ca",
     "cli/guardrails-operations.mjs": "aa5a911663133b3287bea805df9e2a5d8b5bbc4a3df972c52f91fee315954ded",
-    "cli/guardrails.mjs": "e8b9c0a19956a9eab84475d3c56a4b6c77baf7ed9a55e8686d660ef1ad562aa8",
+    "cli/guardrails.mjs": "0ad27e9b4e2c436eeaaa2f05689cdaf52cafbc1cde20af040ae8ada8d31cbe91",
     "cli/hand-task-operations.mjs": "473473fe95324c8c8733e037feab5ac468c07b0658fabd739cfd7d400a7faa83",
     "cli/hand-tasks.mjs": "2c895cf6b30c594a7e27cc4ec4b7eddeb39f941cd195b9255c6e0d6b4a56371f",
     "cli/intent-operations.mjs": "a51de06eb4775840834651e689c62946a30609edbebf53f76d98370153762c5d",
@@ -88,7 +89,7 @@
     "cli/work-operations.mjs": "66a6155964d1af264b4aa3851cf43b9373155887ee2f9bcac3eb97d9f4680157",
     "cli/work.mjs": "b898e2e432a93114b53a906fef49394e80bfc74c79101506966161f34bb06f0c",
     "cli/workspaces.mjs": "297072c9ad0076adbe3b847397ea03b538d6ed3380aae8c9f15bfc7b46c9fcbb",
-    "package.json": "753b5e8f504d6d41128446d93e66af732f67ed926705c4745bfcf8b2126d22a9",
+    "package.json": "026f5928998af2a5f1b10a1d808f154e3a30fd0c74d16b42f11fb3d48bec0644",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "7307267df9b9b0bd5c02d20f15eb12e206ca81d7fea95fe0a3f81ed197e5b40e",

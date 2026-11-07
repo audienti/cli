@@ -1,5 +1,6 @@
 import { readFileSync, statSync, writeFileSync } from 'node:fs';
 import { callWorkspace, configuration } from './workspaces.mjs';
+import { normalizeDoNotContact } from './guardrails-normalize.mjs';
 export async function guardrailsCli(args) {
  const flags = {}, positions = [];
  for (let i = 0; i < args.length; i++) {
@@ -33,5 +34,6 @@ export async function guardrailsCli(args) {
   if (flags.output) { writeFileSync(flags.output, csv); console.log(JSON.stringify({ data: { file: flags.output, count: (result?.data ?? result)?.count ?? 0 } })); } else process.stdout.write(csv);
   return;
  }
+ if (group === 'dnc' && verb === 'add') { console.log(JSON.stringify({ data: { added: normalizeDoNotContact(value)?.value ?? value } })); return; }
  console.log(JSON.stringify(group === 'dnc' && verb === 'list' ? { data: result.data?.doNotContact ?? result.doNotContact ?? result } : result));
 }
