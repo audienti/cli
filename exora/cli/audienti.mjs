@@ -70,6 +70,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            prospects contacts list|record PERSON [--file INPUT.json] [--request-id UUID] --workspace ID
            prospects contacts get|retire PERSON CONTACT --workspace ID
            prospects suppression get|set ID --workspace ID
+           prospects duplicates list --workspace ID | get|merge|dismiss PERSON --workspace ID [--primary PROFILE_ID]  (same name and photo: the newer record is held until you decide)
            guardrails show|pause|resume --workspace ID
            dnc list|add VALUE|remove VALUE --workspace ID
            dnc import --file LIST.csv --workspace ID  (at most 5,000 rows; reports added, skipped and invalid rows)
@@ -178,6 +179,7 @@ async function main() {
   if(args[0]==='budgets'){const {budgetsCli}=await import('./budgets.mjs');await budgetsCli(args);return;}
   if(args[0]==='guardrails'||args[0]==='dnc'){const {guardrailsCli}=await import('./guardrails.mjs');await guardrailsCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='suppression'){const {suppressionCli}=await import('./suppression.mjs');await suppressionCli(args);return;}
+  if(args[0]==='prospects'&&args[1]==='duplicates'){const {duplicatesCli}=await import('./duplicates.mjs');await duplicatesCli(args);return;}
   if(args[0]==='call'){const {callCli}=await import('./tools.mjs');await callCli(args);return;}
   if(args[0]==='tools'){const {toolsCli}=await import('./tools.mjs');await toolsCli(args);return;}
   if(['topics','posts'].includes(args[0])){const {contentCli}=await import('./content.mjs');await contentCli(args);return;}

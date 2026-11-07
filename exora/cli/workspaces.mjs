@@ -20,6 +20,7 @@ import { accountReplyOperations } from './account-reply-operations.mjs';
 import { accountIntakeOperations } from './account-intake-operations.mjs';
 import { recipientOperations } from './recipient-operations.mjs';
 import { suppressionOperations } from './suppression-operations.mjs';
+import { duplicateOperations } from './duplicate-operations.mjs';
 import { guardrailsOperations } from './guardrails-operations.mjs';
 import { auditOperations } from './audit-operations.mjs';
 import { intentOperations } from './intent-operations.mjs';
@@ -61,6 +62,7 @@ export const operations = {
  ...managedAccountOperations,
  ...workFeedbackOperations,
  ...suppressionOperations,
+ ...duplicateOperations,
  ...guardrailsOperations,
  ...auditOperations,
  ...intentOperations,
