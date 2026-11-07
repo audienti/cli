@@ -1,5 +1,5 @@
 import { configuration,errorGuidance,validateUrl,WorkspaceRequestError } from './workspaces.mjs';
-export async function callOwnerAccountOperation(operation,args,profilePath=process.env.AUDIENTI_PROFILE,label='prospecting settings') {
+export async function callOwnerAccountOperation(operation,args,profilePath=process.env.AUDIENTI_PROFILE,label='prospecting settings',showServerMessage=false) {
  const parsed=operation?.schema.safeParse(args);
  if(!parsed?.success)throw Error(`Invalid ${label} command or fields.`);
  const config=configuration(profilePath,'agents:manage'),profile=config.profile;
@@ -13,6 +13,7 @@ export async function callOwnerAccountOperation(operation,args,profilePath=proce
  const url=validateUrl(config.url);let response;
  try{response=await fetch(new URL('/api/v1'+operation.path(parsed.data),url),{method:operation.method,headers:{Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json'},...(operation.method==='POST'?{body:JSON.stringify(operation.body?operation.body(parsed.data):parsed.data)}:{}),redirect:'error',signal:AbortSignal.timeout(10000)});}catch{throw Error('Could not reach the API. Redirects are not followed.');}
  let result;try{result=await response.json();}catch{throw Error('The API returned an invalid response.');}
- if(!response.ok){const code=typeof result?.error?.code==='string'&&/^[a-z_]+$/.test(result.error.code)?result.error.code:'request_failed';throw new WorkspaceRequestError(response.status,code,`${label} request failed: ${code} (HTTP ${response.status}).${response.status===422&&code==='hours_not_narrower'?' An account can only narrow your working hours. Choose hours inside them, or change your own working hours first.':''}`,undefined,undefined,undefined,errorGuidance(result?.error,config.token));}
+ if(!response.ok){const code=typeof result?.error?.code==='string'&&/^[a-z_]+$/.test(result.error.code)?result.error.code:'request_failed';const said=showServerMessage&&typeof result?.error?.message==='string'?result.error.message.trim():'',plain=said&&said.length<=300&&!/[\u0000-\u001f\u007f]/.test(said)&&!said.includes(config.token)?said:'';
+  throw new WorkspaceRequestError(response.status,code,plain?`${plain} (${code})`:`${label} request failed: ${code} (HTTP ${response.status}).${response.status===422&&code==='hours_not_narrower'?' An account can only narrow your working hours. Choose hours inside them, or change your own working hours first.':''}`,undefined,undefined,undefined,errorGuidance(result?.error,config.token));}
  if(!result||!Object.hasOwn(result,'data'))throw Error('The API returned an invalid response.');return result;
 }

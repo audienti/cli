@@ -6,7 +6,7 @@ const args = process.argv.slice(2);
 const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
 Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|balance [--help]
-Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|automation|activity report [--profile PATH]
+Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|workspaces|automation|activity report [--profile PATH]
 Managed LinkedIn: audienti sender managed list|connect [--workspace ID] [--profile PATH] (connect: the user only; returns a sign-in link)
                   audienti sender managed plan MANAGED_ACCOUNT_ID --plan free|premium_career|premium_business|premium_all_in_one|sales_navigator_core|sales_navigator_advanced|recruiter_lite|none [--workspace ID]  (the user only; sets the connection note length; none clears it)
 Prospecting: audienti prospecting settings show|save|accounts|account-show|account-save|history [--profile PATH]
