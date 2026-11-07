@@ -99,7 +99,7 @@ Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches w
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID] [--source-url URL --source-industry TEXT [--source-kind website|register|other] [--source-location TEXT] [--source-note TEXT]]  (checks one person the same way; reuse the request ID after an interruption; a source confirms a company with no LinkedIn page)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
-Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|event PARTICIPATION_ID --kind KIND --reason TEXT  (audienti playbook SUBCOMMAND --help for the request shape)
+Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|rules show ID|rules save ID --file REQUEST.json|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|event PARTICIPATION_ID --kind KIND --reason TEXT  (audienti playbook SUBCOMMAND --help for the request shape)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]
@@ -166,7 +166,7 @@ function unknownCommandMessage(words) {
 }
 
 async function main() {
-  if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : args[1] === 'draft' && args[2] && !args[2].startsWith('-') ? `draft_${args[2]}` : args[1])); return; }
+  if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : ['draft', 'rules'].includes(args[1]) && args[2] && !args[2].startsWith('-') ? `${args[1]}_${args[2]}` : args[1])); return; }
   if (args[0] === 'mcp' && args.length === 2 && (args[1] === '--help' || args[1] === '-h')) { console.log(MCP_HELP); return; }
   if (args.length > 1 && args.slice(1).some(value => value === '--help' || value === '-h') && !['tools', 'call', 'skills'].includes(args[0])) { commandHelp(); return; }
   if(args[0]==='prospects'&&['intake','conversation'].includes(args[1])){const {accountIntakeCli}=await import('./account-intake.mjs');await accountIntakeCli(args);return;}
@@ -217,13 +217,13 @@ async function main() {
   if (args[0] === 'whoami' && profileIndex > 0 && args[profileIndex + 1]) {
     const { configuration } = await import('./workspaces.mjs');
     profileConfig = configuration(args[profileIndex + 1], 'account:read');
-    if (!profileConfig.token) throw new Error('whoami needs a human account token. Agents confirm their connection with: audienti workspace list --profile PATH');
+    if (!profileConfig.token) throw new Error('whoami needs a human account token with Read account (account:read), made in Settings > API tokens. Agents confirm their connection with: audienti workspace list --profile PATH');
     args.splice(profileIndex, 2);
   } else if (args[0] === 'whoami' && profileIndex < 0 && process.env.AUDIENTI_PROFILE && !(process.env.AUDIENTI_API_URL && process.env.AUDIENTI_API_TOKEN)) {
     // The profile named by AUDIENTI_PROFILE (#448), unless the URL and token are in the environment.
     const { configuration } = await import('./workspaces.mjs');
     profileConfig = configuration(undefined, 'account:read');
-    if (!profileConfig.token) throw new Error('whoami needs a human account token, and AUDIENTI_PROFILE holds none. Agents confirm their connection with: audienti workspace list');
+    if (!profileConfig.token) throw new Error('whoami needs a human account token with Read account (account:read), made in Settings > API tokens, and AUDIENTI_PROFILE holds none. Agents confirm their connection with: audienti workspace list');
   }
   if (args[0] !== 'whoami') throw new Error(unknownCommandMessage(args));
   if (args.length > 2 || (args[1] && args[1] !== '--json')) throw new Error('whoami takes only --json and --profile PATH. Use audienti --help.');
@@ -243,7 +243,7 @@ async function main() {
   } catch { throw new Error('Could not reach the API. Check its URL and availability. Redirects are not followed.'); }
   if (!response.ok) {
     if (response.status === 401) throw new Error('Authentication failed. Check whether your token is invalid, expired, or revoked.');
-    if (response.status === 403) throw new Error('This token lacks account:read permission.');
+    if (response.status === 403) { await whoamiWithoutAccount(base, token, args[1] === '--json'); return; }
     throw new Error(`API request failed (HTTP ${response.status}).`);
   }
   let body;
@@ -253,6 +253,34 @@ async function main() {
   // Select the documented fields, so an unexpected response cannot print credentials.
   const profile = { id: data.id, email: data.email, username: data.username };
   console.log(args[1] === '--json' ? JSON.stringify({ data: profile }) : `${profile.email ?? profile.username ?? profile.id}\nAccount ID: ${profile.id}`);
+}
+
+// What a token without "Read account" can still show (#607): its permission, and the workspaces it reaches. It says which token to add.
+const TOKEN_CHOICES = { 'account:read': 'Read account', 'workspace:read': 'Read workspaces and files (read only)', 'workspace:access': 'Manage workspaces and files', 'agents:manage': 'Manage agents' };
+async function whoamiWithoutAccount(base, token, json) {
+  const add = 'To see the account email and ID, create a second token with "Read account" in Settings > API tokens (scope account:read) and use it with whoami.';
+  // Text from the API is shown with control characters removed, and never with the bearer token in it.
+  const plain = value => typeof value === 'string' ? value.replaceAll(token, '[removed]').replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 120) : '';
+  const ask = async path => {
+    const url = new URL(base); url.pathname = `/api/v1/${path}`;
+    try {
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+      if (!response.ok) return { failed: `HTTP ${response.status}` };
+      const data = (await response.json())?.data;
+      return data === undefined || data === null ? { failed: 'an invalid response' } : { data };
+    } catch { return { failed: 'no usable answer' }; }
+  };
+  const info = (await ask('token')).data;
+  if (!info || typeof info.scope !== 'string') throw new Error(`This token lacks account:read permission. ${add}`);
+  const reaches = info.scope === 'workspace:read' || info.scope === 'workspace:access';
+  const answer = reaches ? await ask('workspaces') : undefined;
+  const lookupFailed = answer && (answer.failed || !Array.isArray(answer.data)) ? (answer.failed ?? 'an invalid response') : undefined;
+  const workspaces = answer && !lookupFailed ? answer.data.filter(row => row && typeof row.id === 'string').map(row => ({ id: plain(row.id), name: plain(row.name) })) : undefined;
+  const summary = { kind: plain(info.kind), scope: plain(info.scope), permission: TOKEN_CHOICES[info.scope] ?? plain(info.scope), canChange: info.canChange === true, ...(typeof info.expiresAt === 'string' ? { expiresAt: plain(info.expiresAt) } : {}) };
+  // A workspace list that could not be read is not an empty list: say so and exit with an error.
+  if (lookupFailed) process.exitCode = 1;
+  if (json) { console.log(JSON.stringify({ data: { account: null, token: summary, ...(reaches ? { workspaces: workspaces ?? null } : {}), ...(lookupFailed ? { workspacesError: `Could not read the workspaces (${lookupFailed}).` } : {}), missingScope: 'account:read', next: add } })); return; }
+  console.log([`Token: ${summary.permission} (${summary.scope}), ${summary.canChange ? 'can change data' : 'read only'}${summary.expiresAt ? `, expires ${summary.expiresAt}` : ''}`, 'Account: not shown. This token lacks account:read.', add, ...(!reaches ? [] : lookupFailed ? [`Workspaces: could not be read (${lookupFailed}). Run audienti workspace list to try again.`] : ['Workspaces this token reaches:', ...(workspaces.length ? workspaces.map(row => `  ${row.name || '(no name)'}  ${row.id}`) : ['  none'])])].join('\n'));
 }
 
 main().catch(error => { console.error(JSON.stringify({ error: error.toJSON ? error.toJSON() : { code: 'client_error', message: error.message } })); process.exitCode = 1; });

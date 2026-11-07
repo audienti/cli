@@ -130,7 +130,7 @@ export function writeProfile(path, profile) {
 /** The profile path: --profile wins, then AUDIENTI_PROFILE (the variable the MCP server reads), else none (#448). */
 export const profileFrom = flag => flag ?? (process.env.AUDIENTI_PROFILE || undefined);
 // The server words a next step with CLI commands. An MCP caller has tools, not commands, so the same step is said with the tool names (#507).
-const MCP_WORDING = [['audienti playbook actions','playbook_actions_list'],['playbook draft show','playbook_draft_get'],['playbook draft save','playbook_draft_save'],['playbook draft discard','playbook_draft_discard'],['playbook draft publish','playbook_draft_publish'],['playbook show','playbook_get'],['playbook save','playbook_save'],['audienti playbook save --help','the playbook_save tool description'],['--workspace ID','workspaceId']];
+const MCP_WORDING = [['audienti playbook actions','playbook_actions_list'],['playbook draft show','playbook_draft_get'],['playbook draft save','playbook_draft_save'],['playbook draft discard','playbook_draft_discard'],['playbook draft publish','playbook_draft_publish'],['playbook rules show','playbook_rules_get'],['playbook rules save','playbook_rules_save'],['playbook show','playbook_get'],['playbook save','playbook_save'],['audienti playbook save --help','the playbook_save tool description'],['--workspace ID','workspaceId']];
 export const surfaceWording = (text, config) => config?.interface === 'mcp' && typeof text === 'string' ? MCP_WORDING.reduce((out, [cli, tool]) => out.replaceAll(cli, tool), text) : text;
 export const profileHint = 'Pass --profile PATH, or set AUDIENTI_PROFILE to the profile file.';
 export function configuration(path, scope='workspace:access') {
@@ -153,6 +153,7 @@ export class InvalidArguments extends Error {
 // The same field, allowed values and next step the server gives (#483), for a mistake the CLI refuses before sending.
 const pathText = path => path.reduce((text, part) => typeof part === 'number' ? `${text}[${part}]` : text ? `${text}.${part}` : String(part), '');
 const FIELD_RULES = 'audienti skills read playbook-design references/fields.md';
+const WORKSPACE_ID_EXAMPLE = '3f2b8c1e-5d4a-4e7b-9a60-1c2d3e4f5a6b';
 export function localGuidance(name, issues, args) {
  const issue = issues[0]; if(!issue) return {};
  const playbook = name.startsWith('playbook_');
@@ -173,6 +174,7 @@ export function localGuidance(name, issues, args) {
  if(issue.code === 'unrecognized_keys') return {field, next: `Remove ${issue.keys.map(key => `"${key}"`).join(', ')} or fix the spelling. ${playbook ? `The fields a playbook has are in the example of: audienti playbook save --help. Field rules: ${FIELD_RULES}` : 'Run audienti --help for the options of this command.'}`};
  if(issue.code === 'invalid_type' && given === undefined && last === 'expectedUpdatedAt') return {field, next: 'Add expectedUpdatedAt (null when there is no draft; otherwise the updatedAt that playbook draft show returned).'};
  if(issue.code === 'invalid_type') return {field, next: given === undefined ? `Add ${last || 'the value'}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}` : `Send a ${issue.expected} for ${last || field}.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`};
+ if(last === 'workspaceId' && issue.code === 'invalid_format') return {field, next: `Use the Workspace ID from Settings > Workspace in the app. It is a UUID like ${WORKSPACE_ID_EXAMPLE}. Or run audienti workspace list.`};
  return field ? {field, next: `Fix this value and send the command again.${playbook ? ` Field rules: ${FIELD_RULES}` : ''}`} : {};
 }
 // The next step an error gives an agent (#483): one sentence, the path of the wrong value and the values that would have worked.
@@ -203,7 +205,7 @@ export async function callWorkspace(name, args, config) {
  const input={...parsed.data};
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  // #333: an agent's own queue covers all its workspaces; a user's reads the selected workspace, as before.
- if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error(config.interface==='mcp'?`Pass workspaceId in the tool input, or call workspace_select once. ${config.profile&&Object.keys(config.profile).length?'':profileHint}`.trim():`Select a workspace or supply --workspace ID. ${config.profile&&Object.keys(config.profile).length?'Run workspace use WORKSPACE_ID once for this profile.':`${profileHint} An agent that is not connected yet runs agent connect first; then run workspace use WORKSPACE_ID once.`}`); }
+ if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error(config.interface==='mcp'?`Pass workspaceId in the tool input, or call workspace_select once. Find the ID in Settings > Workspace (the Workspace ID row), or call workspace_list. ${config.profile&&Object.keys(config.profile).length?'':profileHint}`.trim():`Select a workspace or supply --workspace ID. Find the ID in Settings > Workspace (the Workspace ID row), or run workspace list. ${config.profile&&Object.keys(config.profile).length?'Run workspace use WORKSPACE_ID once for this profile.':`${profileHint} An agent that is not connected yet runs agent connect first; then run workspace use WORKSPACE_ID once.`}`); }
  const url=validateUrl(config.url); if(!config.token) throw new Error(`A workspace token is required: workspace:access to read and change, or workspace:read to only read. ${profileHint} Or set AUDIENTI_API_URL and AUDIENTI_API_TOKEN.`);
  const target=new URL(`/api/v1${operation.path(input)}`,url);
  let response;try {response=await fetch(target,{method:operation.method,headers:{Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json',...((operation.traced||name.startsWith('tools_'))?{'X-Audienti-Interface':config.interface==='mcp'?'mcp':'cli'}:{})},...(['POST','PUT','PATCH'].includes(operation.method)?{body:JSON.stringify(operation.body?.(input)??{})}:{}),redirect:'error',signal:AbortSignal.timeout(operation.timeoutMs ?? 10000)});}catch(error){if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,['TimeoutError','AbortError'].includes(error?.name)?'timeout':'transport_failure');throw new Error('Could not reach the API. Redirects are not followed.');}

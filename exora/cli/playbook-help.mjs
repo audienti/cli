@@ -48,6 +48,20 @@ export const playbookCommands = {
     usage: 'playbook draft save PLAYBOOK_ID --file REQUEST.json [--workspace ID] [--profile PATH]',
     about: 'Keep your edits as the draft. The file is {"baseRevision": N, "expectedUpdatedAt": T, "fields": {...}}. expectedUpdatedAt is the updatedAt that playbook draft show returned, or null when it returned {draft: null}. If the draft changed since (another tab, your agent or the person), nothing is replaced: you get draft_conflict with currentUpdatedAt. Run playbook draft show, combine the changes, and save again. baseRevision is the version the edits start from: currentRevision from playbook show, or baseRevision from playbook draft show. A lower baseRevision than the current version is kept; publish checks it and refuses a draft that started from an older version (revision_conflict). The draft is replaced as a whole, so send every field (take them from playbook draft show, or playbook show when there is no draft). It never makes a version. The person sees the change in the editor within a few seconds. Fields follow the same rules as playbook save. The answer carries check: the problems and warnings a publish would see. They never stop a draft save. The draft is not fully checked until publish. Starter and archived playbooks are refused.'
   },
+  rules_show: {
+    usage: 'playbook rules show PLAYBOOK_ID [--workspace ID] [--profile PATH]',
+    about: 'Every event rule and step route of a playbook in one list, without the rest of the playbook. It reads your draft when you have one, otherwise the current version (source says which). Each rule has its place (playbook, stage or step, with stageKey and stepKey), key, when and whenLabel, do and doLabels, goto and gotoLabel, a one-line summary, and a status: ok, or cannot_fire with the reasons. routes are the older per-step routes, read as rules. startingRules is true when the playbook saved no rule list: the rules shown are the starting rules. updatedAt is the draft token for playbook rules save.'
+  },
+  rules_save: {
+    usage: 'playbook rules save PLAYBOOK_ID --file REQUEST.json [--workspace ID] [--profile PATH]',
+    about: 'Change the rules of one place in your draft, without sending the playbook. The file is {"place": {...}, "rules": [...], "routes": {...}, "expectedUpdatedAt": T}. place is {"kind": "playbook"}, {"kind": "stage", "stageKey": UUID} or {"kind": "step", "stageKey": UUID, "stepKey": UUID}; the keys come from playbook rules show. rules is the new list for that place: it replaces the list there, so send every rule you keep (a rule you read keeps its key), and an empty list removes them all. routes is for a step only: an event set to a target ({"kind": "stage", "stageKey": UUID}, off_ramp or step) sets that route, null removes it, and an event left out keeps its route. expectedUpdatedAt is the updatedAt from playbook rules show; a newer draft is refused with draft_conflict and nothing changes. The answer is the rules list, plus check. Nothing else in the playbook changes, and no version is made: run playbook draft publish for that. Rule actions that do not run yet are kept in the draft and refused at publish.',
+    example: {
+      place: { kind: 'step', stageKey: 'STAGE_UUID', stepKey: 'STEP_UUID' },
+      rules: [{ key: 'UUID', when: 'reply.wrong_person', do: ['stop_wait', 'redirect_to_named_person'], goto: { kind: 'stay' } }],
+      routes: { timeout: null },
+      expectedUpdatedAt: 'UPDATED_AT_FROM_RULES_SHOW'
+    }
+  },
   draft_discard: {
     usage: 'playbook draft discard PLAYBOOK_ID [--expected-updated-at T] [--workspace ID] [--profile PATH]',
     about: 'Throw your draft away. The saved versions stay. Safe to repeat: discarded says whether a draft existed. With --expected-updated-at T (the updatedAt from playbook draft show), a draft saved since is kept and you get draft_conflict with currentUpdatedAt.'
@@ -77,7 +91,7 @@ const lines = Object.values(playbookCommands).map(command => command.usage);
 export const playbookUsageError = `Unknown or missing playbook subcommand. Usage:\n${lines.map(line => `  audienti ${line}`).join('\n')}\nRun audienti playbook SUBCOMMAND --help for the request shape.`;
 /** Help for `audienti playbook [SUBCOMMAND] --help`. */
 export function playbookHelp(subcommand) {
-  const names = playbookCommands[subcommand] ? [subcommand] : subcommand === 'draft' ? Object.keys(playbookCommands).filter(name => name.startsWith('draft_')) : Object.keys(playbookCommands);
+  const names = playbookCommands[subcommand] ? [subcommand] : subcommand === 'draft' || subcommand === 'rules' ? Object.keys(playbookCommands).filter(name => name.startsWith(`${subcommand}_`)) : Object.keys(playbookCommands);
   const text = names.map(name => {
     const command = playbookCommands[name];
     return `audienti ${command.usage}\n  ${command.about}${command.example ? `\n\nExample REQUEST.json (replace each UUID with a fresh one; reuse the same UUID where a key repeats):\n${JSON.stringify(command.example, null, 2)}` : ''}`;
