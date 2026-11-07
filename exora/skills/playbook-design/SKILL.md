@@ -7,7 +7,7 @@ description: Create, reuse or revise an Audienti playbook, the stages and steps 
 
 A playbook is what a campaign follows: the stages a prospect moves
 through, the steps in each stage (channel, action, wait), the goal stage, the ways out
-(off-ramps) and the voice. Audienti stores every playbook with revisions, so a good one
+(ways out) and the voice. Audienti stores every playbook with revisions, so a good one
 is written once and reused by many campaigns. Planning tasks (`prospects.plan`) read the
 campaign's playbook to decide each prospect's next step, so a campaign without one
 cannot be worked.
@@ -26,11 +26,11 @@ Use this skill when:
 - Use only channels you can cover with accounts you reported (LinkedIn, Email). For anything you cannot do yourself, such as a call, a voicemail, a handwritten note, a video or a gift, use a `Custom` step: you prepare it and a person does it. A Custom step can wait for a named event the person records (`wait.until` `event`), for example "Gift delivered".
   Do not draft a phone step if no one can call.
 - One playbook is one strategy. A correction to the same strategy (a wait, a step's
-  wording, a missing off-ramp) is a new revision. A different strategy is a new
+  wording, a missing way out) is a new revision. A different strategy is a new
   playbook, so the two can be compared in Analytics.
 - Saving a playbook never changes campaigns already pinned to it. Pin the new
   revision on purpose.
-- Give the playbook an off-ramp with reason `rejected` and one with reason `not_fit`. The default
+- Give the playbook a way out with reason `rejected` and one with reason `not_fit`. The default
   rules use them: a reply that says no thanks ends the person in the first, and a `not_a_fit` event
   ends the person in the second. Without them the event only shows in the history. The guide
   `docs/guides/playbook-agent-guide.md` (Events and rules) lists every event.
@@ -68,7 +68,7 @@ for founder-led or agent-led outbound has five to six stages:
    LinkedIn is not available.
 3. **Outreach underway** (Agent): the touches, in order, with waits. For example a
    connection request (wait 21 days), a message "Only if connected" (wait 5), a first
-   email (wait 4). Completes to the **Unresponsive** off-ramp when every step is done
+   email (wait 4). Completes to the **Unresponsive** way out when every step is done
    and nobody replied.
 4. **In conversation** (Assignee): the prospect replied. A person drafts or approves
    the reply. Completion `stay`.
@@ -84,7 +84,7 @@ field and the rules Audienti checks.
 
 1. Write the request to a file: `expectedRevision` 0 and no `id` for a new playbook;
    the playbook's `id` and its current revision number to revise one. Use a fresh
-   `requestId` (a UUID) and fresh UUIDs for every stage, step and off-ramp `key`.
+   `requestId` (a UUID) and fresh UUIDs for every stage, step and way out `key`.
    Keep the same keys when you revise, so progress already recorded stays on its stage.
 2. `audienti playbook save --file REQUEST.json`. Over MCP use `playbook_save`.
 3. If the save fails, read the error: `field` is the path of the wrong value, `allowed` the

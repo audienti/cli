@@ -16,9 +16,9 @@
 | `name` | 1 to 120 characters. Name the strategy, not the campaign. |
 | `stages` | 2 to 30 stages, in order. Leave it out for the default skeleton (see Defaults). |
 | `goalKey` | The `key` of the goal stage. Not the first stage. Left out, it is the last stage (with `stages` left out too, the skeleton's last stage). |
-| `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The default rules end a person in the off-ramp with reason `rejected` when the reply says no thanks (`not_interested`), and in the one with reason `not_fit` when you record `not_a_fit`. A playbook without that off-ramp keeps the person where they are. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not off-ramps. |
+| `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The default rules end a person in the way out with reason `rejected` when the reply says no thanks (`not_interested`), and in the one with reason `not_fit` when you record `not_a_fit`. A playbook without that way out keeps the person where they are. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not ways out. |
 | `voice` | How messages should sound, in the user's style. |
-| `eventRules` | Optional: what happens when an event reaches a person, for any stage and step. A new playbook starts with three (below); leave the field out to keep them, or send the whole list to replace it. See Event rules. |
+| `eventRules` | Optional: what happens when an event reaches a person, for any stage and step. A new playbook starts with three (below); leave the field out to keep them, or send the whole list to replace it. See Rules. |
 | `rules` | Optional: `allowBackward` (boolean, default false): let a move go to an earlier stage. Approval of a move is a setting on the account, not a playbook rule. |
 
 ## Defaults
@@ -29,7 +29,7 @@ When you change a playbook you already have, a part you leave out (`stages`, `go
 | --- | --- |
 | `stages` | Ready, Outreach underway (no steps; people who finish it leave as Unresponsive), In conversation (worked by a person) and Meeting booked as the goal. `playbook save` with only a `name` makes this. |
 | `offRamps` | Unresponsive, Not interested and Not a fit. |
-| an off-ramp `reason` | Guessed from the name (Not interested is `rejected`, Not a fit is `not_fit`, Unresponsive is `unresponsive`), else `other`. |
+| a way out `reason` | Guessed from the name (Not interested is `rejected`, Not a fit is `not_fit`, Unresponsive is `unresponsive`), else `other`. |
 | `voice` | One plain, short sentence. A blank voice gets it too. |
 | a stage `goalDays` | The waits of its main steps plus 2 days, at least 3. The goal stage gets 0. |
 | a stage `completion` | A stage with steps that an agent works, other than the goal, closes people out as Unresponsive. Other stages stay. |
@@ -42,12 +42,12 @@ When you change a playbook you already have, a part you leave out (`stages`, `go
 Every read and save of a playbook returns `warnings`, a deterministic check that needs no agent. An item
 is `{ id, level, message, stageKey, stepKey, ruleKey, fix }`. A save is refused with `playbook_cannot_work` (422,
 the list in `errors`) when `offRamps` is empty, a stage has `on: []` and nothing sends people to it, or a rule
-holds an action that does not run yet (`rule_action_not_built`; see Event rules).
+holds an action that does not run yet (`rule_action_not_built`; see Rules).
 The other items are warnings; read them after each save and clear them:
 
 | Item `id` | Meaning and default fix |
 | --- | --- |
-| `stage_never_ends` | A stage with steps and `completion` `stay`. Use `off_ramp` with the Unresponsive off-ramp. |
+| `stage_never_ends` | A stage with steps and `completion` `stay`. Use `off_ramp` with the Unresponsive way out. |
 | `stage_by_hand_only` | Nothing opens a stage but a person or agent. Give it an `on` event ("Jump forward to here when") or finish the stage before it with `next`. The first stage after Ready is not flagged. |
 | `send_without_wait` | A send step with no `wait`, followed by another send on the same channel. Add a wait. |
 | `goal_shorter_than_waits` | `goalDays` is below the waits added up. Use the waits plus 2 days. |
@@ -85,12 +85,12 @@ The other items are warnings; read them after each save and clear them:
 | `instructions` | Coaching for whoever does the step. |
 | `wait` | Optional: `{ "until": U, "days": N }`. `until` is `accept` (LinkedIn steps only), `reply`, `meeting`, `timeout` or `event` (Custom steps only); `days` is 1 to 60. An `event` wait also needs `"event": "Gift delivered"` (the name of what the person records); the person records it on the Hand tasks page and that ends the wait, and so does a reply, a booked meeting or the days running out. The wait starts when the agent reports the step's result with its step key: a plan action carries the step's `key` as `playbookStepKey`, and a succeeded result for that action starts the wait. A reply or a booked meeting ends every wait early; an accept ends only a wait until `accept`. Older playbooks used `waitDays: N`, which still reads as `{ "until": "timeout", "days": N }`. |
 | `side` | Defaults to false. A side step runs while the main step before it waits, for example a profile view or a like. A stage with side steps needs a main step. |
-| `onTimeout` | `next` (default) or `off_ramp`. With `off_ramp`, a main step whose wait runs out leaves the prospect through the `unresponsive` off-ramp. When nothing is left in the stage, its completion decides. |
+| `onTimeout` | `next` (default) or `off_ramp`. With `off_ramp`, a main step whose wait runs out leaves the prospect through the `unresponsive` way out. When nothing is left in the stage, its completion decides. |
 | `routes` | Optional: `{ "accept"?: T, "reply"?: T, "meeting"?: T }`, where `T` is `{ "kind": "stage", "stageKey": "<uuid>" }` or `{ "kind": "off_ramp", "offRampKey": "<uuid>" }`. Where an event that reaches the person after this step ran sends them. The step's route wins over the stage's `on` list; an event with no route follows the stage. A main step only; `accept` only on a LinkedIn step. A route to an earlier stage needs `rules.allowBackward`. |
 | `actionId` | Optional: an action id from the outreach rulebook, for example `linkedin.message.send`. It must match the step's `channel`. List the valid ids with their channel and label: `audienti playbook actions` (MCP `playbook_actions_list`). The `action` text stays the label the person reads. |
-| `eventRules` | Optional, up to 10: event rules for this step only. See Event rules. |
+| `eventRules` | Optional, up to 10: event rules for this step only. See Rules. |
 
-## Event rules
+## Rules
 
 An event rule says what happens when an event reaches a person: do these things, then go here. It lives on the playbook (`fields.eventRules`, up to 30), on a stage (`eventRules`, up to 10) or on a step (up to 10). When more than one rule fits, the most specific event wins first: a reply kind such as `reply.interested` beats `replied`. For the same event, the nearest place wins: the step, then the stage, then the playbook. After that the first rule in the list wins, so a later rule for the same event in the same place never fires. A step `routes` entry is the older form of the same thing.
 
