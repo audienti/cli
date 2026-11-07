@@ -4,11 +4,12 @@ import { readFileSync, statSync } from 'node:fs';
 import { readJsonFile } from './json-file.mjs';
 import { printPaid } from './tools.mjs';
 
-const RECORD_FLAGS = ['workspace', 'profile', 'person', 'evidence', 'label', 'quote', 'reason', 'confidence', 'request-id', 'participation', 'file', 'text', 'text-file', 'direction', 'channel', 'context'];
+const RECORD_FLAGS = ['workspace', 'profile', 'person', 'evidence', 'label', 'quote', 'reason', 'confidence', 'request-id', 'participation', 'playbook', 'file', 'text', 'text-file', 'direction', 'channel', 'context', 'event', 'retract'];
 const SUGGEST_FLAGS = ['workspace', 'profile', 'text', 'text-file', 'direction', 'channel', 'context', 'request-id'];
 const TEXT_MAX_BYTES = 16384;
 const TEXT_MAX_CHARACTERS = 4000;
 const CONTEXT_MAX_CHARACTERS = 2000;
+const CORRECT_OK = ['workspace', 'profile', 'person', 'event', 'label', 'quote', 'reason', 'confidence', 'request-id', 'file', 'retract'];
 const RECORD_ONLY_OK = ['workspace', 'profile', 'person', 'evidence', 'label', 'quote', 'reason', 'confidence', 'request-id', 'participation', 'file'];
 
 function readText(path) {
@@ -44,7 +45,28 @@ async function suggest(flags) {
  await printPaid('tools_intent_label', { workspaceId: flags.workspace, requestId, input: { text, direction, channel: flags.channel, ...(flags.context ? { context: flags.context } : {}) } }, { profile: flags.profile, explain: explain(requestId) });
 }
 const SUGGEST_USAGE = 'Use: intent suggest (--text TEXT | --text-file PATH) --channel email|linkedin [--direction inbound|outbound] [--context TEXT] [--request-id UUID] [--workspace ID].';
-const USAGE = 'Use intent list [--workspace ID], intent suggest (--text TEXT | --text-file PATH) --channel email|linkedin [--direction inbound|outbound] [--context TEXT] [--request-id UUID] [--workspace ID], or intent record --person ID --evidence ID (--label NAME --quote TEXT --reason TEXT [--confidence high|medium|low] | --file LABELS.json) [--request-id UUID] [--participation ID] [--workspace ID].';
+const USAGE = 'Use intent list [--playbook ID] [--workspace ID], intent suggest (--text TEXT | --text-file PATH) --channel email|linkedin [--direction inbound|outbound] [--context TEXT] [--request-id UUID] [--workspace ID], or intent record --person ID --evidence ID (--label NAME --quote TEXT --reason TEXT [--confidence high|medium|low] | --file LABELS.json) [--request-id UUID] [--participation ID] [--workspace ID], or intent correct --person ID --event ID (--label NAME --quote TEXT --reason TEXT [--confidence high|medium|low] | --file LABEL.json | --retract) [--request-id UUID] [--workspace ID].';
+
+/** Change or withdraw one label of a message. A person only: the server refuses an agent credential with human_only. */
+async function correct(flags) {
+ if (Object.keys(flags).some(key => !CORRECT_OK.includes(key))) throw Error('Option does not apply to intent correct.');
+ if (!flags.person || !flags.event) throw Error(`--person ID and --event ID are required. Read the event ID from replies list or the person history. ${USAGE}`);
+ const single = ['label', 'quote', 'reason', 'confidence'].filter(key => flags[key] !== undefined);
+ const ways = [flags.retract ? 'retract' : null, flags.file ? 'file' : null, single.length ? 'flags' : null].filter(Boolean);
+ if (ways.length !== 1) throw Error(`Give one change: --retract, one label with --label, --quote and --reason, or a label in --file. ${USAGE}`);
+ let label;
+ if (flags.file) {
+  const body = readJsonFile(flags.file, 65536, 'Label file');
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw Error('The label file is one JSON object: { "label": "...", "quote": "...", "reason": "...", "result": {...} }.');
+  label = body;
+ } else if (single.length) {
+  if (!flags.label || !flags.quote || !flags.reason) throw Error(`--label, --quote and --reason are required together. ${USAGE}`);
+  label = { label: flags.label, quote: flags.quote, reason: flags.reason, ...(flags.confidence ? { confidence: flags.confidence } : {}) };
+ }
+ console.log(JSON.stringify(await callWorkspace('intent_correct', {
+  workspaceId: flags.workspace, prospectId: flags.person, eventId: flags.event, requestId: flags['request-id'] ?? randomUUID(), ...(label ? { label } : { retract: true }),
+ }, configuration(flags.profile))));
+}
 
 export async function intentCli(args) {
  const flags = {}, positions = [];
@@ -53,17 +75,19 @@ export async function intentCli(args) {
   if (arg === '--json') continue;
   if (!arg.startsWith('--')) { positions.push(arg); continue; }
   const key = arg.slice(2);
-  if (!RECORD_FLAGS.includes(key) || Object.hasOwn(flags, key) || i + 1 >= args.length) throw Error(`Invalid flag --${key}. ${USAGE}`);
+  if (key === 'retract' && !Object.hasOwn(flags, key)) { flags.retract = true; continue; }
+  if (!RECORD_FLAGS.includes(key) || key === 'retract' || Object.hasOwn(flags, key) || i + 1 >= args.length) throw Error(`Invalid flag --${key}. ${USAGE}`);
   flags[key] = args[++i];
  }
  const command = positions[1];
- if (positions.length !== 2 || positions[0] !== 'intent' || !['list', 'suggest', 'record'].includes(command)) throw Error(USAGE);
+ if (positions.length !== 2 || positions[0] !== 'intent' || !['list', 'suggest', 'record', 'correct'].includes(command)) throw Error(USAGE);
  if (command === 'list') {
-  if (Object.keys(flags).some(key => !['workspace', 'profile'].includes(key))) throw Error('Option does not apply to intent list.');
-  console.log(JSON.stringify(await callWorkspace('intent_labels_list', { workspaceId: flags.workspace }, configuration(flags.profile))));
+  if (Object.keys(flags).some(key => !['workspace', 'profile', 'playbook'].includes(key))) throw Error('Option does not apply to intent list.');
+  console.log(JSON.stringify(await callWorkspace('intent_labels_list', { workspaceId: flags.workspace, ...(flags.playbook ? { playbookId: flags.playbook } : {}) }, configuration(flags.profile))));
   return;
  }
  if (command === 'suggest') { await suggest(flags); return; }
+ if (command === 'correct') { await correct(flags); return; }
  if (Object.keys(flags).some(key => !RECORD_ONLY_OK.includes(key))) throw Error('Option does not apply to intent record.');
  if (!flags.person || !flags.evidence) throw Error(`--person ID and --evidence ID are required. ${USAGE}`);
  const single = ['label', 'quote', 'reason', 'confidence'].filter(key => flags[key] !== undefined);

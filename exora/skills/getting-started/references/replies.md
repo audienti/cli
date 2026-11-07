@@ -97,7 +97,7 @@ asks for everything to end looks like this:
   "result": {"type": "reply.stop", "scope": "person"}}]
 ```
 
-`audienti intent --help` prints this example. Give the same `--request-id` to repeat a call safely. Add
+`audienti intent record --help` prints this example. Give the same `--request-id` to repeat a call safely. Add
 `confidence` (`high`, `medium` or `low`) when you are unsure. A low-confidence label does not fire its rule:
 the person is held and a decision opens for your user to pick from (see below). `stop` and `bounce` always
 act, whatever the confidence. A message keeps the labels it has: a second request that repeats
@@ -126,6 +126,24 @@ a suggestion, then record it with `intent record`, which runs every check above 
 
 `replies set` records the same labels. Add `"intent": {"quote": "...", "reason": "..."}` next to `classification`
 or `meetingState` and it runs the same checks and stores the words on the event. Without `intent` it works as before.
+
+## A label your playbook defines
+
+A playbook may declare labels of its own, such as "asked about pricing". See them with `audienti intent list --playbook PLAYBOOK_ID`: each shows its name
+(`custom.asked_pricing`), what it means and whether a rule uses it. Record one like any other label:
+`audienti intent record --person PERSON --evidence EVIDENCE --label custom.asked_pricing --quote "..." --reason "..."`. The same checks run, and
+the label fits only the people whose running playbook declares it. If a rule names the label, the rule acts. If none does, the person is held and a
+decision opens for your user, with the trigger `custom_label_no_rule`. A custom label is never a stop or a bounce, and `replies set` takes core labels only.
+
+## A label is wrong
+
+A person corrects a label; an agent cannot. If you see a wrong label, tell your user and say which one. They change it
+with the "Change label" menu on the reply card or the person's page, or with `audienti intent correct --person PERSON
+--event EVENT --label NAME --quote "..." --reason "..."`. `--retract` withdraws it. The `EVENT` is the `id` the label
+shows. Nothing is edited: the old label stays in the history, and the labels in force are the ones no correction replaced.
+The new label passes the same checks as a first recording. If it would send the person somewhere else, nothing moves:
+Operator asks "Move back to ..." and the person picks. A change away from a stop never lifts the stop. A decision
+asks "Lift the stop on this person?", and the stop stays until a person picks to lift it. An agent token gets `human_only`.
 
 ## Label a message you sent
 
