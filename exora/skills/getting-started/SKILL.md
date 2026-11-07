@@ -190,6 +190,11 @@ not retry with a new request ID. For a later idea, draft a new campaign or a suc
 and name what changed, so the two tests compare; save a new playbook as a template with
 the playbook-design skill, then pin it to the successor.
 
+If the user edits an audience that a campaign already uses, the campaign keeps the old
+rules until you move it. Tell the user which revision it uses and what the newer one
+changes, then run `audienti campaign use-audience ID` when they agree
+(`references/campaign-draft.md`).
+
 ## After getting started: work the queue
 
 After that, Audienti puts the daily work in your queue: get a draft campaign ready to

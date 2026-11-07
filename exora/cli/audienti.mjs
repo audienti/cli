@@ -100,6 +100,8 @@ Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches w
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
 Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|rules show ID|rules save ID --file REQUEST.json|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|event PARTICIPATION_ID --kind KIND --reason TEXT  (audienti playbook SUBCOMMAND --help for the request shape)
+Newer audience: campaign show CAMPAIGN_ID  (its audience says the revision it uses, the newest revision and the rules a move adds and removes)
+                campaign use-audience CAMPAIGN_ID [--expected-revision N]  (moves the campaign to the newest audience revision; people already in it stay; an audit event records it)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]

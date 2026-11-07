@@ -38,12 +38,18 @@ export async function campaignCli(args){
   input.expectedRevision=flags['expected-revision']!==undefined?Number(flags['expected-revision']):(await callWorkspace('campaign_targets_get',{workspaceId:flags.workspace,campaignId:position[2],limit:1},config)).data.revision;
   console.log(JSON.stringify(await callWorkspace('campaign_targets_change',input,config)));return;
  }
+ if(command==='use-audience'){
+  if(position.length!==3)throw new Error('Use campaign use-audience ID [--expected-revision N].');
+  const config=configuration(flags.profile);
+  const expectedRevision=flags['expected-revision']!==undefined?Number(flags['expected-revision']):(await callWorkspace('campaign_get',{workspaceId:flags.workspace,campaignId:position[2]},config)).data.campaign.currentRevision;
+  console.log(JSON.stringify(await callWorkspace('campaign_audience_use',{workspaceId:flags.workspace,campaignId:position[2],expectedRevision},config)));return;
+ }
  if(command==='summary'){
   if(position.length!==2)throw new Error('Use campaign summary [--workspace ID].');
   console.log(JSON.stringify(await callWorkspace('campaign_summary',{workspaceId:flags.workspace},configuration(flags.profile))));return;
  }
  const name={list:'campaign_list',show:'campaign_get',create:'campaign_create',update:'campaign_update',transition:'campaign_transition',successor:'campaign_successor',events:'campaign_events',pace:flags['per-day']===undefined&&flags['max-credits']===undefined?'campaign_pace_get':'campaign_pace_set'}[command];
- if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|summary|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N --max-credits C|check ID --url URL|targets ID [--add|--remove|--set].');
+ if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|summary|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N --max-credits C|check ID --url URL|targets ID [--add|--remove|--set]|use-audience ID.');
  if(flags['per-day']!==undefined&&command!=='pace')throw new Error('Set the pace with campaign pace ID --per-day N|derived, after the campaign is saved.');
  const input={workspaceId:flags.workspace};
  if(position[2])input.campaignId=position[2];

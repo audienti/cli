@@ -5,7 +5,7 @@ export const auditOperations = {
   schema: z.object({
    workspaceId: z.string().uuid().optional(),
    actor: z.enum(['person', 'agent']).optional(),
-   category: z.enum(['guardrails', 'budgets', 'approvals', 'suppression', 'members', 'agents', 'replies', 'billing', 'playbooks']).optional(),
+   category: z.enum(['guardrails', 'budgets', 'approvals', 'suppression', 'members', 'agents', 'replies', 'billing', 'playbooks', 'campaigns']).optional(),
    since: z.string().datetime().optional(),
    until: z.string().datetime().optional(),
    cursor: z.string().max(500).optional(),

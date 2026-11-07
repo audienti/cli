@@ -56,10 +56,18 @@ name or notes.
 | Campaign | `audienti campaign create --file CAMPAIGN.json --request-id UUID` | `campaign_create` |
 | Pace | `audienti campaign pace ID --per-day derived`, or `--per-day N` with the user's number | `campaign_pace_set` |
 | Next test | `audienti campaign successor ID --file CAMPAIGN.json --request-id UUID` | `campaign_successor` |
+| Use the newest audience revision | `audienti campaign use-audience ID` | `campaign_audience_use` |
 
 Read each command's request fields in the API schema at `/api/v1/openapi.json`
 (search for the MCP tool name above). A campaign also needs the `audienceRevision`
 and `offerRevision` returned when you saved the audience and offer.
+
+A campaign keeps the audience revision it was saved with. When you edit an audience, the
+campaigns that use it do not change. Read `audience` in the campaign: it gives the revision
+in use, the latest revision, `newerAvailable` and the rule changes. Run
+`audienti campaign use-audience ID` to move to the latest revision. A draft or preparing
+campaign moves unless its audience or offer is archived. A running campaign moves for 48 hours after its first activation.
+People already in the campaign stay. Only people checked after the move use the new rules.
 
 ## Example proposal
 
