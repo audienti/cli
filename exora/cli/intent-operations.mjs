@@ -11,7 +11,7 @@ const label = z.object({
  label: z.string().describe('A name from intent_labels_list that fits the message direction and channel.'),
  quote: z.string().meta({ minLength: 1, maxLength: 300 }).describe('The words in the message that support the label. Copy them from the message; case and spacing do not matter.'),
  reason: z.string().meta({ minLength: 1, maxLength: 200 }).describe('One plain sentence: why the quote means this label. A person reads it, so no IDs, error codes or status numbers.'),
- confidence: z.enum(['high', 'medium', 'low']).optional().describe('How sure you are. Optional. It is stored with the label when given and does not change what the label does yet.'),
+ confidence: z.enum(['high', 'medium', 'low']).optional().describe('How sure you are. Optional. It is stored with the label when given. A low-confidence label does not fire its rule: it holds the person and opens a decision, except stop and bounce, which always act.'),
  result: resultInput.optional().describe('The typed detail a stop (reply.stop), bounce (email.bounce) or referral (reply.referral) needs. Same shape as replies set; a stop or referral takes the label quote as its own when it has none.'),
  meeting: z.object({ at: z.string().datetime(), source: z.enum(['sent_invite', 'received_invite']) }).strict().optional().describe('Only for meeting_booked: when the meeting is (UTC, ending in Z) and who sent the invite.'),
  returnsOn: z.string().datetime().optional().describe('Only for out_of_office: the day the person is back (UTC, ending in Z).'),

@@ -83,6 +83,11 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            intent list [--workspace ID]  (the closed set of message labels: name, direction, event, channels, typed detail; output is JSON)
            intent suggest (--text TEXT | --text-file PATH) --channel email|linkedin [--direction inbound|outbound] [--context TEXT] [--request-id UUID] [--workspace ID]  (paid: what a message may mean, read by a model; prints the price per 1M input tokens first; suggests labels with a quote and reason, records nothing; keep one with intent record)
            intent record --person ID --evidence ID --label NAME --quote TEXT --reason TEXT [--confidence high|medium|low] [--request-id UUID] [--participation ID] [--workspace ID]  (what a stored message means; get EVIDENCE from prospects conversation append|list; --file LABELS.json for several labels or a typed detail such as a stop result or a meeting time; every label is checked and a refusal says what to fix; a message you sent that asks for a meeting takes --label meeting_requested on its outbound evidence)
+           decision list [--state open|decided|all] [--person ID] [--participation ID] [--limit N] [--workspace ID]  (what Operator asks the person when the rules do not decide; an open decision holds its person)
+           decision options ID [--workspace ID]  (one decision with the options the playbook allows)
+           decision ask --participation ID [--reason TEXT] [--request-id UUID] [--workspace ID]  (ask the person to decide about one running person)
+           decision prepare ID --recommended OPTION_ID --option OPTION_ID=ANALYSIS ... [--file PREPARE.json] [--request-id UUID] [--workspace ID]  (an agent adds its view: two to five options, one line each)
+           decision answer ID --option OPTION_ID [--workspace ID]  (a person picks; the move runs once)
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
@@ -123,6 +128,7 @@ Tool names follow the commands: playbook_get for playbook show, playbook_draft_g
 Errors name the MCP tool to call next, not the command.`;
 // Example inputs for the commands that save prospects, so `--help` shows a working shape.
 const examples = {
+  'decision prepare': { recommended: 'snooze_30', options: [{ id: 'snooze_30', analysis: 'They said ask again in March, so wait a month.' }, { id: 'continue', analysis: 'Keep the plan; a follow-up may go this week.' }] },
   'prospects conversation append': { requestId: 'UUID', item: { source: { provider: 'email', accountRef: 'you@yourcompany.com', itemId: 'PROVIDER_MESSAGE_ID', threadId: null }, payload: { direction: 'outbound', conversationType: 'direct', occurredAt: '2026-11-06T14:00:00Z', subject: 'Ten minutes on late invoices?', body: 'Hi Jordan, could we find 20 minutes next week?', participants: null } } },
   'intent record': [{ label: 'stop', quote: 'please stop writing to me', reason: 'They ask us to stop.', result: { type: 'reply.stop', scope: 'person' } }],
   'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'linkedin', url: 'https://www.linkedin.com/in/jane-doe' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
@@ -142,7 +148,7 @@ function commandHelp() {
   }
   console.log(shown.length ? shown.map(line => line.trim()).join('\n') : usage);
   const example = Object.entries(examples).find(([command]) => words.join(' ').startsWith(command) || (words.length > 0 && command.startsWith(words.join(' '))));
-  if (example) console.log(`\nExample --file INPUT.json for ${example[0]}:\n${JSON.stringify(example[1], null, 1)}\n${example[0].startsWith('intent') ? `\nA message you sent that asks for a meeting (store it first with prospects conversation append, direction outbound):\naudienti intent record --person PERSON --evidence EVIDENCE --label meeting_requested --quote "find 20 minutes next week" --reason "We ask for a call next week."\nRules: the "Label a message with its words" and "Label a message you sent" sections of the getting-started replies reference.` : 'Steps and rules: the "Save prospects and contacts" section of llms.txt.'}`);
+  if (example) console.log(`\nExample --file INPUT.json for ${example[0]}:\n${JSON.stringify(example[1], null, 1)}\n${example[0].startsWith('decision') ? 'Choose option ids from `audienti decision options ID`. One plain line each, at most 140 characters, no IDs or error codes.' : example[0].startsWith('intent') ? `\nA message you sent that asks for a meeting (store it first with prospects conversation append, direction outbound):\naudienti intent record --person PERSON --evidence EVIDENCE --label meeting_requested --quote "find 20 minutes next week" --reason "We ask for a call next week."\nRules: the "Label a message with its words" and "Label a message you sent" sections of the getting-started replies reference.` : 'Steps and rules: the "Save prospects and contacts" section of llms.txt.'}`);
 }
 
 /** Says what is wrong with a command no handler took, instead of one message for every case. */
@@ -164,6 +170,7 @@ async function main() {
   if(args[0]==='prospects'&&args[1]==='replies'){const {accountRepliesCli}=await import('./account-replies.mjs');await accountRepliesCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='contacts'){const {recipientsCli}=await import('./recipients.mjs');await recipientsCli(args);return;}
   if(args[0]==='usage'){const {usageCli}=await import('./usage.mjs');await usageCli(args);return;}
+  if(args[0]==='decision'){const {decisionCli}=await import('./decision.mjs');await decisionCli(args);return;}
   if(args[0]==='intent'){const {intentCli}=await import('./intent.mjs');await intentCli(args);return;}
   if(args[0]==='audit'){const {auditCli}=await import('./audit.mjs');await auditCli(args);return;}
   if(args[0]==='secret'||args[0]==='secrets'){const {secretsCli}=await import('./secrets.mjs');await secretsCli(args);return;}

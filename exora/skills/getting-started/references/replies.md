@@ -7,8 +7,8 @@ approved: inbound wins, and you record it. What the user approves is your answer
 
 1. Read the conversation: `audienti prospects conversation list PERSON --workspace ID`.
 2. Classify the reply as one of `interested`, `question`, `later`, `not_interested` (a clear no thanks),
-   `out_of_office`, `stop`, `bounce`, `referral` or `wrong_person` (the prospect is the wrong person and
-   names no one else). A stop, a bounce or a referral must carry its typed
+   `out_of_office`, `stop`, `bounce`, `referral`, `wrong_person` (the prospect is the wrong person and
+   names no one else) or `unclear` (you cannot tell what they mean; it holds the person for a decision, see below). A stop, a bounce or a referral must carry its typed
    `result`, or the report is refused; see [Stop, bounce and referral](#stop-bounce-and-referral).
 3. Draft the answer from the mailbox or LinkedIn account the reply came to (the assignee's).
    - Bind the recipient and the sender, or the answer waits in Blocked: the recipient's
@@ -98,8 +98,9 @@ asks for everything to end looks like this:
 ```
 
 `audienti intent --help` prints this example. Give the same `--request-id` to repeat a call safely. Add
-`confidence` (`high`, `medium` or `low`) when you are unsure; it is stored only when you give it, and it
-does not change what the label does yet. A message keeps the labels it has: a second request that repeats
+`confidence` (`high`, `medium` or `low`) when you are unsure. A low-confidence label does not fire its rule:
+the person is held and a decision opens for your user to pick from (see below). `stop` and `bounce` always
+act, whatever the confidence. A message keeps the labels it has: a second request that repeats
 one is refused with `already_recorded`, and one that would give the message a second reading is refused.
 
 Audienti checks every label and writes nothing if one fails. A refusal names the `field`, the `allowed`
@@ -112,6 +113,10 @@ values and the `next` step. The checks:
 - The labels fit together: `stop`, `bounce` and `out_of_office` stand alone; a message has one reading of the
   reply and at most one meeting label.
 - The typed detail is present: a `stop`, `bounce` or `referral` needs its `result`; `meeting_booked` needs `meeting`.
+
+A recorded label shows to the user as a chip with the quote, the reason, how sure you were and who recorded it, on the
+reply card in Operator, the person's page and the Pipeline card. Write the `quote` and `reason` for a person to read. The same
+labels come back as `labels` on `audienti prospects timeline PERSON`, `audienti prospects replies get PERSON` (the latest reply, or one message with `--evidence`) and `audienti pipeline show`. A label event on the timeline carries the label once, under `event.label`. Mark a guess with `confidence: low`: the chip says so.
 
 To get a second reading before you record, `audienti intent suggest --channel email --text "..."` asks a model
 to suggest labels. It costs credits: the call prints the price per million input tokens first, and a message
@@ -156,6 +161,26 @@ The same checks apply: a message with no stored text, a quote that is not in it,
   The same message cannot take the label twice (`already_recorded`).
 - The label goes on the person's running campaign. A person runs in one campaign per workspace, so you need no option; `--participation ID` names the run if you want it explicit. The answer to `work execution send` or `report` carries that `participationId` when the send started a playbook step and the person still runs in the campaign run the send started, also when you repeat the call. A person who left and rejoined has a new run: a repeat of the old send names none. The label works without it.
 - An answer to a reply that offers times is labeled the same way, with the evidence of the answer you sent.
+
+## When the rules do not decide: decisions
+
+A reply the rules cannot act on holds the person, and a decision asks your user to pick. It opens when a
+label is `unclear`, when a label has low confidence (not `stop` or `bounce`), when a reply has had no label
+for 24 hours, or when you ask for one with `audienti decision ask`. While it is open nothing is sent to the
+person. A `decisions.prepare` task tells you to add your view:
+
+1. Read the options the playbook allows: `audienti decision options DECISION_ID`. Only these ids are valid.
+   A stage option names its stage (`stageName`), a snooze option reads "Snooze 30 days, then continue", and each
+   trigger says who recorded the event behind it (`recordedBy`: kind and name). The clock raises a trigger with none.
+2. Choose two to five. Write one plain line for each (at most 140 characters, no IDs or error codes) and
+   recommend one: `audienti decision prepare DECISION_ID --recommended ID --option ID=ANALYSIS ...`.
+   Audienti refuses an option outside the list and names the allowed ids.
+3. Report the task done. Only your user picks, in Operator or with `audienti decision answer` under their own
+   sign-in. Audienti never applies your recommendation. After 24 hours without your view the user sees the
+   options without analyses. An open decision turns stale after 7 days; the person stays held.
+
+A reply you can label clearly needs no decision: record the label with `audienti intent record` and the rules
+act. A label recorded later ends the hold.
 
 ## Stop, bounce and referral
 

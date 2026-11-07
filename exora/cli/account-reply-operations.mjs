@@ -5,7 +5,7 @@ const item = { ...scope, evidenceId: uuid };
 const status = z.enum(['needs_handling', 'handled', 'not_reply']);
 const outcome = z.enum(['response_recorded', 'closed_without_response', 'suppressed']);
 const limit = z.number().int().min(1).max(100);
-const classification = z.enum(['interested', 'question', 'later', 'not_interested', 'out_of_office', 'stop', 'bounce', 'referral', 'wrong_person']);
+const classification = z.enum(['interested', 'question', 'later', 'not_interested', 'out_of_office', 'stop', 'bounce', 'referral', 'wrong_person', 'unclear']);
 const slot = z.object({ start: z.string().describe('UTC start, ending in Z.'), end: z.string().describe('UTC end, ending in Z.'), timeZone: z.string().describe("The user's IANA time zone, for display.") }).strict();
 const draft = z.object({
   type: z.enum(['email.send', 'linkedin.send']),
@@ -34,7 +34,7 @@ export const accountReplyOperations = {
   workspace_reply_set: {
     schema: z.object({ ...item, requestId: uuid, expectedVersion: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), status,
       outcome: outcome.nullable().describe("Null for needs_handling/not_reply; a handling outcome is required for handled."), reason: z.string().meta({ minLength: 1, maxLength: 2000 }).describe("Required trimmed NFC reason, 1–2000 codepoints. Interior control characters including newline and tab are rejected."), responseEvidenceId: uuid.nullable().describe("Required for response_recorded; null otherwise. Must identify matching outbound account evidence."),
-      classification: classification.optional().describe("What the reply is. Records a replied event on the person's active campaigns, except for bounce and out_of_office. An out_of_office reply snoozes the person instead; a wrong_person reply with no name given stops the sends and asks who the right person is. Someone who names the right person is a referral."),
+      classification: classification.optional().describe("What the reply is. Records a replied event on the person's active campaigns, except for bounce and out_of_office. An out_of_office reply snoozes the person instead; an unclear reply holds the person for a decision; a wrong_person reply with no name given stops the sends and asks who the right person is. Someone who names the right person is a referral."),
       returnsOn: z.string().datetime().optional().describe("Only with out_of_office: the date the person is back (UTC, ending in Z). The snooze lasts until then; with no date it follows the playbook's out-of-office rule, 7 days by default."),
       invite: z.literal(true).optional().describe("The prospect sent a calendar invite you have not processed yet. Requires a classification; a meetings.confirm task follows."),
       draft: draft.optional().describe("Your drafted answer. Saved as a reply plan revision the user reviews in Operator; requires status needs_handling. Never sent until approved."),
@@ -46,6 +46,7 @@ export const accountReplyOperations = {
     body: ({ workspaceId, prospectId, evidenceId, ...rest }) => rest,
   },
   workspace_reply_get: {
+    description: 'Read one inbound message: its reply state and history, and the `labels` an agent or person recorded on it (label, title, quote, reason, confidence, who recorded it, when), newest first. Free CRM read. The CLI reads the latest reply of the person when `--evidence` is left out.',
     schema: z.object({ ...item, historyCursor: uuid.optional(), historyLimit: limit.optional() }).strict(),
     method: 'GET', scoped: true, path: a => query(detail(a), a, ['historyCursor', 'historyLimit']),
   },

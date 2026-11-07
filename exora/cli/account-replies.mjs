@@ -14,7 +14,7 @@ export async function accountRepliesCli(args) {
   if (positions[0] !== 'prospects' || positions[1] !== 'replies' || !['set', 'get', 'list'].includes(command) || positions.length !== 4) throw Error('Use prospects replies set|get|list PERSON --workspace ID.');
   const allowed = ['workspace', 'profile', ...(command === 'set' ? ['file', 'evidence'] : command === 'get' ? ['evidence', 'history-cursor', 'history-limit'] : ['cursor', 'limit', 'status'])];
   if (Object.keys(flags).some(k => !allowed.includes(k))) throw Error('Option does not apply to this reply command.');
-  if (command !== 'list' && !flags.evidence) throw Error('--evidence EVIDENCE is required.');
+  if (command === 'set' && !flags.evidence) throw Error('--evidence EVIDENCE is required.');
   let input = {};
   if (command === 'set') {
     if (!flags.file) throw Error('--file INPUT.json is required.');
@@ -31,5 +31,19 @@ export async function accountRepliesCli(args) {
     if (!/^\d+$/.test(flags[flag])) throw Error('invalid_fields');
     input[key] = Number(flags[flag]);
   }
-  console.log(JSON.stringify(await callWorkspace(`workspace_reply_${command}`, input, configuration(flags.profile))));
+  const config = configuration(flags.profile);
+  if (command === 'get' && !input.evidenceId) {
+    // No --evidence: read the person's latest reply. The list runs oldest first, so walk to its last page.
+    let last = null, cursor;
+    for (;;) {
+      const page = await callWorkspace('workspace_reply_list', { workspaceId: input.workspaceId, prospectId: input.prospectId, limit: 100, ...(cursor ? { cursor } : {}) }, config);
+      const data = page.data ?? page;
+      last = data.items?.at(-1)?.evidenceId ?? last;
+      if (!data.nextCursor) break;
+      cursor = data.nextCursor;
+    }
+    if (!last) throw Error('This person has no stored reply yet. Run prospects timeline PERSON to see their messages.');
+    input.evidenceId = last;
+  }
+  console.log(JSON.stringify(await callWorkspace(`workspace_reply_${command}`, input, config)));
 }
