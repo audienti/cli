@@ -113,6 +113,12 @@ values and the `next` step. The checks:
   reply and at most one meeting label.
 - The typed detail is present: a `stop`, `bounce` or `referral` needs its `result`; `meeting_booked` needs `meeting`.
 
+To get a second reading before you record, `audienti intent suggest --channel email --text "..."` asks a model
+to suggest labels. It costs credits: the call prints the price per million input tokens first, and a message
+uses a small part of that. It returns up to two suggestions, each with a `quote`, a `reason`, a `confidence` and
+`needs` (the typed detail to add, for example the `scope` of a stop). It records nothing. Keep, change or drop
+a suggestion, then record it with `intent record`, which runs every check above again.
+
 `replies set` records the same labels. Add `"intent": {"quote": "...", "reason": "..."}` next to `classification`
 or `meetingState` and it runs the same checks and stores the words on the event. Without `intent` it works as before.
 

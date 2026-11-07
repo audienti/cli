@@ -54,12 +54,12 @@ async function readStdin() {
  try{return JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Buffer.concat(chunks)));}catch{throw new Error('Tool input must be valid UTF-8 JSON.');}
 }
 const asJson=value=>{try{return JSON.parse(value);}catch{throw new Error('Tool input must be valid JSON.');}};
-async function printPaid(name,args,values){
+export async function printPaid(name,args,values){
  try{
   const result=await callWorkspace(name,args,configuration(values.profile));
   const paidResult=paidToolResult(name,result?.data,args);
   if(['failed','uncertain','rejected'].includes(paidResult?.status)){
-   process.stderr.write(JSON.stringify({error:{code:paidResult.error?.code??'tool_incomplete'},operationId:paidResult.operationId,requestId:args.requestId,billing:paidResult.billing,...(paidResult.result?.persistence?{result:paidResult.result}:{}),requestTraceId:result.requestTraceId,recovery:paidResult.status==='rejected'?'resolve_rejection_then_new_request_id':paidResult.result?.persistence?.recovery??'retry_same_request_id'})+'\n');process.exitCode=1;return;
+   process.stderr.write(JSON.stringify({error:{code:paidResult.error?.code??'tool_incomplete'},operationId:paidResult.operationId,requestId:args.requestId,billing:paidResult.billing,...(paidResult.result?.persistence?{result:paidResult.result}:{}),requestTraceId:result.requestTraceId,recovery:paidResult.status==='rejected'?'resolve_rejection_then_new_request_id':paidResult.result?.persistence?.recovery??'retry_same_request_id'})+'\n');if(values.explain)process.stderr.write(values.explain(paidResult)+'\n');process.exitCode=1;return;
   }
   console.log(JSON.stringify(result));
  }catch(error){
