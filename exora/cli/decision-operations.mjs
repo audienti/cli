@@ -6,7 +6,7 @@ export const decisionOperations = {
  decision_list: {
   schema: z.object({ ...scope, state: z.enum(['open', 'decided', 'all']).optional(), prospectId: uuid.optional(), participationId: uuid.optional(), limit: z.number().int().min(1).max(100).optional() }).strict(),
   method: 'GET', path: a => { const q = new URLSearchParams(Object.entries({ state: a.state, prospectId: a.prospectId, participationId: a.participationId, limit: a.limit }).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString(); return `${base(a)}${q ? `?${q}` : ''}`; }, scoped: true,
-  description: `List the decisions Operator asks the person when the rules do not decide: an unclear or low-confidence reply, a reply nobody labeled for 24 hours, an agent that asked, or a rule that asks who the right person is. Open ones come first. Each has the options the playbook allows, the agent's view when it added one, and a stale flag after 7 days. ${hold}`,
+  description: `List the decisions Operator asks the person when the rules do not decide: an unclear or low-confidence reply, a reply nobody labeled for 24 hours, a label of the playbook's own that no rule names, a label a person changed that routes the person elsewhere (or away from a stop), a rule that asks who the right person is, or an agent that asked. Pass prospectId or participationId to see one person's. Open ones come first. Each has the options the playbook allows, the agent's view when it added one, and a stale flag after 7 days. ${hold}`,
  },
  decision_get: {
   schema: z.object({ ...scope, decisionId: uuid }).strict(),

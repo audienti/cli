@@ -134,7 +134,7 @@ A playbook may declare labels of its own, such as "asked about pricing". See the
 (`custom.asked_pricing`), what it means and whether a rule uses it. Record one like any other label:
 `audienti intent record --person PERSON --evidence EVIDENCE --label custom.asked_pricing --quote "..." --reason "..."`. The same checks run, and
 the label fits only the people whose running playbook declares it. If a rule names the label, the rule acts. If none does, the person is held and a
-decision opens for your user, with the trigger `custom_label_no_rule`. A custom label is never a stop or a bounce, and `replies set` takes core labels only.
+decision opens for your user, with the trigger `custom_label_no_rule`. The record answer does not say which happened. Look with `audienti decision list --person PERSON`. A custom label is never a stop or a bounce, and `replies set` takes core labels only.
 
 ## A label is wrong
 

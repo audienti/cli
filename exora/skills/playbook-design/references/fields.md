@@ -19,6 +19,7 @@
 | `offRamps` | Up to 30 ways out: `{ key, name, reason }`. `reason` is `rejected`, `not_fit`, `nurture`, `unresponsive` or `other`. The default rules end a person in the way out with reason `rejected` when the reply says no thanks (`not_interested`), and in the one with reason `not_fit` when you record `not_a_fit`. A playbook without that way out keeps the person where they are. The system sets `taken_over`, `bounced` and `skipped` itself; do not choose them. "Bad data" and "repair" are not ways out. |
 | `voice` | How messages should sound, in the user's style. |
 | `eventRules` | Optional: what happens when an event reaches a person, for any stage and step. A new playbook starts with three (below); leave the field out to keep them, or send the whole list to replace it. See Rules. |
+| `customLabels` | Optional, up to 20: labels of this playbook's own, for what a reply means that the core labels do not say (see Your own labels). Each is `{ "name", "direction": "inbound", "meaning" }`. |
 | `rules` | Optional: `allowBackward` (boolean, default false): let a move go to an earlier stage. Approval of a move is a setting on the account, not a playbook rule. |
 
 ## Defaults
@@ -97,7 +98,7 @@ An event rule says what happens when an event reaches a person: do these things,
 | Field | Rule |
 | --- | --- |
 | `key` | A UUID, unique in the playbook. |
-| `when` | The event: `accepted`, `replied`, `meeting_booked`, `wait_timeout`, `inbound_connection_request`, or a reply kind `reply.interested`, `reply.question`, `reply.later`, `reply.out_of_office`, `reply.wrong_person`, `reply.referral`. An unknown name is refused with the allowed names; `audienti playbook actions` lists them under `eventRules.when`. |
+| `when` | The event: `accepted`, `replied`, `meeting_booked`, `wait_timeout`, `inbound_connection_request`, or a label of this playbook `custom.NAME` (see Your own labels), or a reply kind `reply.interested`, `reply.question`, `reply.later`, `reply.out_of_office`, `reply.wrong_person`, `reply.referral`. An unknown name is refused with the allowed names; `audienti playbook actions` lists them under `eventRules.when`. |
 | `do` | Optional list, each once. The screen's words are in brackets: `stop_wait` (End their wait), `snooze` (Wait before the next step), `redirect_to_named_person` (Add the person they name), `ask_who_is_right` (Ask who the right person is), `tell_me` (Tell me), `hand_to_user` (Put it in my queue), `withdraw_pending_request` (Withdraw the pending request). `withdraw_pending_request` does not run yet: a rule that holds it cannot be published or saved as a version. `ask_who_is_right` runs on a reply event: it holds the person and asks the user in Operator who the right person is (on any other event the check warns and nobody is asked). Also under `eventRules.do`. |
 | `snoozeDays` | 1 to 90. For `snooze`. |
 | `goto` | Where the person goes after: `{ "kind": "stay" }`, `{ "kind": "gate" }` (the stage's own next step; the default), or `{ "kind": "stage", "stageKey": KEY }`, `{ "kind": "off_ramp", "offRampKey": KEY }` or `{ "kind": "step", "stepKey": KEY }`. |
@@ -113,6 +114,14 @@ Taking someone off the list and a bounce always run first; no rule changes them.
 A refused rule or route says which one it is and what to change, in the words the screen uses, for example: `The rule for "a meeting is booked" in the stage "Reaching out" goes back to "Ready", but moving back a stage is off. Change that rule first.`
 
 A LinkedIn step whose `actionId` is `linkedin.inmail.send` runs only when the LinkedIn account reports InMail available. Otherwise it is skipped without a card.
+
+## Your own labels
+
+A reply may mean something the core labels do not say, such as "asked about pricing". Declare it in `customLabels` and let a rule act on it:
+
+- `customLabels`: `[{ "name": "asked_pricing", "direction": "inbound", "meaning": "They ask what it costs." }]`. The name is 2 to 40 lower case letters, digits and underscores, starting with a letter, and not the name of a core label (`audienti intent list`). The direction is `inbound`; the meaning is one line (160 characters).
+- A rule names it as `when: "custom.asked_pricing"`. Without a rule, each message with that label holds the person and opens a decision for your user. The Playbook check warns about that, and refuses a rule that names a label the playbook does not declare.
+- Your agent records one with `audienti intent record --label custom.asked_pricing`. `audienti intent list --playbook PLAYBOOK_ID` shows the playbook's labels and whether a rule names each. A custom label is never a stop or a bounce and cannot be locked.
 
 ## Example request
 
