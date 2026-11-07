@@ -95,7 +95,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
 Qualification: campaigns qualification submit --file INPUT.json
 Campaign summary: campaign summary [--workspace ID]  (campaign counts per state, and per campaign its audience, offer, playbook, goal stage, people, engaged and at-goal counts)
 Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches with the audience filters, checks each person, admits only fits; stops at N fits or the credit cap and reports the spend)
-                campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID]  (checks one person the same way; reuse the request ID after an interruption)
+                campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID] [--source-url URL --source-industry TEXT [--source-kind website|register|other] [--source-location TEXT] [--source-note TEXT]]  (checks one person the same way; reuse the request ID after an interruption; a source confirms a company with no LinkedIn page)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
 Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|delete ID|progress PARTICIPATION_ID|record --file REQUEST.json|event PARTICIPATION_ID --kind KIND --reason TEXT  (audienti playbook SUBCOMMAND --help for the request shape)

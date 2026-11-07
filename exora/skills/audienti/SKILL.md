@@ -127,6 +127,15 @@ To check one person, run `audienti campaign check CAMPAIGN_ID --url LINKEDIN_URL
 --request-id UUID` (MCP tool `campaign_prospect_check`). Reuse the request ID after an
 interruption so a retry never pays twice.
 
+If the person's company has no LinkedIn page, the check holds with "No company page; add a
+source to confirm the industry." Read another page that states the company's industry, such
+as its website or a regulator's register. Run the check again with `--source-url URL
+--source-industry INDUSTRY` (add `--source-kind website|register|other`, website by default; add `--source-location
+PLACE` or `--source-note TEXT` if useful). MCP: `companySource` on `campaign_prospect_check`.
+The industry rule still applies, and the source is recorded on the receipt. A company the
+campaign names in its targets passes the industry rule without a source. A held person is
+not offered again until new evidence, such as a source, arrives.
+
 `campaign find` moves on to the next person only after a definite answer: fit, held, not
 a fit, already found, or a refusal about that person (a bad URL or no LinkedIn profile).
 If a check is still running, its response is lost or the server fails, the command retries

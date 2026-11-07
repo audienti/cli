@@ -3,7 +3,7 @@ import {readJsonFile} from './json-file.mjs';
 export async function campaignCli(args){
  const position=[],flags={};for(let i=0;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}
-  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url','add','remove','set'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
+  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url','add','remove','set','source-url','source-kind','source-industry','source-location','source-note'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
   flags[key]=args[++i];
  }
  const command=position[1];
@@ -17,9 +17,13 @@ export async function campaignCli(args){
   console.log(JSON.stringify({data:report}));return;
  }
  if(command==='check'){
-  if(position.length!==3||!flags.url)throw new Error('Use campaign check ID --url LINKEDIN_URL [--request-id UUID].');
+  if(position.length!==3||!flags.url)throw new Error('Use campaign check ID --url LINKEDIN_URL [--request-id UUID] [--source-url URL [--source-kind website|register|other] --source-industry TEXT [--source-location TEXT] [--source-note TEXT]].');
+  const sourceFlags=['source-url','source-kind','source-industry','source-location','source-note'].filter(key=>flags[key]!==undefined);
+  const missing=[['source-url','--source-url URL'],['source-industry','--source-industry TEXT']].filter(([key])=>flags[key]===undefined).map(([,text])=>text);
+  if(sourceFlags.length&&missing.length)throw new Error(`A company source needs its web address and the industry it states. Add ${missing.join(' and ')}.`);
+  const companySource=sourceFlags.length?{kind:String(flags['source-kind']??'website').toLowerCase(),url:flags['source-url'],industry:flags['source-industry'],...(flags['source-location']!==undefined?{location:flags['source-location']}:{}),...(flags['source-note']!==undefined?{note:flags['source-note']}:{})}:undefined;
   const {randomUUID}=await import('node:crypto');
-  console.log(JSON.stringify(await callWorkspace('campaign_prospect_check',{workspaceId:flags.workspace,campaignId:position[2],url:flags.url,requestId:flags['request-id']??randomUUID()},configuration(flags.profile))));return;
+  console.log(JSON.stringify(await callWorkspace('campaign_prospect_check',{workspaceId:flags.workspace,campaignId:position[2],url:flags.url,requestId:flags['request-id']??randomUUID(),...(companySource?{companySource}:{})},configuration(flags.profile))));return;
  }
  if(command==='targets'){
   if(position.length!==3)throw new Error('Use campaign targets ID [--add a.com,b.com] [--remove a.com] [--set FILE|-] [--expected-revision N].');
