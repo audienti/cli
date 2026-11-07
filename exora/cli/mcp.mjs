@@ -27,7 +27,7 @@ for (const [name, operation] of Object.entries(agentOperations)) {
  });
 }
 for (const [name, operation] of Object.entries(prospectingSettingsOperations)) {
- server.registerTool(name, {description:`${name.replaceAll('_',' ')}. Personal prospecting settings; no workspace scope, sending or authority grant. ${operation.ownerOnly?'Human agents:manage credential required.':'Active agent reads only its owner and its own reported accounts.'}`,inputSchema:operation.schema},async args=>{
+ server.registerTool(name, {description:`${name.replaceAll('_',' ')}. Personal prospecting settings; no workspace scope, sending or authority grant.${operation.description?` ${operation.description}`:''} ${operation.ownerOnly?'Human agents:manage credential required.':'Active agent reads only its owner and its own reported accounts.'}`,inputSchema:operation.schema},async args=>{
   try{return {content:[{type:'text',text:JSON.stringify(await callProspectingSettings(name,args))}]};}
   catch(error){return {isError:true,content:[{type:'text',text:JSON.stringify({error:error.toJSON?error.toJSON():{code:'client_error',message:error.message}})}]};}
  });

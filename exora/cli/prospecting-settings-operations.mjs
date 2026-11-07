@@ -9,7 +9,7 @@ const query=a=>{const q=new URLSearchParams(Object.entries(a).map(([k,v])=>[k,St
 export const prospectingSettingsOperations={
  prospecting_settings_get:{schema:z.object({}).strict(),method:'GET',path:()=>'/prospecting-policy'},
  prospecting_settings_set:{schema:z.object({...write,schedule,emailLimits:limits,linkedinLimits:limits}).strict(),method:'POST',path:()=>'/prospecting-policy',ownerOnly:true},
- prospecting_account_settings_get:{schema:z.object(account).strict(),method:'GET',path:a=>'/prospecting-policy/account'+query(a)},
+ prospecting_account_settings_get:{description:'Read one connected account\'s hours and limits, and its sending window now: window.open, window.reason (open, no_hours, outside_hours or working_hours_closed), window.timezone and window.nextOpensAt (null while open). A send outside the window waits and goes when it opens; replies are never held.',schema:z.object(account).strict(),method:'GET',path:a=>'/prospecting-policy/account'+query(a)},
  prospecting_account_settings_set:{schema:z.object({...write,...account,schedule:schedule.nullable(),limits:limits.nullable()}).strict(),method:'POST',path:()=>'/prospecting-policy/account',ownerOnly:true},
  prospecting_settings_history:{schema:z.object(page).strict(),method:'GET',path:a=>'/prospecting-policy/events'+query(a),ownerOnly:true},
  prospecting_accounts_list:{schema:z.object(page).strict(),method:'GET',path:a=>'/prospecting-policy/accounts'+query(a)},
