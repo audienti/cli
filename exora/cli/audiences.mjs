@@ -3,7 +3,9 @@ import {readJsonFile} from './json-file.mjs';
 export async function audienceCli(args){
  const position=[],flags={};for(let i=0;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}
-  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','kind','url','audience','text'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete audience option.');
+  const key=args[i].slice(2);
+  if(key==='json'&&!Object.hasOwn(flags,key)){flags.json=true;continue}
+  if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','kind','url','audience','text'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete audience option.');
   flags[key]=args[++i];
  }
  const command=position[1],name={options:'audience_options',list:'audience_list',show:'audience_get',create:'audience_create',update:'audience_update',archive:'audience_archive',restore:'audience_restore',summary:'audience_summary',people:'audience_people',companies:'audience_companies',test:'audience_prospect_test',improve:'audience_fit_check_improve'}[command];

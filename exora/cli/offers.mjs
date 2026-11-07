@@ -3,7 +3,9 @@ import {readJsonFile} from './json-file.mjs';
 export async function offerCli(args){
  const position=[],flags={};for(let i=0;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}
-  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete offer option.');
+  const key=args[i].slice(2);
+  if(key==='json'&&!Object.hasOwn(flags,key)){flags.json=true;continue}
+  if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete offer option.');
   flags[key]=args[++i];
  }
  const command=position[1],name={list:'offer_list',show:'offer_get',create:'offer_create',update:'offer_update',archive:'offer_archive',restore:'offer_restore'}[command];

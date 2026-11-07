@@ -55,7 +55,7 @@ Work list: work list --workspace ID [--order oldest|priority] [--queue review|bl
            a plan that only waits for its cadence is in neither review nor blocked; it returns to review when the wait ends
 Work writes: --file INPUT.json; human review needs a human workspace:access token
 Audiences: audience options --kind industries|locations|sizes|types|seniorities|titles|functions [--q TEXT]
-           audience list|show ID|create|update ID|archive ID|restore ID
+           audience list|show ID|create|update ID|archive ID|restore ID [--json]
            audience summary [--audience ID]|people ID|companies ID
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
@@ -70,7 +70,7 @@ Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campai
            audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
 Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|read|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
 KV: audienti kv get KEY|set KEY VALUE [--json] [--nx] [--if-version N] [--ttl 7d|--expires-at TIME]|list [--prefix P]|search [--key TEXT] [--value TEXT]|delete KEY  (small state between runs; never credentials)
-Offers: offer list|show ID|create|update ID|archive ID|restore ID
+Offers: offer list|show ID|create|update ID|archive ID|restore ID [--json]
 Offer options: --file FIELDS.json --request-id UUID --expected-revision N --revision N --archived true|false
   audienti prospects replies set|get|list PERSON --workspace ID [--evidence EVIDENCE] [--file INPUT.json]
 Account intake: prospects intake --workspace ID --file INPUT.json
