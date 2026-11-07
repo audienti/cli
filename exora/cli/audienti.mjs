@@ -59,7 +59,7 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience summary [--audience ID]|people ID|companies ID
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
-Hand tasks: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID --outcome TEXT [--notes TEXT] [--result replied|meeting_booked]|skip ID --reason TEXT|event ID [--name TEXT]  (a person does a Custom step by hand and records what happened)
+Operator Custom steps: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID --outcome TEXT [--notes TEXT] [--result replied|meeting_booked]|skip ID --reason TEXT|event ID [--name TEXT]  (a person does a Custom step by hand and records what happened)
 Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT [--reason-code CODE]|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
 Runs: audienti runs [list] [--workspace ID] [--agent ID] [--status all|running|done|failed] [--cursor-at ISO_DATE --cursor-id ID] (includes plain skip reasons and codes)
 Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
