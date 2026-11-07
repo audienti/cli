@@ -12,7 +12,7 @@ export const duplicateOperations = {
     schema: z.object(located).strict(), method: 'GET', path, scoped: true,
   },
   workspace_prospect_duplicate_merge: {
-    description: 'Merge a possible duplicate into one person. The older record survives and keeps both LinkedIn profiles, the email, the observations and the timelines. The LinkedIn profile that outreach uses is the main channel and the other LinkedIn channel is retired. Set primaryProfileId to choose it; without a choice the suggestedPrimary of the flag applies (the profile of the person who has an email, else the newest). Set keepBoth to true to leave both channels active.',
+    description: 'Merge a possible duplicate into one person. The older record survives and keeps both LinkedIn profiles, the email, the observations and the timelines. The LinkedIn profile that outreach uses is the main channel and the other LinkedIn channel is retired. Set primaryProfileId to choose it; without a choice the suggestedPrimary of the flag applies (the profile of the person who has an email, else the newest). Set keepBoth to true to leave both channels active; outreach then uses only the newest active LinkedIn contact. The result lists the retired channels in retiredChannels.',
     schema: z.object({ ...located, primaryProfileId: uuid.optional(), keepBoth: z.boolean().optional() }).strict(), method: 'POST', path: a => `${path(a)}/merge`, body: ({ workspaceId, prospectId, ...body }) => body, scoped: true,
   },
   workspace_prospect_duplicate_dismiss: {

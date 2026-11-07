@@ -70,7 +70,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            prospects contacts list|record PERSON [--file INPUT.json] [--request-id UUID] --workspace ID
            prospects contacts get|retire PERSON CONTACT --workspace ID
            prospects suppression get|set ID --workspace ID
-           prospects duplicates list --workspace ID | get|merge|dismiss PERSON --workspace ID [--primary PROFILE_ID]  (same name and photo: the newer record is held until you decide)
+           prospects duplicates list --workspace ID | get|merge|dismiss PERSON --workspace ID [--primary PROFILE_ID | --keep-both]  (same name and photo: the newer record is held until you decide; a merge with no flag retires the other LinkedIn channel and says which)
            guardrails show|pause|resume --workspace ID
            dnc list|add VALUE|remove VALUE --workspace ID
            dnc import --file LIST.csv --workspace ID  (at most 5,000 rows; reports added, skipped and invalid rows)
