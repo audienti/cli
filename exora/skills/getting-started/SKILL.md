@@ -168,7 +168,7 @@ When the user answers (a **Read your user's answer** task in your queue):
    with the premise, playbook, channels and `schedule.endAt` (over MCP, `offer_create`,
    `audience_create`, `campaign_create`). The campaign starts in `Draft`; nothing runs
    until the user starts it. Then save the pace: `audienti campaign pace ID --per-day N`
-   with the user's number, or `--per-day derived` when they kept it (over MCP,
+   with the user's number, or `--per-day derived` to use the default of 25 new people a day (over MCP,
    `campaign_pace_set`). Only `campaign pace` takes `--per-day`; `campaign create` and
    `update` refuse it. When the user approved a spend for finding, such as "find 5 people
    for up to 20 credits", save the cap too: `audienti campaign pace ID --max-credits 20`.
