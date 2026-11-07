@@ -1,5 +1,5 @@
 import {callWorkspace,configuration} from './workspaces.mjs';
-const askHelp='Use ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID] [--topic KEY]. A newer open question with the same --topic replaces the older one.';
+const askHelp='Use ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID] [--topic KEY]. Pass --campaign ID --topic campaign:ID for a campaign decision (first_campaign only before it exists). The server derives the campaign topic when omitted; superseded lists the replaced question IDs.';
 const help='Use questions [list] [--state open|answered|withdrawn|superseded|all] | show ID | withdraw ID | answer ID --answer TEXT.';
 function parse(args,allowed,usage){
  const position=[],flags={},options=[];
