@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "f3f8ec894c72e86ff3bbb5904fb0ea08fb3b0482",
+  "sourceCommit": "cb669f6a1d6ffbb7c5058faf6eb03fdb1813485f",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -16,7 +16,7 @@
     "cli/attachments.mjs": "2fee6b4abbf82da9847d4a927a3d4d3ca947a198a903a78927596a2ea858cbf4",
     "cli/audience-operations.mjs": "4c72d02364cb9ab255fb58cac0ec7362613d63bd7b0999c2afa782cc52287abd",
     "cli/audiences.mjs": "3c377346efc1a8bdde432a16c2d19a3f51f34f3333d344d3a2bfa94c188a017d",
-    "cli/audienti.mjs": "19c5670da5f0f4f064f8d92993eb212005eadbf39facf0de93d795c87081a5be",
+    "cli/audienti.mjs": "8a5ec28c8af467ab24a0d932c584141c4d276f62ad494aaf12ef98fdd60706b2",
     "cli/audit-operations.mjs": "42a12625e2d2ab5e43e441f7371d30c99df1e535debcc41bc8d541330b7e35ca",
     "cli/audit.mjs": "a7becaed67c58b063e668b5e66844b6dc15c11a63b428faa171b542ad922c001",
     "cli/budget-operations.mjs": "d74916551ef393e29734c6e13cf9021251e0ed126eeaa529e18cf2332146e1e0",
@@ -88,7 +88,7 @@
     "cli/work-operations.mjs": "66a6155964d1af264b4aa3851cf43b9373155887ee2f9bcac3eb97d9f4680157",
     "cli/work.mjs": "b898e2e432a93114b53a906fef49394e80bfc74c79101506966161f34bb06f0c",
     "cli/workspaces.mjs": "297072c9ad0076adbe3b847397ea03b538d6ed3380aae8c9f15bfc7b46c9fcbb",
-    "package.json": "b72958738f2a63026b868dec8b17251e5de68c2faee848e510ebb9079bd9cf8b",
+    "package.json": "afd5fd3afde868de958d3bd6e4bd0a8cdfba5685419ad976e334482dea37a134",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "7307267df9b9b0bd5c02d20f15eb12e206ca81d7fea95fe0a3f81ed197e5b40e",
