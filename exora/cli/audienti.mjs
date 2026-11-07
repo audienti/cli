@@ -56,7 +56,8 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
 Hand tasks: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID --outcome TEXT [--notes TEXT] [--result replied|meeting_booked]|skip ID --reason TEXT|event ID [--name TEXT]  (a person does a Custom step by hand and records what happened)
-Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
+Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT [--reason-code CODE]|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
+Runs: audienti runs [list] [--workspace ID] [--agent ID] [--status all|running|done|failed] [--cursor-at ISO_DATE --cursor-id ID] (includes plain skip reasons and codes)
 Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
 Saved posts: audienti posts list [--topic-id ID]|get ID  (savedByOperationId names the tool run that saved a post; read it with audienti tools runs get ID)
@@ -181,6 +182,7 @@ async function main() {
   if(args[0]==='prospecting'){const {prospectingSettingsCli}=await import('./prospecting-settings.mjs');await prospectingSettingsCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='replies'){const {accountRepliesCli}=await import('./account-replies.mjs');await accountRepliesCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='contacts'){const {recipientsCli}=await import('./recipients.mjs');await recipientsCli(args);return;}
+  if(args[0]==='runs'){const {runsCli}=await import('./runs.mjs');await runsCli(args);return;}
   if(args[0]==='usage'){const {usageCli}=await import('./usage.mjs');await usageCli(args);return;}
   if(args[0]==='decision'){const {decisionCli}=await import('./decision.mjs');await decisionCli(args);return;}
   if(args[0]==='intent'){const {intentCli}=await import('./intent.mjs');await intentCli(args);return;}

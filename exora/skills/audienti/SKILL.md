@@ -127,14 +127,22 @@ To check one person, run `audienti campaign check CAMPAIGN_ID --url LINKEDIN_URL
 --request-id UUID` (MCP tool `campaign_prospect_check`). Reuse the request ID after an
 interruption so a retry never pays twice.
 
-If the person's company has no LinkedIn page, the check holds with "No company page; add a
-source to confirm the industry." Read another page that states the company's industry, such
-as its website or a regulator's register. Run the check again with `--source-url URL
---source-industry INDUSTRY` (add `--source-kind website|register|other`, website by default; add `--source-location
-PLACE` or `--source-note TEXT` if useful). MCP: `companySource` on `campaign_prospect_check`.
-The industry rule still applies, and the source is recorded on the receipt. A company the
-campaign names in its targets passes the industry rule without a source. A held person is
-not offered again until new evidence, such as a source, arrives.
+A missing company LinkedIn page is never, by itself, a reason to skip a person. Read the
+person's current experience first: company name, title, dates and the employer location on
+that role. `campaign check` uses that employer location when no company page is available;
+it does not treat the person's residence as the company location or use ended employment.
+
+Check the required facts on the receipt. If a fact such as industry or headcount is still
+unknown, research that fact. If the person's experience explicitly states the company industry,
+you can use that profile as the source (`--source-kind other --source-url PERSON_PROFILE_URL
+--source-industry INDUSTRY`). Otherwise use the company website or a regulator's register:
+`--source-url URL --source-industry INDUSTRY` (add `--source-kind website|register|other` and
+`--source-location PLACE` when stated). MCP takes `companySource`. Never infer industry or
+size just from a company name. A named campaign target still passes its industry rule.
+
+Report done after recording the check. Skip only if a required fact is genuinely unavailable,
+and name that fact and the sources checked in `--note`, with `--reason-code required_fact_unknown`.
+The person stays held until new evidence arrives. Never use "no company profile" as the reason.
 
 `campaign find` moves on to the next person only after a definite answer: fit, held, not
 a fit, already found, or a refusal about that person (a bad URL or no LinkedIn profile).
