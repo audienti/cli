@@ -114,7 +114,8 @@ Search: workspace search --workspace ID --query TEXT [--people-only true] [--rec
 Invitation commands: workspace invitation show|accept|decline|retry|cancel ID
 Options: --workspace ID --name NAME --request-id UUID --email EMAIL --generation N
 Optional private profile: --profile PATH (outside this repository), or the AUDIENTI_PROFILE variable. --profile wins.
-Save an environment token: profile save --scope account:read|workspace:access|agents:manage --profile PATH
+Save an environment token: profile save --scope account:read|workspace:read|workspace:access|agents:manage --profile PATH
+Tokens: token show [--profile PATH]  (what the token can do; workspace:read can look but is refused on every change)
 Start local MCP stdio server: mcp  (audienti mcp --help for the settings)
 --json writes the API response envelope.
 `;
@@ -201,7 +202,7 @@ async function main() {
   if(args[0]==='offer'){const {offerCli}=await import('./offers.mjs');await offerCli(args);return;}
   if (args[0] === 'agent') { const { agentCli } = await import('./agents.mjs'); await agentCli(args); return; }
   if (isAssignmentCommand(args)) { await assignmentCli(args); return; }
-  if (['workspace', 'profile'].includes(args[0])) { const { workspaceCli } = await import('./workspaces.mjs'); await workspaceCli(args); return; }
+  if (['workspace', 'profile', 'token'].includes(args[0])) { const { workspaceCli } = await import('./workspaces.mjs'); await workspaceCli(args); return; }
   if (args[0] === 'profiles') { const { profilesCli } = await import('./profiles.mjs'); await profilesCli(args); return; }
   if (args[0] === 'skills') { const { skillsCli } = await import('./skills.mjs'); await skillsCli(args); return; }
   if (args[0] === 'mcp' && args.length === 1) { await import('./mcp.mjs'); return; }
