@@ -41,7 +41,8 @@ Share/unshare: agent capabilities share --id AGENT_ID --provider email|linkedin 
 Team member: workspace member USER_ID [--workspace ID] --profile PROFILE
 Work execution: work execution claim|start|send|get PLAN --action ID (send: managed LinkedIn accounts, --file with claimId and requestId); release|lookup --claim ID; report --attempt ID
 Work feedback: work changes request|list|get|respond|withdraw PLAN --workspace ID
-Work: work plan save|list|show|approve|withdraw-approval|cancel|skip|eligibility
+Work: work plan save  (audienti work --help lists the options of each work command)
+Work: work list|show|approve|withdraw-approval|cancel|skip|eligibility|activity
 Activity: work activity --workspace ID [--search TEXT] [--cursor-at ISO --cursor-id ID]
 Work list: work list --workspace ID [--order oldest|priority] [--queue review|blocked|activity]
            a plan that only waits for its cadence is in neither review nor blocked; it returns to review when the wait ends
@@ -170,6 +171,7 @@ function unknownCommandMessage(words) {
 async function main() {
   if (args[0] === 'playbook' && args.slice(1).some(value => value === '--help' || value === '-h')) { console.log(playbookHelp(args[1]?.startsWith('-') ? undefined : ['draft', 'rules'].includes(args[1]) && args[2] && !args[2].startsWith('-') ? `${args[1]}_${args[2]}` : args[1])); return; }
   if (args[0] === 'mcp' && args.length === 2 && (args[1] === '--help' || args[1] === '-h')) { console.log(MCP_HELP); return; }
+  if (args[0] === 'work' && !['execution', 'changes'].includes(args[1]) && args.slice(1).some(value => value === '--help' || value === '-h')) { const {workHelp}=await import('./work.mjs'); const sub = args[1]?.startsWith('-') ? undefined : args[1] === 'plan' ? 'plan save' : args[1]; console.log(workHelp(sub)); return; }
   if (args.length > 1 && args.slice(1).some(value => value === '--help' || value === '-h') && !['tools', 'call', 'skills'].includes(args[0])) { commandHelp(); return; }
   if(args[0]==='prospects'&&['intake','conversation'].includes(args[1])){const {accountIntakeCli}=await import('./account-intake.mjs');await accountIntakeCli(args);return;}
   if(args[0]==='sender'){const {senderAccountsCli}=await import('./sender-accounts.mjs');await senderAccountsCli(args);return;}

@@ -1,5 +1,23 @@
 import { callWorkspace, configuration } from './workspaces.mjs';
 import { readJsonFile } from './json-file.mjs';
+const WORK_HELP = {
+ 'plan save': 'work plan save --file INPUT.json [--workspace ID] [--request-id UUID]  (save the actions a campaign plan asks a person to approve)',
+ list: 'work list [--workspace ID] [--order oldest|priority] [--queue review|blocked|activity] [--state STATE] [--review-status STATUS] [--search TEXT] [--limit N] [--cursor CURSOR]  (what Operator shows)',
+ show: 'work show --plan-id ID [--workspace ID] [--revision N] [--history-limit N] [--history-cursor CURSOR]  (one plan, with the history of its actions)',
+ approve: 'work approve --plan-id ID --client-action-id ID --file INPUT.json [--workspace ID] [--request-id UUID]  (a person approves; the file holds expectedRevision, expectedApprovalVersion and requestId)',
+ 'withdraw-approval': 'work withdraw-approval --plan-id ID --client-action-id ID --file INPUT.json [--workspace ID] [--request-id UUID]  (take an approval back; the file holds expectedRevision, expectedApprovalVersion, requestId and reason)',
+ cancel: 'work cancel --plan-id ID --client-action-id ID --file INPUT.json [--workspace ID] [--request-id UUID]  (reject it; the file holds expectedRevision, requestId and reason)',
+ skip: 'work skip --plan-id ID --client-action-id ID --file INPUT.json [--workspace ID] [--request-id UUID]  (skip it; the file holds expectedRevision and requestId)',
+ eligibility: 'work eligibility --plan-id ID --client-action-id ID [--workspace ID]  (checks whether a pending action could be sent now; it reserves nothing)',
+ activity: 'work activity [--workspace ID] [--search TEXT] [--cursor-at ISO --cursor-id ID]  (what happened, newest first)',
+};
+const WORK_OTHER = ['work execution claim|start|send|get PLAN --action ID  (send: managed LinkedIn accounts, --file with claimId and requestId); release|lookup --claim ID; report --attempt ID', 'work changes request|list|get|respond|withdraw PLAN --workspace ID'];
+/** The help for `audienti work ...`: only the work commands, with the options each one takes. */
+export function workHelp(sub) {
+ const known = WORK_HELP[sub];
+ const lines = known ? [known] : [...Object.values(WORK_HELP), ...WORK_OTHER];
+ return `${lines.join('\n')}\nEvery command also takes --profile PATH. Commands that write take --file INPUT.json, and a person reviews with a human workspace:access token.`;
+}
 export async function workCli(args) {
  const flags={}, position=[];
  const allowed=['profile','workspace','file','request-id','plan-id','client-action-id','cursor','limit','history-cursor','history-limit','revision','state','review-status','queue','search','order','cursor-at','cursor-id'];
@@ -9,7 +27,7 @@ export async function workCli(args) {
   const key=args[i].slice(2);if(!allowed.includes(key)||Object.hasOwn(flags,key)||args[i+1]===undefined||args[i+1].startsWith('--'))throw new Error('Unknown, repeated, or incomplete work option.');flags[key]=args[++i];
  }
  const names={'work activity':'workspace_work_activity_list','work plan save':'workspace_work_action_plan_save','work list':'workspace_work_operator_list','work show':'workspace_work_operator_get','work approve':'workspace_work_action_approve','work withdraw-approval':'workspace_work_action_withdraw','work cancel':'workspace_work_action_cancel','work skip':'workspace_work_action_skip','work eligibility':'workspace_work_eligibility_get'};
- const name=names[position.join(' ')];if(!name)throw new Error('Use work plan save, list, activity, show, approve, withdraw-approval, cancel, skip, or eligibility. Writes require --file INPUT.json.');
+ const name=names[position.join(' ')];if(!name)throw new Error('Use work plan save, or work list, activity, show, approve, withdraw-approval, cancel, skip, or eligibility. Writes require --file INPUT.json.');
  const read=['workspace_work_activity_list','workspace_work_operator_list','workspace_work_operator_get','workspace_work_eligibility_get'].includes(name);
  const input=read?{}:readJsonFile(flags.file,65536,'Work input');
  for(const [flag,key] of [['workspace','workspaceId'],['request-id','requestId'],['plan-id','planId'],['client-action-id','clientActionId']])if(flags[flag]!==undefined)input[key]=flags[flag];
