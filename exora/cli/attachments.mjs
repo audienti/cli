@@ -1,8 +1,8 @@
 import {readFileSync,writeFileSync,statSync} from 'node:fs';
 import {basename,extname} from 'node:path';
 import {callWorkspace,configuration} from './workspaces.mjs';
-const help='Use attachments upload FILE [--type MIME] [--name NAME] [--duration SECONDS] [--workspace ID] [--profile PATH], or attachments get ATTACHMENT_ID --out PATH [--workspace ID] [--profile PATH]. An image is at most 5 MB; a voice note is at most 2 minutes and 5 MB, and its length goes in --duration.';
-const TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif','.webp':'image/webp','.mp3':'audio/mpeg','.m4a':'audio/mp4','.ogg':'audio/ogg','.wav':'audio/wav'};
+const help='Use attachments upload FILE [--type MIME] [--name NAME] [--duration SECONDS] [--workspace ID] [--profile PATH], or attachments get ATTACHMENT_ID --out PATH [--workspace ID] [--profile PATH]. An image, PDF document or MP4 video is at most 5 MB; a voice note is at most 2 minutes and 5 MB, and its length goes in --duration.';
+const TYPES={'.jpg':'image/jpeg','.jpeg':'image/jpeg','.png':'image/png','.gif':'image/gif','.webp':'image/webp','.mp3':'audio/mpeg','.m4a':'audio/mp4','.ogg':'audio/ogg','.wav':'audio/wav','.pdf':'application/pdf','.mp4':'video/mp4'};
 export async function attachmentsCli(args){
  const position=[],flags={};for(let i=1;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}

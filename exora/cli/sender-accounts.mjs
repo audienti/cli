@@ -8,8 +8,8 @@ export async function callSenderAccounts(name,args,profilePath){
  return callOwnerAccountOperation(senderAccountOperations[name],args,profilePath,'sender account',true);
 }
 export async function senderAccountsCli(args){
- const flags={},positions=[];const known=['profile','file','cursor','limit','aliases-cursor','aliases-limit','history-cursor','history-limit','action-type','capability','provider','account-ref','workspace','plan','text','text-file','attachment','reason','request-id','state','account'];
- for(let i=0;i<args.length;i++){const arg=args[i];if(arg==='--json')continue;if(!arg.startsWith('--')){positions.push(arg);continue;}const key=arg.slice(2);if(!known.includes(key)||Object.hasOwn(flags,key)||!args[i+1]||args[i+1].startsWith('--'))throw Error('Unknown, repeated or incomplete sender option.');flags[key]=args[++i];}
+ const flags={},positions=[];const known=['profile','file','cursor','limit','aliases-cursor','aliases-limit','history-cursor','history-limit','action-type','capability','provider','account-ref','workspace','plan','text','text-file','attachment','reason','request-id','state','account','company-page','repost'];
+ for(let i=0;i<args.length;i++){const arg=args[i];if(arg==='--json')continue;if(!arg.startsWith('--')){positions.push(arg);continue;}const key=arg.slice(2);if(!known.includes(key)||Object.hasOwn(flags,key)||args[i+1]===undefined||args[i+1].startsWith('--'))throw Error('Unknown, repeated or incomplete sender option.');flags[key]=args[++i];}
  if(positions[0]==='sender'&&positions[1]==='managed'){
   if(positions[2]==='plan'){
    const plans=['free','premium_career','premium_business','premium_all_in_one','sales_navigator_core','sales_navigator_advanced','recruiter_lite'],usage=`Use sender managed plan MANAGED_ACCOUNT_ID --plan ${plans.join('|')}|none [--workspace ID] [--profile PATH]  (the user only; none clears it).`;
@@ -17,17 +17,18 @@ export async function senderAccountsCli(args){
    console.log(JSON.stringify(await callWorkspace('workspace_managed_account_plan_set',{workspaceId:flags.workspace,managedAccountId:positions[3],plan:flags.plan==='none'?null:flags.plan},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
   }
   if(positions[2]==='post'){
-   const usage='Use sender managed post create MANAGED_ACCOUNT_ID (--text TEXT|--text-file PATH) [--attachment ID] [--reason TEXT] [--request-id UUID], sender managed post list [--account ID] [--state STATE], sender managed post get POST_ID, sender managed post approve POST_ID [--text TEXT], or sender managed post reject POST_ID [--reason TEXT] [--workspace ID] [--profile PATH]. Approve and reject are for the account owner, a person.';
-   const sub=positions[3],applies={create:['text','text-file','attachment','reason','request-id'],list:['account','state','limit'],get:[],approve:['text'],reject:['reason']}[sub];
+   const usage='Use sender managed post create MANAGED_ACCOUNT_ID (--text TEXT|--text-file PATH) [--attachment ID] [--company-page COMPANY_ID] [--repost POST_ID] [--reason TEXT] [--request-id UUID], sender managed post pages MANAGED_ACCOUNT_ID, sender managed post list [--account ID] [--state STATE], sender managed post get POST_ID, sender managed post approve POST_ID [--text TEXT], or sender managed post reject POST_ID [--reason TEXT] [--workspace ID] [--profile PATH]. Approve and reject are for the account owner, a person.';
+   const sub=positions[3],applies={create:['text','text-file','attachment','company-page','repost','reason','request-id'],pages:[],list:['account','state','limit'],get:[],approve:['text'],reject:['reason']}[sub];
    if(!applies||positions.length!==(sub==='list'?4:5)||Object.keys(flags).some(key=>!['profile','workspace',...applies].includes(key)))throw Error(usage);
    if(sub==='list'){console.log(JSON.stringify(await callWorkspace('workspace_managed_posts_list',{workspaceId:flags.workspace,...flags.account?{managedAccountId:flags.account}:{},...flags.state?{state:flags.state}:{},...flags.limit?{limit:Number(flags.limit)}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;}
+   if(sub==='pages'){console.log(JSON.stringify(await callWorkspace('workspace_managed_post_pages',{workspaceId:flags.workspace,managedAccountId:positions[4]},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;}
    if(sub==='get'){console.log(JSON.stringify(await callWorkspace('workspace_managed_post_get',{workspaceId:flags.workspace,postId:positions[4]},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;}
    if(sub==='create'){
-    if(Boolean(flags.text)===Boolean(flags['text-file']))throw Error('Give the post with --text or --text-file, not both. '+usage);
-    const text=flags.text??readFileSync(flags['text-file'],'utf8');
-    console.log(JSON.stringify(await callWorkspace('workspace_managed_post_create',{workspaceId:flags.workspace,managedAccountId:positions[4],requestId:flags['request-id']??randomUUID(),text,...flags.attachment?{attachmentId:flags.attachment}:{},...flags.reason?{reason:flags.reason}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
+    if((flags.text!==undefined&&flags['text-file']!==undefined)||(!flags.repost&&flags.text===undefined&&flags['text-file']===undefined))throw Error('Give the post with --text or --text-file, not both. '+usage);
+    const text=flags.text??(flags['text-file']?readFileSync(flags['text-file'],'utf8'):'');
+    console.log(JSON.stringify(await callWorkspace('workspace_managed_post_create',{workspaceId:flags.workspace,managedAccountId:positions[4],requestId:flags['request-id']??randomUUID(),text,...flags.attachment?{attachmentId:flags.attachment}:{},...flags['company-page']?{companyPageId:flags['company-page']}:{},...flags.repost?{repostId:flags.repost}:{},...flags.reason?{reason:flags.reason}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
    }
-   console.log(JSON.stringify(await callWorkspace(sub==='approve'?'workspace_managed_post_approve':'workspace_managed_post_reject',{workspaceId:flags.workspace,postId:positions[4],...flags.text?{text:flags.text}:{},...flags.reason?{reason:flags.reason}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
+   console.log(JSON.stringify(await callWorkspace(sub==='approve'?'workspace_managed_post_approve':'workspace_managed_post_reject',{workspaceId:flags.workspace,postId:positions[4],...flags.text!==undefined?{text:flags.text}:{},...flags.reason?{reason:flags.reason}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
   }
   const names={list:'workspace_managed_accounts_list',connect:'workspace_managed_account_connect'};
   if(!names[positions[2]]||positions.length!==3||Object.keys(flags).some(key=>!['profile','workspace'].includes(key)))throw Error('Use sender managed list|connect|plan|post [--workspace ID] [--profile PATH].');
