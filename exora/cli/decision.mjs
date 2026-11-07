@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { callWorkspace, configuration } from './workspaces.mjs';
 import { readJsonFile } from './json-file.mjs';
 
-const FLAGS = ['workspace', 'profile', 'state', 'person', 'participation', 'limit', 'reason', 'request-id', 'recommended', 'option', 'file'];
-const USAGE = 'Use decision list [--state open|decided|all] [--person ID] [--participation ID] [--limit N], decision options ID, decision ask --participation ID [--reason TEXT] [--request-id UUID], decision prepare ID (--recommended OPTION_ID --option OPTION_ID=ANALYSIS ... | --file PREPARE.json) [--request-id UUID], or decision answer ID --option OPTION_ID. Add --workspace ID to any of them.';
+const FLAGS = ['workspace', 'profile', 'state', 'person', 'participation', 'limit', 'reason', 'request-id', 'recommended', 'option', 'file', 'name', 'title', 'email', 'linkedin-url'];
+const USAGE = 'Use decision list [--state open|decided|all] [--person ID] [--participation ID] [--limit N], decision options ID, decision ask --participation ID [--reason TEXT] [--request-id UUID], decision prepare ID (--recommended OPTION_ID --option OPTION_ID=ANALYSIS ... | --file PREPARE.json) [--request-id UUID], or decision answer ID --option OPTION_ID [--name NAME [--title TEXT] [--email ADDRESS] [--linkedin-url URL]] (the name goes with the option name_person, which answers a question about who the right person is). Add --workspace ID to any of them.';
 
 export async function decisionCli(args) {
  const flags = {}, many = [], positions = [];
@@ -32,9 +32,11 @@ export async function decisionCli(args) {
  if (positions.length !== 3 || !id) throw Error(`Give the decision ID. ${USAGE}`);
  if (command === 'options') { only(); return call('decision_get', { decisionId: id }); }
  if (command === 'answer') {
-  only('option');
+  only('option', 'name', 'title', 'email', 'linkedin-url');
   if (many.length !== 1) throw Error(`Give the option once: --option OPTION_ID. ${USAGE}`);
-  return call('decision_answer', { decisionId: id, option: many[0] });
+  if (!flags.name && (flags.title || flags.email || flags['linkedin-url'])) throw Error(`--title, --email and --linkedin-url go with --name. ${USAGE}`);
+  const person = flags.name ? { name: flags.name, ...(flags.title ? { title: flags.title } : {}), ...(flags.email ? { email: flags.email } : {}), ...(flags['linkedin-url'] ? { linkedinUrl: flags['linkedin-url'] } : {}) } : null;
+  return call('decision_answer', { decisionId: id, option: many[0], ...(person ? { person } : {}) });
  }
  only('recommended', 'option', 'file', 'request-id');
  let body;

@@ -71,8 +71,9 @@ for `bounce` and `out_of_office`, which are not replies from the person.
 An `out_of_office` reply records an auto-reply instead. The playbook's out-of-office rule
 snoozes the person: the wait and the next step hold for 7 days, or until the return date
 when you pass `returnsOn`. Nothing is sent meanwhile and the person does not move. A
-`wrong_person` reply that names no one stops the sends and leaves the reply for the user to
-settle: ask who the right person is. When the reply names the right person, classify it as a
+`wrong_person` reply that names no one stops the sends and the starting rules ask the user
+in Operator who the right person is (`audienti decision answer ID --option name_person --name NAME`;
+only the user answers). When the reply names the right person, classify it as a
 `referral` with its typed `result`.
 
 ## Label a message with its words

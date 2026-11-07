@@ -6,7 +6,7 @@ export const decisionOperations = {
  decision_list: {
   schema: z.object({ ...scope, state: z.enum(['open', 'decided', 'all']).optional(), prospectId: uuid.optional(), participationId: uuid.optional(), limit: z.number().int().min(1).max(100).optional() }).strict(),
   method: 'GET', path: a => { const q = new URLSearchParams(Object.entries({ state: a.state, prospectId: a.prospectId, participationId: a.participationId, limit: a.limit }).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])).toString(); return `${base(a)}${q ? `?${q}` : ''}`; }, scoped: true,
-  description: `List the decisions Operator asks the person when the rules do not decide: an unclear or low-confidence reply, a reply nobody labeled for 24 hours, or an agent that asked. Open ones come first. Each has the options the playbook allows, the agent's view when it added one, and a stale flag after 7 days. ${hold}`,
+  description: `List the decisions Operator asks the person when the rules do not decide: an unclear or low-confidence reply, a reply nobody labeled for 24 hours, an agent that asked, or a rule that asks who the right person is. Open ones come first. Each has the options the playbook allows, the agent's view when it added one, and a stale flag after 7 days. ${hold}`,
  },
  decision_get: {
   schema: z.object({ ...scope, decisionId: uuid }).strict(),
@@ -28,8 +28,12 @@ export const decisionOperations = {
   description: 'Add your view to a decision: choose two to five of its options, write a one-line analysis for each and recommend one. Audienti refuses an option the playbook does not allow from the stage and lists the allowed ids. Take over and hold always stay open to the person. Your recommendation is never applied without the person\'s pick.',
  },
  decision_answer: {
-  schema: z.object({ ...scope, decisionId: uuid, option: z.string().min(1).max(80).describe('An option id from decision_get.') }).strict(),
+  schema: z.object({
+   ...scope, decisionId: uuid, option: z.string().min(1).max(80).describe('An option id from decision_get.'),
+   person: z.object({ name: z.string().trim().min(1).max(200), title: z.string().trim().max(200).optional(), email: z.string().trim().max(320).optional(), linkedinUrl: z.string().trim().max(500).optional() }).strict().optional()
+    .describe('Only with the option name_person, which answers a question about who the right person is. The name is required; add a title, an email or a LinkedIn address when you have them.'),
+  }).strict(),
   method: 'POST', path: a => `${base(a)}/${a.decisionId}/answer`, body: ({ workspaceId, decisionId, ...rest }) => rest, scoped: true,
-  description: 'People only: an agent cannot pick. Pick an option of a decision. The pick is recorded and the option\'s move runs once; sending it again returns the first answer. Picking hold changes nothing and the person stays held.',
+  description: 'People only: an agent cannot pick. Pick an option of a decision. The pick is recorded and the option\'s move runs once; sending it again returns the first answer. Picking hold changes nothing and the person stays held. When the rules ask who the right person is, pick name_person and send the person: they are added as a new prospect, checked against the campaign audience before anything is sent, and the person who replied leaves the campaign as Not a fit.',
  },
 };

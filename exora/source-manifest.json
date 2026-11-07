@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "bae6918ef3bdae6e092d4e1aee8e77e8f28e9fc4",
+  "sourceCommit": "1a5aeb560b1b2ae1eba540cdf005c2affd435398",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -16,7 +16,7 @@
     "cli/attachments.mjs": "2fee6b4abbf82da9847d4a927a3d4d3ca947a198a903a78927596a2ea858cbf4",
     "cli/audience-operations.mjs": "133b72dc6b9e3a6b4f173ce28f1524163f9c7b049505b885115f83b9e4af7170",
     "cli/audiences.mjs": "3c377346efc1a8bdde432a16c2d19a3f51f34f3333d344d3a2bfa94c188a017d",
-    "cli/audienti.mjs": "420083c3746fad301318db996c0322036601dd0235fab0a8f21b4336ff74d51b",
+    "cli/audienti.mjs": "a098924fc57dcfc99060c1cc3671237a3988c4f636e235a6f9b706f3bc7af775",
     "cli/audit-operations.mjs": "afaf87d592a1e5f6bff2a8649a6a64a8f471950b7d99e98995d9205aa5910398",
     "cli/audit.mjs": "a7becaed67c58b063e668b5e66844b6dc15c11a63b428faa171b542ad922c001",
     "cli/budget-operations.mjs": "d74916551ef393e29734c6e13cf9021251e0ed126eeaa529e18cf2332146e1e0",
@@ -28,8 +28,8 @@
     "cli/cohorts.mjs": "c71940903430f3e6834608f113534910b75a98b3e410a5942f04051607488485",
     "cli/connection-registry-operations.mjs": "888ea440d00ffc9ed68d4cc084ff73a5a00d0e60bd6293baba8bb4539a25ae62",
     "cli/content.mjs": "139dee5fd37fd89669c39e2120ac70a2e0286b207b055ff666f54ba3512ab061",
-    "cli/decision-operations.mjs": "0c4c2134c9615678def2b50f2a5254218b14f1174f1ce4e8ba7db78c751661af",
-    "cli/decision.mjs": "3d89d48b333e2620bce0191cf528ef25541ee841a7f8ae6d60249aead434b651",
+    "cli/decision-operations.mjs": "283249104858d52953ea7b236aecce24a28ca4fec310d2db80bf43bb208929b2",
+    "cli/decision.mjs": "2715e4ec204a88e67674a5e63bd4fa760f29e02a745c19d297179f30d1a87d14",
     "cli/discovery-operations.mjs": "072a85a0c88de6cbef3c683da632b96f98ad2417f9100d94f58e430c7d046375",
     "cli/discovery.mjs": "34b3794ee6ca539dbbccef77ec2085fd5411023046bdfb9b83e2537414542a41",
     "cli/duplicate-operations.mjs": "ef977bfff169977d83e646fd617304e138bf161bfbb7447d92c5d7313a4423b2",
@@ -55,7 +55,7 @@
     "cli/outcomes.mjs": "765ccb112a90fc4d228b2a41e5e19c5e1f3e2fe14bc1d8128b0090fc95cdbf3f",
     "cli/owner-account-client.mjs": "aa2790fd3c16714b1a82922fe13012f261cced99025d692bca5d0c605a717cd1",
     "cli/playbook-help.mjs": "91987a5d47501cb74694410637d75da5f5ae1361deca41a8d4352859ad023657",
-    "cli/playbook-operations.mjs": "32503d9d5ca224b3a5b5c7e58b1671c1453c662f1f71b35a4c8763f256d36690",
+    "cli/playbook-operations.mjs": "a540dbb2405d54db30ac0dfd7b1bbcc6318b1c5726c372f45f589cce48fcf116",
     "cli/profiles.mjs": "45929b224ffc916b6dbd7a94e06ac09a1ff7feec430633b10d160c1608fc2d32",
     "cli/progress.mjs": "3f623b364df99b472355e5ee6d364d8dce41470990b2f1eda96271973496fb4d",
     "cli/prospecting-settings-operations.mjs": "1829eb2fe7208f58601988143756072429adbfe00f8deb5a52613bf650a9eacc",
@@ -88,7 +88,7 @@
     "cli/work-operations.mjs": "66a6155964d1af264b4aa3851cf43b9373155887ee2f9bcac3eb97d9f4680157",
     "cli/work.mjs": "751107ecc3de5a6be9db4a068cddc41f3ad8e77c87e59686eaf522862caf9e9f",
     "cli/workspaces.mjs": "4921e56cbdafa8e0dd78a2b752c5e938100b851021cee2bdcc72bbbb4533609c",
-    "package.json": "37cf47952932b5b95627391550c3fd9ba852dc7b5cac83f0952516cd2b893073",
+    "package.json": "c947531d9b9596ef73c32e4529273a11a84ae5793900be8184089838d2367238",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "7307267df9b9b0bd5c02d20f15eb12e206ca81d7fea95fe0a3f81ed197e5b40e",
@@ -104,9 +104,9 @@
     "skills/getting-started/references/capabilities.md": "982e3583a47ba4ac832efae2f6af3a4d8c0c18cace159c76b2a4ad1a8d8e910e",
     "skills/getting-started/references/mailbox-check.md": "113574bb5a573125620dcde4e65ebf44164f7b0727cc936fb41234f5d57bba73",
     "skills/getting-started/references/outcome-checks.md": "094d09d231b38d4935aa9eb8ac089e46ba8e698489852fa97040e6b5eac77a9b",
-    "skills/getting-started/references/replies.md": "e543f13b9fae2ad3a7a07b6289ca03258c75e64df60cd3b36d4686ac9298d799",
+    "skills/getting-started/references/replies.md": "d49427f027f1f5031cfea28c47d6b22b9d17bd8dee3ca10235bf263f37c81def",
     "skills/getting-started/references/reply-checks.md": "85fe692ad6b7bc73e204de313b27d225be3da1a0af71e8e7bb9945ae511a0dc3",
     "skills/playbook-design/SKILL.md": "476ec173b04be972a4c9a7796206078219ad1647b7469d769f671763cd813d0a",
-    "skills/playbook-design/references/fields.md": "767bea152aedd52eba178d3eb22aa29d47b454847cccf2c44c071732edefc2f1"
+    "skills/playbook-design/references/fields.md": "08213264b8eaa5d6c8e97d3666b91e274080cb4c6502ff8f5eb48d27eef2b7b0"
   }
 }

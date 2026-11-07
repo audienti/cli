@@ -90,7 +90,7 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            decision options ID [--workspace ID]  (one decision with the options the playbook allows)
            decision ask --participation ID [--reason TEXT] [--request-id UUID] [--workspace ID]  (ask the person to decide about one running person)
            decision prepare ID --recommended OPTION_ID --option OPTION_ID=ANALYSIS ... [--file PREPARE.json] [--request-id UUID] [--workspace ID]  (an agent adds its view: two to five options, one line each)
-           decision answer ID --option OPTION_ID [--workspace ID]  (a person picks; the move runs once)
+           decision answer ID --option OPTION_ID [--name NAME [--title TEXT] [--email ADDRESS] [--linkedin-url URL]] [--workspace ID]  (a person picks; the move runs once; the name goes with name_person)
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
