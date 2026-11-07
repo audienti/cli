@@ -5,7 +5,7 @@ const item = { ...scope, evidenceId: uuid };
 const status = z.enum(['needs_handling', 'handled', 'not_reply']);
 const outcome = z.enum(['response_recorded', 'closed_without_response', 'suppressed']);
 const limit = z.number().int().min(1).max(100);
-const classification = z.enum(['interested', 'question', 'later', 'out_of_office', 'stop', 'bounce', 'referral', 'wrong_person']);
+const classification = z.enum(['interested', 'question', 'later', 'not_interested', 'out_of_office', 'stop', 'bounce', 'referral', 'wrong_person']);
 const slot = z.object({ start: z.string().describe('UTC start, ending in Z.'), end: z.string().describe('UTC end, ending in Z.'), timeZone: z.string().describe("The user's IANA time zone, for display.") }).strict();
 const draft = z.object({
   type: z.enum(['email.send', 'linkedin.send']),

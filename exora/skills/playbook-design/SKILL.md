@@ -30,6 +30,10 @@ Use this skill when:
   playbook, so the two can be compared in Analytics.
 - Saving a playbook never changes campaigns already pinned to it. Pin the new
   revision on purpose.
+- Give the playbook an off-ramp with reason `rejected` and one with reason `not_fit`. The default
+  rules use them: a reply that says no thanks ends the person in the first, and a `not_a_fit` event
+  ends the person in the second. Without them the event only shows in the history. The guide
+  `docs/guides/playbook-agent-guide.md` (Events and rules) lists every event.
 - Never invent results or proof points for the voice. Use the user's words.
 - Every first email ends with one plain sentence that lets the prospect opt out, such
   as "If this is not for you, reply and I will not write again." Say so in the first

@@ -6,8 +6,8 @@ approved: inbound wins, and you record it. What the user approves is your answer
 ## What to do
 
 1. Read the conversation: `audienti prospects conversation list PERSON --workspace ID`.
-2. Classify the reply as one of `interested`, `question`, `later`, `out_of_office`,
-   `stop`, `bounce`, `referral` or `wrong_person` (the prospect is the wrong person and
+2. Classify the reply as one of `interested`, `question`, `later`, `not_interested` (a clear no thanks),
+   `out_of_office`, `stop`, `bounce`, `referral` or `wrong_person` (the prospect is the wrong person and
    names no one else). A stop, a bounce or a referral must carry its typed
    `result`, or the report is refused; see [Stop, bounce and referral](#stop-bounce-and-referral).
 3. Draft the answer from the mailbox or LinkedIn account the reply came to (the assignee's).
