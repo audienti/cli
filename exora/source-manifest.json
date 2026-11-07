@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "3ace57bf9aaff4acbeb92b8bbb5216495011eead",
+  "sourceCommit": "db544ce4316012eb87d9cf43c16636bbb744b3d9",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -87,8 +87,8 @@
     "cli/work-feedback.mjs": "f3b77ecfd7ea1aba9c9f03c9d894137547e9c5575d9daa359ed94505ad025852",
     "cli/work-operations.mjs": "8b3a84ca15e8e4ad79ef92ced4c5adaffd5129f630e3bfc2c74a844a90867600",
     "cli/work.mjs": "751107ecc3de5a6be9db4a068cddc41f3ad8e77c87e59686eaf522862caf9e9f",
-    "cli/workspaces.mjs": "b2621958f426ed12db6ac7e7484c9c7d4eb84d25474d3090d1f75c667ebcd36f",
-    "package.json": "853558fe662b32288defea4af0e62aa05922eccb1ff32fc7e11273fd0cd6d5b2",
+    "cli/workspaces.mjs": "ed0f268f8c5a44cadd29d8c201cb06777d907f6f36a41c289c96dcb17089ce2e",
+    "package.json": "57c20ca1885c4382fc8b2e0ba8da1a3f00d5a8827a7879deea822cf9f5616fdd",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "8f2124065bfc3a005b44e194e7dcce9bbf14062ab332e7db66d441eeccb518ed",
