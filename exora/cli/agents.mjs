@@ -1,3 +1,4 @@
+import { clientHeaders, versionRefusal, reportClientUpdate, clientError } from './client-version.mjs';
 import { readProfile, writeProfile, validateUrl, configuration, profileFrom, WorkspaceRequestError, errorGuidance } from './workspaces.mjs';
 import { z } from 'zod';
 import {readJsonFile} from './json-file.mjs';
@@ -41,20 +42,27 @@ export const agentOperations = {
 async function request(config, path, body, authenticated = false, method = body === undefined ? 'GET' : 'POST') {
  const url = validateUrl(config.url);
  let response;
- try { response = await fetch(new URL(`/api/v1${path}`, url), { method, headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${config.token ?? ''}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(10000) }); }
+ try { response = await fetch(new URL(`/api/v1${path}`, url), { method, headers: { ...clientHeaders(config), Accept: 'application/json', 'Content-Type': 'application/json', ...(authenticated ? { Authorization: `Bearer ${config.token ?? ''}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'error', signal: AbortSignal.timeout(10000) }); }
  catch { throw new Error('Could not reach the API. Redirects are not followed.'); }
  let result; try { result = await response.json(); } catch { throw new Error('The API returned an invalid response.'); }
+ if (response.ok) reportClientUpdate(result,config);
  if (!response.ok) {
+  if(versionRefusal(result)) throw clientError(new WorkspaceRequestError(response.status,'client_update_required',versionRefusal(result)),result);
   const code = typeof result?.error?.code === 'string' && /^[a-z_]+$/.test(result.error.code) ? result.error.code : 'request_failed';
   // A refused report says why (ADR 015), with the same safety checks as the workspace client.
   const message = result?.error?.message;
   const detail = response.status === 400 && (code === 'validation_error' || code === 'hosted_via_reserved') && typeof message === 'string' && message.length <= 300 && !/[\u0000-\u001f\u007f]/.test(message) && !(config.token && message.includes(config.token)) ? ` ${message}` : '';
-  throw new WorkspaceRequestError(response.status, code, `Agent request failed: ${code} (HTTP ${response.status}).${detail}`, undefined, undefined, undefined, errorGuidance(result?.error, config.token));
+  throw clientError(new WorkspaceRequestError(response.status, code, `Agent request failed: ${code} (HTTP ${response.status}).${detail}`, undefined, undefined, undefined, errorGuidance(result?.error, config.token)),result);
  }
  if (!result || !Object.hasOwn(result, 'data')) throw new Error('The API returned an invalid response.');
+ config.clientCompatibility = result.client;
  return result.data;
 }
 export async function callAgent(name, args, config, profilePath) {
+ const result = await callAgentData(name, args, config, profilePath);
+ return config.clientCompatibility ? { ...result, client: config.clientCompatibility } : result;
+}
+async function callAgentData(name, args, config, profilePath) {
  const input = agentOperations[name]?.schema.safeParse(args);
  if (!input?.success || (agentOperations[name].shape && !agentOperations[name].shape.safeParse(args).success)) throw new Error('Invalid agent command or arguments.');
  if (agentManagementOperations.includes(name) && (config.profile?.agent || config.profile?.pendingAgent)) throw new Error('Use a separate user management profile with an agents:manage token.');

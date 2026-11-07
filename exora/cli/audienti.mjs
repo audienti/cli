@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { clientHeaders, CLI_VERSION, versionRefusal, clientUpdateGuidance, clientError } from './client-version.mjs';
+if (process.argv.length === 3 && ['--version', '-v', 'version'].includes(process.argv[2])) { console.log(CLI_VERSION); process.exit(0); }
 import { isAssignmentCommand, assignmentCli } from './assignment.mjs';
 import { playbookHelp } from './playbook-help.mjs';
 // The CLI is an HTTP client. It has no database access or separate business rules.
@@ -25,6 +27,8 @@ Usage: audienti whoami [--json]
        audienti workspace leave --file INPUT.json
 
 Required environment:
+Version: audienti --version | -v | version (prints the installed version)
+
   AUDIENTI_API_URL    Backend base URL including /api/v1
   AUDIENTI_API_TOKEN  API token from Settings > API tokens (Read account for whoami; Manage workspaces for other commands)
 
@@ -248,15 +252,17 @@ async function main() {
   base.pathname = '/api/v1/account';
   let response;
   try {
-    response = await fetch(base, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+    response = await fetch(base, { headers: { ...clientHeaders(profileConfig ?? {}), Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(10_000) });
   } catch { throw new Error('Could not reach the API. Check its URL and availability. Redirects are not followed.'); }
-  if (!response.ok) {
-    if (response.status === 401) throw new Error('Authentication failed. Check whether your token is invalid, expired, or revoked.');
-    if (response.status === 403) { await whoamiWithoutAccount(base, token, args[1] === '--json'); return; }
-    throw new Error(`API request failed (HTTP ${response.status}).`);
-  }
   let body;
-  try { body = await response.json(); } catch { throw new Error('The API returned an invalid response.'); }
+  try { body = await response.json(); } catch { /* Preserve the status-specific refusal below. */ }
+  if (versionRefusal(body)) throw new Error(versionRefusal(body));
+  if (!response.ok) {
+    if (response.status === 401) throw clientError(new Error('Authentication failed. Check whether your token is invalid, expired, or revoked.'),body);
+    if (response.status === 403) { if (clientUpdateGuidance(body)) console.error(clientUpdateGuidance(body)); await whoamiWithoutAccount(base, token, args[1] === '--json'); return; }
+    throw clientError(new Error(`API request failed (HTTP ${response.status}).`),body);
+  }
+  if (clientUpdateGuidance(body)) console.error(clientUpdateGuidance(body));
   const data = body?.data;
   if (!data || typeof data.id !== 'string' || !('email' in data) || !('username' in data) || ![data.email, data.username].every(v => v === null || typeof v === 'string')) throw new Error('The API returned an invalid account profile.');
   // Select the documented fields, so an unexpected response cannot print credentials.
@@ -273,16 +279,23 @@ async function whoamiWithoutAccount(base, token, json) {
   const ask = async path => {
     const url = new URL(base); url.pathname = `/api/v1/${path}`;
     try {
-      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(10_000) });
-      if (!response.ok) return { failed: `HTTP ${response.status}` };
-      const data = (await response.json())?.data;
-      return data === undefined || data === null ? { failed: 'an invalid response' } : { data };
+      const response = await fetch(url, { headers: { ...clientHeaders(), Authorization: `Bearer ${token}`, Accept: 'application/json' }, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+      const result = await response.json();
+      if (versionRefusal(result)) return { updateRequired: versionRefusal(result) };
+      if (!response.ok) return { failed: `HTTP ${response.status}`, client: result.client };
+      const data = result?.data;
+      return data === undefined || data === null ? { failed: 'an invalid response' } : { data, client: result.client };
     } catch { return { failed: 'no usable answer' }; }
   };
-  const info = (await ask('token')).data;
-  if (!info || typeof info.scope !== 'string') throw new Error(`This token lacks account:read permission. ${add}`);
+  const tokenAnswer = await ask('token');
+  if (tokenAnswer.updateRequired) throw new Error(tokenAnswer.updateRequired);
+  const info = tokenAnswer.data;
+  if (!info || typeof info.scope !== 'string') throw clientError(new Error(`This token lacks account:read permission. ${add}`),tokenAnswer);
   const reaches = info.scope === 'workspace:read' || info.scope === 'workspace:access';
   const answer = reaches ? await ask('workspaces') : undefined;
+  if (answer?.updateRequired) throw new Error(answer.updateRequired);
+  const clientAnswer = answer?.client ? answer : tokenAnswer;
+  if (clientUpdateGuidance(clientAnswer)) console.error(clientUpdateGuidance(clientAnswer));
   const lookupFailed = answer && (answer.failed || !Array.isArray(answer.data)) ? (answer.failed ?? 'an invalid response') : undefined;
   const workspaces = answer && !lookupFailed ? answer.data.filter(row => row && typeof row.id === 'string').map(row => ({ id: plain(row.id), name: plain(row.name) })) : undefined;
   const summary = { kind: plain(info.kind), scope: plain(info.scope), permission: TOKEN_CHOICES[info.scope] ?? plain(info.scope), canChange: info.canChange === true, ...(typeof info.expiresAt === 'string' ? { expiresAt: plain(info.expiresAt) } : {}) };

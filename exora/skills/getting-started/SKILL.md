@@ -63,7 +63,7 @@ answers, and show five fits.
 
 First, keep yourself awake. Audienti never calls you, so set a durable schedule in your
 own host now that starts you and runs `audienti queue next` (no `--workspace`, so it
-covers all your user's workspaces), then does the work it returns: every 5 minutes during your user's working hours, every 15 minutes outside them
+covers all your user's workspaces), then does the work it returns: every 15 minutes, including outside working hours
 (`queue next` names the hours in `orientation`; `pollAfterSeconds` gives the next gap). A
 timer inside your current session, such as a Claude Code `/loop` or a session cron, stops
 when the session ends and does not count. Use a schedule your host keeps: a Paseo schedule
