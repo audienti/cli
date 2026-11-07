@@ -23,7 +23,7 @@ Usage: audienti whoami [--json]
 
 Required environment:
   AUDIENTI_API_URL    Backend base URL including /api/v1
-  AUDIENTI_API_TOKEN  Account API token (create it from your Account page)
+  AUDIENTI_API_TOKEN  API token from Settings > API tokens (Read account for whoami; Manage workspaces for other commands)
 
 Use HTTPS for remote hosts. Local HTTP is supported on loopback only.
 Agent commands: agent connect --name NAME [--write (ask for Allow workspace changes up front)] [--capabilities find,enrich,expand,research,engage,sync,notify,approve]|poll|cancel|list|revoke ID --profile PATH
@@ -229,7 +229,7 @@ async function main() {
   if (args.length > 2 || (args[1] && args[1] !== '--json')) throw new Error('whoami takes only --json and --profile PATH. Use audienti --help.');
   const rawUrl = profileConfig ? profileConfig.url : process.env.AUDIENTI_API_URL;
   const token = profileConfig ? profileConfig.token : process.env.AUDIENTI_API_TOKEN;
-  if (!rawUrl || !token) throw new Error('Set AUDIENTI_API_URL and AUDIENTI_API_TOKEN, or pass --profile PATH (or set AUDIENTI_PROFILE) to a profile with an account:read token. Create a token from your Account page.');
+  if (!rawUrl || !token) throw new Error('Set AUDIENTI_API_URL and AUDIENTI_API_TOKEN, or pass --profile PATH (or set AUDIENTI_PROFILE) to a profile with an account:read token. Create a token in Settings > API tokens.');
   let base;
   try { base = new URL(rawUrl); } catch { throw new Error('AUDIENTI_API_URL must be a valid API base URL.'); }
   if (base.username || base.password || base.search || base.hash) throw new Error('The API URL must not contain credentials, query parameters, or a fragment.');
