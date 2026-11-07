@@ -12,7 +12,7 @@ export async function queueCli(args){
   if(position.length>1)throw new Error(help);
   const queue=await call('agent_queue_list',{});
   // Without --workspace an agent reads every workspace its user approved it in (#333); each task names its workspace.
-  console.log(JSON.stringify(command==='next'?{orientation:queue.orientation,you:queue.you,...(queue.workspaces?{workspaces:queue.workspaces}:{}),...(queue.notChecked?{notChecked:queue.notChecked}:{}),holding:queue.holding,next:queue.next,...(queue.workspaceStep!==undefined?{workspaceStep:queue.workspaceStep}:{}),announce:queue.announce??null,fleet:queue.fleet,needsOtherTools:queue.needsOtherTools,pollAfterSeconds:queue.pollAfterSeconds,nextStep:queue.nextStep}:queue));return;
+  console.log(JSON.stringify(command==='next'?{orientation:queue.orientation,you:queue.you,...(queue.workspaces?{workspaces:queue.workspaces}:{}),...(queue.notChecked?{notChecked:queue.notChecked}:{}),holding:queue.holding,waiting:queue.waiting??[],next:queue.next,...(queue.workspaceStep!==undefined?{workspaceStep:queue.workspaceStep}:{}),announce:queue.announce??null,fleet:queue.fleet,needsOtherTools:queue.needsOtherTools,pollAfterSeconds:queue.pollAfterSeconds,nextStep:queue.nextStep}:queue));return;
  }
  if(!id||position.length!==2)throw new Error(help);
  if(command==='claim'){console.log(JSON.stringify(await call('agent_queue_claim',{taskId:id,...(flags.lease?{leaseMinutes:Number(flags.lease)}:{}),...(flags.note?{note:flags.note}:{})})));return;}

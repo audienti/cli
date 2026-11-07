@@ -3,6 +3,11 @@ name: playbook-design
 description: Create, reuse or revise an Audienti playbook, the stages and steps a prospect moves through from first touch to the goal. Use during getting started, when a campaign has no playbook, and whenever you or the user have a new outreach idea.
 ---
 
+Work only from this workspace's data and your own tools. Never reuse or mention another workspace's offers, audiences, campaigns, playbooks or people. Never copy or clone across workspaces, or offer to.
+
+Use the task's workspace ID as WORKSPACE_ID and its task ID as TASK_ID. When a queue task needs an answer, always include `--task TASK_ID` on `audienti ask`. Pass `--workspace WORKSPACE_ID` on every Audienti data command, including lists; never rely on a profile's previously selected workspace.
+
+
 # Playbook design
 
 A playbook is what a campaign follows: the stages a prospect moves
@@ -48,7 +53,7 @@ A reply outcome has positive and no targets. Meeting booked has its own outcome.
 
 ## 1. Reuse first
 
-1. `audienti playbook list` shows one page of summaries: name, latest revision and stage and step
+1. `audienti playbook list --workspace WORKSPACE_ID` shows one page of summaries: name, latest revision and stage and step
    counts. Follow `nextCursor` for more; `--limit N` sets the page size.
    Every workspace has three starter playbooks (`system: true`): Email first, LinkedIn
    first and Email only. When your reported channels point to one, the list marks it
@@ -56,7 +61,7 @@ A reply outcome has positive and no targets. Meeting booked has its own outcome.
    LinkedIn account gives LinkedIn first: the user registered it as a sender account and
    authorized you on it, and your report for it is healthy and includes `send_message`.
    Email with LinkedIn not yet confirmed gives Email first; email alone gives Email only.
-2. `audienti playbook show ID` shows the stages, steps, goal and voice.
+2. `audienti playbook show --workspace WORKSPACE_ID ID` shows the stages, steps, goal and voice.
 3. If one fits the campaign's offer, audience and your channels, use it. Say in one
    line why it fits, then go to step 4 (pin it). A starter playbook can be pinned as it
    is, but it is read-only: to change it, save its fields as a new playbook (no `id`,
@@ -102,7 +107,7 @@ field and the rules Audienti checks.
 ## 4. Ask the user and pin it
 
 1. Ask in Audienti, not in chat: `audienti ask "Use this playbook for CAMPAIGN?"
-   --context "SUMMARY" --option "Use it" --option "Change it"`. Put the stages, the
+   --workspace WORKSPACE_ID --task TASK_ID --context "SUMMARY" --option "Use it" --option "Change it"`. Put the stages, the
    touches with their waits, the goal and the voice in the context as a short list.
 2. When they answer, apply their changes as a new revision.
 3. Pin it to the campaign with `playbookPin` `{ "id": PLAYBOOK_ID, "revision": N }`:
@@ -142,3 +147,5 @@ not a hosted sequence that runs by itself.
 Close your queue task with a note that names the playbook, its revision and the
 campaign it is pinned to: `audienti queue done TASK --note "Saved Founder-led outbound
 r1, pinned to Logistics UK test"`.
+
+After finishing a queue task or posting an ask with `--task TASK_ID`, run `audienti queue next` without `--workspace` and carry on across approved workspaces until nothing actionable remains. An open ask holds only its task; keep working on the rest and never ask it again while it is open.

@@ -3,6 +3,11 @@ name: getting-started
 description: Run once, right after your Audienti connection is approved. Report the tools and connectors you already have, introduce yourself to the user, and propose a first campaign test (offer, audience, playbook, length) drafted from what you can already read, so the user only corrects it. Use again when your tools change or the user asks for a new test.
 ---
 
+Work only from this workspace's data and your own tools. Never reuse or mention another workspace's offers, audiences, campaigns, playbooks or people. Never copy or clone across workspaces, or offer to.
+
+Use the task's workspace ID as WORKSPACE_ID and its task ID as TASK_ID. When a queue task needs an answer, always include `--task TASK_ID` on `audienti ask`. Pass `--workspace WORKSPACE_ID` on every Audienti data command, including lists; never rely on a profile's previously selected workspace.
+
+
 # Getting started with Audienti
 
 You have just been connected to a person's Audienti account. Audienti is an agentic CRM
@@ -67,7 +72,7 @@ cloud schedule, a Codex automation, or cron. Tell your user the schedule is set,
 it, when you introduce yourself. If your host cannot wake you, say plainly that it cannot
 wake you, so you only check when they message you.
 
-1. Confirm your connection: `audienti workspace list --profile AGENT_PROFILE`, then select
+1. Confirm your connection: `audienti workspace list --workspace WORKSPACE_ID --profile AGENT_PROFILE`, then select
    the workspace the user approved (`audienti workspace use ID --profile AGENT_PROFILE`;
    over MCP, `workspace_select`).
 2. List every tool, connector, plugin and integration you can call now: your runtime's
@@ -107,13 +112,13 @@ email connector.
 
 ## 2. Introduce yourself and propose a first campaign
 
-First check what already exists: `audienti campaign list`, `audienti offer list`,
-`audienti audience list`. If the workspace already has an active campaign, introduce
+First check what already exists: `audienti campaign list --workspace WORKSPACE_ID`, `audienti offer list --workspace WORKSPACE_ID`,
+`audienti audience list --workspace WORKSPACE_ID`. If the workspace already has an active campaign, introduce
 yourself, list your tools and ask what the user wants to test next; skip the rest of
 this section.
 
 Otherwise draft a complete first campaign before you ask anything. Start from the
-user's own answers: `audienti workspace show` returns `startingAudience` (their website or
+user's own answers: `audienti workspace show --workspace WORKSPACE_ID` returns `startingAudience` (their website or
 `noWebsite`, what they sell, `about` the business, the first `offer`, and their target buyer:
 industries, company `sizes`, job functions, job `titles` and regions, with `providerId`s you
 can reuse; ask only for what they left out) and
@@ -134,7 +139,7 @@ anything about why now (hiring, funding, a new leader, an intent to buy) is a ca
 signal, not a smart rule. Give the campaign at least one signal: prospect finding starts
 from signals, which find the companies that need the offer today ([the through line](references/campaign-draft.md#signals-the-through-line)).
 
-Ask the user in Audienti, not in chat: `audienti ask "QUESTION" --context "PROPOSAL"
+Ask the user in Audienti, not in chat: `audienti ask "QUESTION" --workspace WORKSPACE_ID --task TASK_ID --context "PROPOSAL"
 --option "Go" --option "Change it" --topic first_campaign`. It shows as a card in
 Operator, and the answer comes back to you as a task. The topic keeps one open card per
 subject (`first_campaign`, `campaign:ID` or `tools`): a new question with the same topic
@@ -230,3 +235,5 @@ timestamps for every agent of your user in this workspace, `audienti kv get KEY`
 them back on the next run, and `--if-version N` protects a key two agents may touch;
 credentials never go there: the Vault holds them and you store the Vault key name. Never
 send anything to a prospect that the user has not approved.
+
+After finishing a queue task or posting an ask with `--task TASK_ID`, run `audienti queue next` without `--workspace` and carry on across approved workspaces until nothing actionable remains. An open ask holds only its task; keep working on the rest and never ask it again while it is open.
