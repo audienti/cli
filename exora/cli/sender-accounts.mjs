@@ -31,8 +31,8 @@ export async function senderAccountsCli(args){
    console.log(JSON.stringify(await callWorkspace(sub==='approve'?'workspace_managed_post_approve':'workspace_managed_post_reject',{workspaceId:flags.workspace,postId:positions[4],...flags.text!==undefined?{text:flags.text}:{},...flags.reason?{reason:flags.reason}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
   }
   const names={list:'workspace_managed_accounts_list',connect:'workspace_managed_account_connect'};
-  if(!names[positions[2]]||positions.length!==3||Object.keys(flags).some(key=>!['profile','workspace'].includes(key)))throw Error('Use sender managed list|connect|plan|post [--workspace ID] [--profile PATH].');
-  console.log(JSON.stringify(await callWorkspace(names[positions[2]],{workspaceId:flags.workspace},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
+  if(!names[positions[2]]||positions.length!==3||Object.keys(flags).some(key=>!['profile','workspace',...(positions[2]==='connect'?['provider']:[])].includes(key)))throw Error('Use sender managed list|connect|plan|post [--workspace ID] [--profile PATH].');
+  console.log(JSON.stringify(await callWorkspace(names[positions[2]],{workspaceId:flags.workspace,...flags.provider?{provider:flags.provider}:{}},configuration(flags.profile??process.env.AUDIENTI_PROFILE))));return;
  }
  if(positions[0]!=='sender'||positions[1]!=='accounts')throw Error('Use sender accounts list|get|alias|register|bind|unbind|state|workspaces|seat|limits|automation|modes.');
  const automation=positions[2]==='automation',modes=positions[2]==='modes',activity=positions[2]==='activity',nested=automation||modes||activity,command=nested?`${positions[2]}-${positions[3]}`:positions[2];

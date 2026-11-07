@@ -9,7 +9,7 @@ const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|a
 Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|balance [--help]
 Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|workspaces|automation|activity report [--profile PATH]
-Managed LinkedIn: audienti sender managed list|connect [--workspace ID] [--profile PATH] (connect: the user only; returns a sign-in link)
+Managed accounts: audienti sender managed list|connect [--provider linkedin|whatsapp] [--workspace ID] [--profile PATH] (connect: the user only; returns a sign-in link)
                   audienti sender managed plan MANAGED_ACCOUNT_ID --plan free|premium_career|premium_business|premium_all_in_one|sales_navigator_core|sales_navigator_advanced|recruiter_lite|none [--workspace ID]  (the user only; sets the connection note length; none clears it)
                   audienti sender managed post create MANAGED_ACCOUNT_ID (--text TEXT|--text-file PATH) [--attachment ID] [--reason TEXT] [--request-id UUID]  (publish a post you wrote; to retry after a timeout, repeat the same --request-id so it never posts twice; the account's Publish posts mode decides: Automatic posts it, Draft for approval saves it for the owner, Off refuses)
                   audienti sender managed post list [--account ID] [--state draft|approved|posting|published|rejected|failed|unknown]; post get POST_ID
@@ -77,7 +77,7 @@ Account intake: prospects intake --workspace ID --file INPUT.json
                 prospects conversation append|list PERSON --workspace ID
 Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|citation create|evidence create
            prospects contacts list|record PERSON [--file INPUT.json] [--request-id UUID] --workspace ID
-           prospects contacts get|retire PERSON CONTACT --workspace ID
+           prospects contacts get|retire|whatsapp-check PERSON CONTACT [--file INPUT.json] --workspace ID
            prospects suppression get|set ID --workspace ID
            prospects duplicates list --workspace ID | get|merge|dismiss PERSON --workspace ID [--primary PROFILE_ID | --keep-both]  (same name and photo: the newer record is held until you decide; a merge with no flag retires the other LinkedIn channel and says which)
            prospects outreach-profile PERSON --primary PROFILE_ID --workspace ID  (change the LinkedIn profile outreach uses for a person; the other LinkedIn channel is retired and the chosen one is used again if it was retired)
@@ -150,6 +150,7 @@ const examples = {
   'prospects observation create': { requestId: 'UUID', kind: 'person', source: { provider: 'linkedin', url: 'https://www.linkedin.com/in/jane-doe' }, fields: { name: 'Jane Doe', title: 'VP Sales', imageUrl: 'https://media.licdn.com/dms/image/PHOTO_ID' }, provenance: { url: 'https://example.com/team/jane' }, observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
   'prospects citation create': { requestId: 'UUID', source: { kind: 'prospect', id: 'PERSON_PROSPECT_ID' }, target: { kind: 'prospect', id: 'COMPANY_PROSPECT_ID' }, edgeType: 'works_at', roles: [{ roleId: 'role-1', title: 'VP Sales', current: true, observedAt: '2026-01-01T00:00:00Z' }] },
   'prospects evidence create': { requestId: 'UUID', subject: { kind: 'person', prospectId: 'PROSPECT_ID' }, campaignId: 'CAMPAIGN_ID', campaignRevision: 1, kind: 'interpretation', data: { conclusion: 'Leads a 40-person sales team', reason: 'Team page lists her as VP Sales' }, sourceUrl: 'https://example.com/team', observedAt: '2026-01-01T00:00:00Z', skill: { id: 'signal-prospect-research', version: '1' } },
+  'prospects contacts whatsapp-check': { requestId: 'UUID', managedAccountId: 'MANAGED_ACCOUNT_ID', approved: false },
   'prospects contacts record': { kind: 'email|linkedin|mobile|phone', value: 'jane@example.com, or +15551234567 for a mobile or a direct office phone', reason: 'Published on https://example.com/contact', requestId: 'UUID', provenance: { observationId: 'OBSERVATION_ID' } },
   'campaigns qualification submit': { requestId: 'UUID', campaignId: 'CAMPAIGN_ID', campaignRevision: 1, prospectId: 'PERSON_PROSPECT_ID', companyProspectId: 'COMPANY_PROSPECT_ID', companyIcp: { status: 'pass|fail|unverified', evidenceIds: ['COMPANY_EVIDENCE_ID'] }, personIcp: { status: 'pass|fail|unverified', evidenceIds: ['PERSON_EVIDENCE_ID'] }, signal: { status: 'match|no_match|unverified|not_required', evidenceIds: [] }, fit: { status: 'high|moderate|low|no_fit|unscored', evidenceIds: ['PERSON_EVIDENCE_ID'], reason: 'why' }, skill: { id: 'signal-prospect-research', version: '1' } },
 };
