@@ -152,6 +152,7 @@ user, but no task requires them yet.
 | `profile.invitations.received` | linkedin | read | Read the invitations people sent to the user (as the user) | linkedin |
 | `profile.inmail.send` | linkedin | send | Send an approved InMail | yes |
 | `profile.connection.request` | linkedin | send | Send an approved connection request | yes |
+| `profile.connection.accept` | linkedin | send | Accept a received request for a person in an active campaign, under the account mode and daily limit | yes |
 | `profile.connection.withdraw` | linkedin | send | Withdraw a pending request | yes |
 | `profile.connection.remove` | linkedin | send | Remove a connection | later |
 | `profile.follow` | linkedin, x, instagram, tiktok | send | Follow a person or company | linkedin |

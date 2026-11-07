@@ -23,12 +23,12 @@ export const playbookCommands = {
       fields: {
         name: 'Email only',
         stages: [
-          { key: 'STAGE_A_UUID', name: 'Ready', owner: 'Agent', goalDays: 3, steps: [{ key: 'UUID', channel: 'Email', actionId: 'email.send', action: 'Email 1', condition: 'Always', instructions: 'Three sentences.', wait: { until: 'reply', days: 4 } }], completion: { kind: 'next' } },
-          { key: 'STAGE_B_UUID', name: 'Meeting booked', on: ['meeting'], owner: 'Assignee', goalDays: 0, steps: [], completion: { kind: 'stay' } }
+          { key: 'STAGE_A_UUID', name: 'Ready', owner: 'Agent', goalDays: 3, steps: [{ key: 'UUID', channel: 'Email', actionId: 'email.send', action: 'Email 1', condition: 'Always', instructions: 'Three sentences.', wait: { until: 'timeout', days: 4 } }], completion: { kind: 'next' } },
+          { key: 'STAGE_B_UUID', name: 'Meeting booked', outcomes: [], owner: 'Assignee', goalDays: 0, steps: [], completion: { kind: 'stay' } }
         ],
         goalKey: 'STAGE_B_UUID',
         offRamps: [{ key: 'UUID', name: 'Unresponsive', reason: 'unresponsive' }],
-        eventRules: [{ key: 'UUID', when: 'reply.interested', do: ['stop_wait'], goto: { kind: 'stage', stageKey: 'STAGE_B_UUID' } }]
+        eventRules: [{ key: 'UUID', when: 'reply.later', do: ['snooze'], snoozeDays: 30, goto: { kind: 'stay' } }]
       }
     }
   },
@@ -50,15 +50,14 @@ export const playbookCommands = {
   },
   rules_show: {
     usage: 'playbook rules show PLAYBOOK_ID [--workspace ID] [--profile PATH]',
-    about: 'Every event rule and step route of a playbook in one list, without the rest of the playbook. It reads your draft when you have one, otherwise the current version (source says which). Each rule has its place (playbook, stage or step, with stageKey and stepKey), key, when and whenLabel, do and doLabels, goto and gotoLabel, a one-line summary, and a status: ok, or cannot_fire with the reasons. routes are the older per-step routes, read as rules. startingRules is true when the playbook saved no rule list: the rules shown are the starting rules. updatedAt is the draft token for playbook rules save.'
+    about: 'Read or replace the playbook-wide list. For a save, send place {kind: playbook}, rules and expectedUpdatedAt. Stages use outcomes. Steps only run their action and wait. Publish the draft to make a version.',
   },
   rules_save: {
     usage: 'playbook rules save PLAYBOOK_ID --file REQUEST.json [--workspace ID] [--profile PATH]',
-    about: 'Change the rules of one place in your draft, without sending the playbook. The file is {"place": {...}, "rules": [...], "routes": {...}, "expectedUpdatedAt": T}. place is {"kind": "playbook"}, {"kind": "stage", "stageKey": UUID} or {"kind": "step", "stageKey": UUID, "stepKey": UUID}; the keys are in playbook show (fields.stages[].key and its steps[].key); playbook rules show lists them only for places that already have rules. A rule that does snooze also needs snoozeDays (1 to 90). rules is the new list for that place: it replaces the list there, so send every rule you keep (a rule you read keeps its key), and an empty list removes them all. routes is for a step only: an event set to a target ({"kind": "stage", "stageKey": UUID}, off_ramp or step) sets that route, null removes it, and an event left out keeps its route. expectedUpdatedAt is the updatedAt from playbook rules show; a newer draft is refused with draft_conflict and nothing changes. The answer is the rules list, plus check. Nothing else in the playbook changes, and no version is made: run playbook draft publish for that. Rule actions that do not run yet are kept in the draft and refused at publish.',
+    about: 'Read or replace the playbook-wide list. For a save, send place {kind: playbook}, rules and expectedUpdatedAt. Stages use outcomes. Steps only run their action and wait. Publish the draft to make a version.',
     example: {
-      place: { kind: 'step', stageKey: 'STAGE_UUID', stepKey: 'STEP_UUID' },
+      place: { kind: 'playbook' },
       rules: [{ key: 'UUID', when: 'reply.wrong_person', do: ['stop_wait', 'redirect_to_named_person'], goto: { kind: 'stay' } }],
-      routes: { timeout: null },
       expectedUpdatedAt: 'UPDATED_AT_FROM_RULES_SHOW'
     }
   },
@@ -84,7 +83,7 @@ export const playbookCommands = {
   },
   event: {
     usage: 'playbook event PARTICIPATION_ID --kind KIND --reason TEXT [--evidence conversation:ID|observation:ID ...] [--at ISO] [--request-id UUID] [--file REQUEST.json] [--workspace ID] [--profile PATH]',
-    about: 'Record one event for a person, then let the playbook settle. KIND is meeting_requested (A meeting is asked for), meeting_accepted (They say yes to a meeting), meeting_declined (They say no to a meeting), meeting_booked (A meeting is booked), not_a_fit (They are not a fit) or steps_done (the steps of the current stage are done). A stage that lists the event as an entry event takes the person forward; the playbook rules decide the rest. not_a_fit ends the person in the not_fit way out when the playbook has one, and otherwise only shows in the history. steps_done applies the current stage completion (next stage, stay or way out). REASON is 1 to 300 characters and shows in the history. --evidence names stored evidence about this person: conversation:ID is a message id (the conversation ids in the person timeline, audienti prospects timeline), observation:ID a profile observation id. Repeat it for each piece, up to 20. --at is an ISO time with a timezone offset, for example 2026-11-06T14:30:00Z. Left out, the time is now; a future time counts as now, and a time before the person entered the stage counts as just after it. --request-id is made for you when left out; pass the same UUID to retry safely. Only the person\'s assignee or a workspace Admin may record. A repeat writes nothing and answers recorded false. A person who has left the campaign is refused with participation_ended, with two exceptions: meeting_booked is still recorded, and a repeat of meeting_booked or not_a_fit answers recorded false with the eventId already recorded.'
+    about: 'Record one event for a person, then let the playbook settle. KIND is meeting_requested (A meeting is asked for), meeting_accepted (They say yes to a meeting), meeting_declined (They say no to a meeting), meeting_booked (A meeting is booked), not_a_fit (You or your agent mark them not a fit) or steps_done (the steps of the current stage are done). meeting_booked meets the stage outcome of that kind. not_a_fit uses the playbook-wide list for a recorded decision, separate from a No reply. steps_done applies the current stage completion (next stage, stay or exit). REASON is 1 to 300 characters and shows in the history. --evidence names stored evidence about this person: conversation:ID is a message id (the conversation ids in the person timeline, audienti prospects timeline), observation:ID a profile observation id. Repeat it for each piece, up to 20. --at is an ISO time with a timezone offset, for example 2026-11-06T14:30:00Z. Left out, the time is now; a future time counts as now, and a time before the person entered the stage counts as just after it. --request-id is made for you when left out; pass the same UUID to retry safely. Only the person\'s assignee or a workspace Admin may record. A repeat writes nothing and answers recorded false. A person who has left the campaign is refused with participation_ended, with two exceptions: meeting_booked is still recorded, and a repeat of meeting_booked or not_a_fit answers recorded false with the eventId already recorded.'
   }
 };
 const lines = Object.values(playbookCommands).map(command => command.usage);

@@ -6,8 +6,7 @@ description: Create, reuse or revise an Audienti playbook, the stages and steps 
 # Playbook design
 
 A playbook is what a campaign follows: the stages a prospect moves
-through, the steps in each stage (channel, action, wait), the goal stage, the ways out
-(ways out) and the voice. Audienti stores every playbook with revisions, so a good one
+through, the steps in each stage (channel, action, wait), the stage outcomes, the goal stage, the exits and the voice. Audienti stores every playbook with revisions, so a good one
 is written once and reused by many campaigns. Planning tasks (`prospects.plan`) read the
 campaign's playbook to decide each prospect's next step, so a campaign without one
 cannot be worked.
@@ -23,23 +22,29 @@ Use this skill when:
 ## Rules
 
 - Reuse before you create. Most new campaigns fit a playbook that already exists.
-- Use only channels you can cover with accounts you reported (LinkedIn, Email). For anything you cannot do yourself, such as a call, a voicemail, a handwritten note, a video or a gift, use a `Custom` step: you prepare it and a person does it. A Custom step can wait for a named event the person records (`wait.until` `event`), for example "Gift delivered".
+- Use only channels you can cover with accounts you reported (LinkedIn, Email). For anything you cannot do yourself, such as a call, a voicemail, a handwritten note, a video or a gift, use a `Custom` step: you prepare it and a person does it. The person records done or failed, with a note. That ends the step. A reply or booked meeting counts toward a stage outcome. A missing disposition keeps the task open and reminds the person when its wait runs out.
   Do not draft a phone step if no one can call.
 - One playbook is one strategy. A correction to the same strategy (a wait, a step's
-  wording, a missing way out) is a new revision. A different strategy is a new
+  wording, a missing exit) is a new revision. A different strategy is a new
   playbook, so the two can be compared in Analytics.
 - Saving a playbook never changes campaigns already pinned to it. Pin the new
   revision on purpose.
-- Give the playbook a way out with reason `rejected` and one with reason `not_fit`. The default
-  rules use them: a reply that says no thanks ends the person in the first, and a `not_a_fit` event
-  ends the person in the second. Without them the event only shows in the history. The guide
-  `docs/guides/playbook-agent-guide.md` (Events and rules) lists every event.
+- Give the playbook an exit with reason `rejected` and one with reason `not_fit`. Use the first for each reply outcome's no target. The playbook-wide list sends a `not_a_fit` event to the second. The guide
+  `docs/guides/playbook-agent-guide.md` (Outcomes and the playbook-wide list) lists every event.
 - Never invent results or proof points for the voice. Use the user's words.
 - Every first email ends with one plain sentence that lets the prospect opt out, such
   as "If this is not for you, reply and I will not write again." Say so in the first
   email step's `instructions`. A prospect who opts out is suppressed for good.
 - Ask the user before a new playbook is used for outreach. Nothing is sent without
   their approval.
+
+A step never routes. Every move comes from a stage outcome, completion, the playbook-wide list, or a person moving them by hand.
+Keep instructions for content. Never hide a move in instructions.
+A stage can list any set of connected, replied, meeting_booked and task_done, each once.
+Check the current stage first, then the first later stage that lists a missing kind. Never look backward.
+For one observation, use meeting_booked, then replied, then connected, then task_done.
+Connected and meeting_booked count on entry. Replied and task_done count after entry and cannot fire again after their move.
+A reply outcome has positive and no targets. Meeting booked has its own outcome. Only the goal may have no outcomes and stay. Read [the fields](references/fields.md).
 
 ## 1. Reuse first
 
@@ -68,7 +73,7 @@ for founder-led or agent-led outbound has five to six stages:
    LinkedIn is not available.
 3. **Outreach underway** (Agent): the touches, in order, with waits. For example a
    connection request (wait 21 days), a message "Only if connected" (wait 5), a first
-   email (wait 4). Completes to the **Unresponsive** way out when every step is done
+   email (wait 4). Completes to the **Unresponsive** exit when every step is done
    and nobody replied.
 4. **In conversation** (Assignee): the prospect replied. A person drafts or approves
    the reply. Completion `stay`.
@@ -84,7 +89,7 @@ field and the rules Audienti checks.
 
 1. Write the request to a file: `expectedRevision` 0 and no `id` for a new playbook;
    the playbook's `id` and its current revision number to revise one. Use a fresh
-   `requestId` (a UUID) and fresh UUIDs for every stage, step and way out `key`.
+   `requestId` (a UUID) and fresh UUIDs for every stage, step and exit `key`.
    Keep the same keys when you revise, so progress already recorded stays on its stage.
 2. `audienti playbook save --file REQUEST.json`. Over MCP use `playbook_save`.
 3. If the save fails, read the error: `field` is the path of the wrong value, `allowed` the
