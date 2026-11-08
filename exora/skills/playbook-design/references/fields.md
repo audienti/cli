@@ -169,7 +169,8 @@ A step has one exit: the next step. It never chooses a stage.
 | `condition` | `Always`, `Only if connected`, or `Only if viable`. |
 | `viability` | Explain the guard when using `Only if viable`. |
 | `instructions` | What the agent prepares or writes. Never put a move here. The planner does not read these words. |
-| `wait` | `{days: N, until:"timeout"}`, 1 to 60 whole days. A custom task uses the same days wait. Its done or failed disposition ends the step. `null` chooses no wait on other actions. A custom task always waits for done or failed; missing or null days use a two-day reminder. |
+| `due` | Optional timing **before** the action runs: exactly one of days/minutes/at, optionally afterEvent with a duration. Use this on the email after a Custom task to follow up two days after delivery; its own `wait` remains separate. Relative durations start after earlier steps/waits finish (stage entry for the first), or after the preceding main step runs for a side step. |
+| `wait` | `{days: N, until:"timeout"}` (1–60), `{minutes: N, until:"timeout"}` (1–86400), or `{at: ISO, until:"timeout"}`. Add `afterEvent: NAME` to a duration to measure it from a recorded outside event. A custom task uses the same timing for its reminder. Its done or failed disposition ends the step. `null` chooses no wait on other actions. A custom task always waits for done or failed; a missing or null wait uses a two-day reminder. |
 | `humanize` | Email only. False turns off humanizing. Omit for on. |
 
 A new send step starts at three days, or seven for a connection request. A saved step keeps its chosen wait.
@@ -205,3 +206,9 @@ This changes the draft. Publish the draft to make a version. Use the regular dra
 
 A request with step `routes`, step or stage `eventRules`, stage `on`, or step `onTimeout` is refused.
 Use stage `outcomes`, playbook `eventRules` and stage `completion`.
+
+
+### Flexible wait timing
+A wait chooses exactly one of `days` (1–60), `minutes` (1–86400), or `at` (ISO instant with timezone). A duration can add `afterEvent: "Gift delivered"`; it has no deadline until a named `outside_event` or `scheduled_time` is recorded for this participation, across stage moves. Record it with `playbook_event_record` (`name`, `at`, `reason`) or `playbook event ID --kind outside_event --name "Gift delivered" --reason TEXT`. The first actual occurrence wins across stages; otherwise the latest schedule wins. The fact only anchors timing; Custom done/failed, stage outcomes and completion keep their separate meanings. Meeting follow-ups use days or minutes without `at` or `afterEvent`.
+
+For a per-person future time, use `playbook_event_record` with `kind: "scheduled_time"`, `name`, `at` and `reason`. Its `at` can be future and is required. To act before it, use signed named offsets, for example `due: {days: -2, afterEvent: "Sprint starts"}`. Named ranges: days -60..60, minutes -86400..86400; 0 is at the time. Durations without afterEvent stay positive. A literal `due.at`/`wait.at` is shared by the playbook version; scheduled_time belongs to one participation. Actual outside_event times stay capped at now. Use a distinct name for a second actual occurrence.

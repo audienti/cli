@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "167f0dfe29df7dd889390431a135b7879335e464",
+  "sourceCommit": "80c73adff2602bfa614b7a62d7a11c4f83d40072",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -56,10 +56,10 @@
     "cli/outcome-operations.mjs": "cf133097799f240a006264a38a4c6bd4094078d6dec78a71679700ac3bdeacd5",
     "cli/outcomes.mjs": "765ccb112a90fc4d228b2a41e5e19c5e1f3e2fe14bc1d8128b0090fc95cdbf3f",
     "cli/owner-account-client.mjs": "eeeea62565ad7bd1df585606307693947fd51e1114364fcb347823038c496b9c",
-    "cli/playbook-help.mjs": "bc12d066f812b0a5c3111b19f36a34f6e6d623b8b5e18ed3c28066ed78705020",
-    "cli/playbook-operations.mjs": "296c99d132ea9c93cc844cd1e5c629256f841cd816cbb2998c14ba533cd9d2cf",
+    "cli/playbook-help.mjs": "d8dfdc615d0d3f21c1adde5161d8427ca053796de0f8d2b8f1f81dffc0dba0a9",
+    "cli/playbook-operations.mjs": "c40976b5374c6b257c6e2fa5434b80d3b8a33b895fd835bd8c6774aee00acf45",
     "cli/profiles.mjs": "45929b224ffc916b6dbd7a94e06ac09a1ff7feec430633b10d160c1608fc2d32",
-    "cli/progress.mjs": "3f623b364df99b472355e5ee6d364d8dce41470990b2f1eda96271973496fb4d",
+    "cli/progress.mjs": "deeced6cd11820db43e2d1384129b929fc32fa4bec914db8dbaf6cc597b04fef",
     "cli/prospecting-settings-operations.mjs": "1829eb2fe7208f58601988143756072429adbfe00f8deb5a52613bf650a9eacc",
     "cli/prospecting-settings.mjs": "b09f47c84416d9892d7d5b17dcf684cbb560e1cacb25513826ff04ef9307626e",
     "cli/question-operations.mjs": "9c5046e9483563d3c8999fdebe9d9bee1cd938d9678502cd621cae05c4606915",
@@ -91,7 +91,7 @@
     "cli/work-operations.mjs": "66a6155964d1af264b4aa3851cf43b9373155887ee2f9bcac3eb97d9f4680157",
     "cli/work.mjs": "b898e2e432a93114b53a906fef49394e80bfc74c79101506966161f34bb06f0c",
     "cli/workspaces.mjs": "6de5c04df600013db53fc186c7f64b719ad198d1e8edb08029dda5a947ecb663",
-    "package.json": "86a277ab870846255851db4fb813e052ce89ed71f98868ff5cf491cefcb7fe6d",
+    "package.json": "4656f8c94d473fe8beae5e53f0312c68dd2f95bd51e61a8bf425053abd8cd089",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "cd3e4e1776c2705bc687f0718b8337e146bee48e2ca5acbdf14dcc45ad433ad3",
@@ -110,6 +110,6 @@
     "skills/getting-started/references/replies.md": "6453171732f8df7236288bc920f37ee517963b59ca91167053b24a3481474479",
     "skills/getting-started/references/reply-checks.md": "85fe692ad6b7bc73e204de313b27d225be3da1a0af71e8e7bb9945ae511a0dc3",
     "skills/playbook-design/SKILL.md": "0e65cc0e47115b6ad87b7bc52b3a4877a4693435d4939670fb61979843fec458",
-    "skills/playbook-design/references/fields.md": "18ce3fc13e112ad72208c72116a50d81a5c2a18caf4e456565db2639ee2ca905"
+    "skills/playbook-design/references/fields.md": "f33b272749d0f68eb88f8dd89225d569e89413f8603de911b64645f8c28333fc"
   }
 }
