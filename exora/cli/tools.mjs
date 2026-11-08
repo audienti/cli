@@ -9,7 +9,7 @@ const help = `Usage:
   audienti tools get TOOL [--workspace UUID]         one tool: inputs, price, availability, your 30-day success rate and speed
   audienti tools list [--workspace UUID] [--json]    the whole catalog
   audienti tools runs get UUID [--attempt-after ORDINAL] [--entry-after UUID] | list [--cursor UUID]
-  audienti tools balance
+  audienti tools balance [--workspace UUID] [--json]   read-only balance; no credit or ledger changes
   audienti tools NAME --input FILE|- --request-id UUID [--workspace UUID] [--json]   same as call NAME; kept for existing scripts
   audienti tools proxy.sessions.close UUID [--workspace UUID]
 

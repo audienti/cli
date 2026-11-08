@@ -1,6 +1,6 @@
 {
   "repository": "https://github.com/omalab/exora",
-  "sourceCommit": "207a97d07ec5b361b43385e3dc01688fc69c92e5",
+  "sourceCommit": "4a389ba3e4c9d3b508cce51ae217b8243497291a",
   "files": {
     "LICENSE": "220f297cfcd5c38eb64e6b4b4a77cab4ebc7f4686d4d99c6260a475d02ca11e5",
     "README.md": "7ff32cc8ac89dd54b64d7b39c0b41b1f37e154b7ea10ad5a7bceefc3df77d87f",
@@ -80,8 +80,8 @@
     "cli/skills.mjs": "db9fff1d6d23ab93bf2021506f5ca705e954935c673e3ce9732ba5385eb1c1d2",
     "cli/suppression-operations.mjs": "d1f827a785670fc6e44d87b18e4cfb6596b09e5be7c4f84c4b9a75ed13a962c6",
     "cli/suppression.mjs": "2b10be67e290deec9ed915139c3d98d45d7d10fd41abb67b5a35a630d636a4ed",
-    "cli/tools-operations.mjs": "f64e58f75ef0c02b9317c6b6e07ccc7b9891464cf29824cee75f0fcae9026eb2",
-    "cli/tools.mjs": "16967f23a2b2460d28e766c827721a254e83d34b2df5195981cc9f899f6a5ed0",
+    "cli/tools-operations.mjs": "0ef760acf729d7c23e678c03b0e238acaeb34d58fe54e7a82cdd3326cfe44444",
+    "cli/tools.mjs": "a3c6753cad1dd1fb99a97a7baacb5ab05c43c368694affb0dea8ce72ad2e31cd",
     "cli/usage-operations.mjs": "8f4f13ab03f41f6660300542800166ec32677519dd5c9c91bb6f1f721786fc27",
     "cli/usage.mjs": "cd582c061f83ca4f220ddd3cd2a174a1a3a3c0ee308b3d5a5f47752a501e322e",
     "cli/work-execution-operations.mjs": "0efd92bef83ad41f49f7fb7c013f78ff90820ee2ae44faac2fb92609dac5a727",
@@ -91,7 +91,7 @@
     "cli/work-operations.mjs": "66a6155964d1af264b4aa3851cf43b9373155887ee2f9bcac3eb97d9f4680157",
     "cli/work.mjs": "b898e2e432a93114b53a906fef49394e80bfc74c79101506966161f34bb06f0c",
     "cli/workspaces.mjs": "9575e15a1ca6c49194850f5453a39a1d4de0c51da76f15346b8fdac26b80e6db",
-    "package.json": "ad00c719e12564cf9dcdbbf21e852c752aa07ca90e7fef8179069f1f981fa34b",
+    "package.json": "3c5428857ceb5e8cda89f5d3ac10fb97a889b2daf80ed2d80bf0bb0d5c0990aa",
     "skills/agent-rooms/SKILL.md": "08f917ff85fee1d23499a4499056ce845b39ce6727029b104819dad41ee87cc2",
     "skills/agent-rooms/references/commands.md": "ef5afa5543ca9da967a147f638774647998ea1c1a2a821959f3bf87d54c292bd",
     "skills/audienti/SKILL.md": "cd3e4e1776c2705bc687f0718b8337e146bee48e2ca5acbdf14dcc45ad433ad3",
