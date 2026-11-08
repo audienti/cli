@@ -1,5 +1,7 @@
 # Audience definition
 
+The workspace Do not contact list is checked when people are found and before any research.
+
 An audience is a set of structured filters plus one smart rule. Discovery and fit checks
 read the structured filters first, so put everything you can into them. Free text is
 only for the one test the filters cannot express.

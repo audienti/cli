@@ -1,5 +1,7 @@
 # Campaign draft
 
+The workspace Do not contact list is checked when people are found and before any research.
+
 Fill this before you ask the user anything. Mark each value with where it came from:
 `found` (quote or link), `inferred` (say from what) or `needed` (ask the user).
 
