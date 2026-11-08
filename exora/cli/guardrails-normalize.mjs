@@ -42,6 +42,10 @@ export function normalizeDoNotContact(raw) {
     if (typeof raw !== 'string') return null;
     const text = raw.trim().toLowerCase();
     if (!text || text.length > 254 || /\s/.test(text)) return null;
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(text)) return {
+        kind: 'person',
+        value: text
+    };
     if (text.includes('linkedin.com/')) {
         const url = normalizeLinkedInUrl(text);
         return url ? {

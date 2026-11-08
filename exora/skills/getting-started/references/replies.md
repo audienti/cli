@@ -308,8 +308,18 @@ template unless the user put one in your instructions. Save it as a plan action 
 `playbookStepKey` the task names. After the last wait runs out, Audienti records
 `meeting_no_answer` itself and tells the owner. Do not record it.
 
-## Taken over
+## Take over, Blocked and Hand back
 
-When the user takes a person over, every open task and draft for them is withdrawn
-and no new task about them appears, in any campaign. There is no hand back. Do not
-contact them again. A draft for them is refused with `taken_over`.
+Take over assigns the person to the user who clicked it and keeps them in their
+current stage. Keep researching, planning and preparing drafts. Every action that
+reaches the prospect needs the user's approval in Operator before it runs, even
+when the sending account normally acts automatically.
+
+Blocked means do no work for this person. Their open tasks and drafts are withdrawn;
+a new draft is refused with `do_not_contact`. Already-started actions may still
+complete. The person's stage stays visible.
+
+A person can Hand back either state. This clears their person marks; separate
+Do not contact entries and requests to stop still apply. Read the current state with
+`audienti work control --prospect-id ID`; a person changes it with `--mode take_over`,
+`--mode blocked` or `--mode hand_back` and a fresh `--request-id`.
