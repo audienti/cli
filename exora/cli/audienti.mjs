@@ -5,7 +5,8 @@ import { isAssignmentCommand, assignmentCli } from './assignment.mjs';
 import { playbookHelp } from './playbook-help.mjs';
 // The CLI is an HTTP client. It has no database access or separate business rules.
 const args = process.argv.slice(2);
-const usage = `Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
+const usage = `Workspace deletion: audienti workspace delete --workspace ID --confirm-name NAME
+Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
 Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|balance [--help]
 Sender: audienti sender accounts list|get|alias|register|bind|unbind|state|workspaces|automation|activity report [--profile PATH]
