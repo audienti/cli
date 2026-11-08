@@ -1,4 +1,4 @@
-export const SKILL_VERSION = '1.4.0';
+export const SKILL_VERSION = '1.4.1';
 export const MAX_INPUT_BYTES = 1024 * 1024;
 const text = maxLength => ({ type: 'string', maxLength });
 const object = (properties, required = []) => ({ type: 'object', properties, required, additionalProperties: false });

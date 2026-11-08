@@ -212,3 +212,30 @@ must not recreate tariffs or reserve balances. Core reads/evidence remain free
 under normal workspace authorization, even when using compatible external tools
 at zero hosted credits. No request, credential or billing information belongs in
 an unprotected public report. Never include bearer/proxy/provider secrets.
+
+## Keep the complete person profile
+
+A profile read saves its structured work history, headline, about text, education
+and skills when supplied. The headline is separate from the job title. Each
+`experience` has `title`, `companyName`, `companyUrl`, `companyProviderId`,
+`companyDomain`, `startDate`, `endDate`, `current` and `location`. For external
+research, send these under `fields.experience` in `prospect_record_observation`
+(CLI `prospects observation create --file INPUT.json`), with `fields.headline`
+and `fields.bio`. Dates accept strings or source date objects. Do not flatten a
+headline into title, or combine one job's title with another job's company.
+Audienti links the selected current employer by its LinkedIn identity.
+
+Put how you found the person in `provenance.excerpt`, including the search context
+when known. Saved search observations also retain the tool and filters. Reading
+or finding someone saves them in the workspace; it does not admit them to a
+campaign. Read `personContext` on `prospect_get` or assignment reads for discovery,
+latest evaluation and their current check state. Record the campaign check even
+when it rejects or holds them; its reason and time remain in the timeline.
+
+A fresh complete `profiles.fetch` cache hit returns the same structured facts as
+the paid fetch, without another provider request. Legacy person snapshots without
+structured experiences or the current format marker are misses; a subsequent paid
+result reports `cache.missReason: incomplete_saved_profile`. Missing, invalid or
+truncated fields are never claimed complete. Existing bounded-output limits still
+apply and truncation is explicit. Use the saved reads before deciding whether a
+new paid lookup is justified; `refresh:true` deliberately requests one.
