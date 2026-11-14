@@ -1,5 +1,6 @@
 import { clientHeaders, versionRefusal, reportClientUpdate, clientError } from './client-version.mjs';
-import { readProfile, writeProfile, validateUrl, configuration, profileFrom, WorkspaceRequestError, errorGuidance } from './workspaces.mjs';
+import { readProfile, writeProfile, withProfileLock, validateUrl, configuration, profileFrom, WorkspaceRequestError, errorGuidance } from './workspaces.mjs';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {readJsonFile} from './json-file.mjs';
 
@@ -34,6 +35,7 @@ export const agentOperations = {
  agent_permission: {schema:z.object({id:z.string().uuid(),scope:z.enum(['workspace:read','workspace:access'])}).strict()},
  agent_capabilities_set: {schema:z.object({id:z.string().uuid(),capabilities:z.array(z.enum(capabilityKeys)).min(1).max(9)}).strict()},
  agent_connect: { schema: z.object({ name: z.string().trim().min(1).max(80), capabilities: z.array(z.enum(capabilityKeys)).max(9).optional(), write: z.boolean().optional() }).strict() },
+ agent_reconnect: { description: 'Reuse an existing stable Agent ID. With the private profile, valid credentials are read back without rotation; missing or expired credentials start explicit owner-approved recovery. It never creates a new Agent or expands permissions.', schema: z.object({ agentId: z.string().uuid().optional() }).strict() },
  agent_poll: { schema: z.object({}).strict() },
  agent_cancel: { schema: z.object({}).strict() },
  agent_list: { schema: z.object({}).strict() },
@@ -57,6 +59,84 @@ async function request(config, path, body, authenticated = false, method = body 
  if (!result || !Object.hasOwn(result, 'data')) throw new Error('The API returned an invalid response.');
  config.clientCompatibility = result.client;
  return result.data;
+}
+const recoverySecret = /^adc_[A-Za-z0-9_-]{43}$/;
+const recoveryCredential = /^agt_[A-Za-z0-9_-]{43}$/;
+const recoveryCode = /^[A-F0-9]{4}-[A-F0-9]{4}$/;
+const recoveryRequest = value => value && z.string().uuid().safeParse(value.requestId).success && z.string().uuid().safeParse(value.targetAgentId).success && recoverySecret.test(value.secret) && recoveryCredential.test(value.credential) && recoveryCode.test(value.code);
+const recoveryCodeValue = () => `${randomBytes(2).toString('hex').toUpperCase()}-${randomBytes(2).toString('hex').toUpperCase()}`;
+async function reconnectAgent(input, config, profilePath) {
+ return withProfileLock(profilePath, async () => {
+  const profile = readProfile(profilePath);
+  const url = validateUrl(config.url).toString().replace(/\/$/, '');
+  if (profile.url && profile.url !== url) throw new Error('The agent profile belongs to a different API host.');
+  if (!profile.agent && !profile.pendingRecovery && Object.keys(profile.tokens ?? {}).length) throw new Error('Use a separate private profile without user API tokens for agent recovery.');
+  const pending = profile.pendingRecovery;
+  const explicitId = input.agentId;
+  const storedId = profile.agent?.id;
+  const targetAgentId = pending?.targetAgentId ?? storedId ?? explicitId;
+  if (!targetAgentId) throw new Error('Supply the exact stable Agent ID with --agent-id, or use a profile that already has an agent identity.');
+  if ((explicitId && explicitId !== targetAgentId) || (storedId && storedId !== targetAgentId)) throw new Error('The profile identity and requested Agent ID do not match. Refusing to act as a different agent.');
+  if (pending && (!recoveryRequest(pending) || pending.targetAgentId !== targetAgentId)) throw new Error('The saved recovery request is invalid or bound to a different Agent ID.');
+  const lockedConfig = { ...config, url, profile };
+  const oldCredential = profile.tokens?.['workspace:read'];
+  if (!pending && profile.agent && recoveryCredential.test(oldCredential ?? '')) {
+   lockedConfig.token = oldCredential;
+   try {
+    const readback = await request(lockedConfig, '/agent-capabilities', undefined, true);
+    if (!readback.agent || readback.agent.id !== targetAgentId) throw new Error('The saved credential belongs to a different Agent ID. Refusing to reconnect.');
+    const saved = { ...profile, url, agent: readback.agent };
+    writeProfile(profilePath, saved); config.profile = saved; config.token = oldCredential; config.url = url;
+    return { data: { status: 'active', agent: readback.agent, reused: true } };
+   } catch (error) {
+    if (!(error instanceof WorkspaceRequestError) || error.status !== 401 || error.code !== 'unauthorized') throw error;
+   }
+  }
+  const requestData = pending ? (({ requestId, targetAgentId, secret, credential, code }) => ({ requestId, targetAgentId, secret, credential, code }))(pending) : { requestId: randomUUID(), targetAgentId, secret: `adc_${randomBytes(32).toString('base64url')}`, credential: `agt_${randomBytes(32).toString('base64url')}`, code: recoveryCodeValue() };
+  if (!recoveryRequest(requestData)) throw new Error('Could not prepare a valid identity-bound recovery request.');
+  const persisted = { ...profile, url, pendingRecovery: requestData };
+  // Persist the exact replay material before the network call. A second CLI process waits on this lock and reuses it.
+  writeProfile(profilePath, persisted);
+  lockedConfig.profile = persisted; lockedConfig.token = undefined;
+  const data = await request(lockedConfig, '/agent-connections', requestData);
+  if (!z.string().uuid().safeParse(data.id).success || data.recovery !== true || !recoveryCode.test(data.code) || typeof data.expiresAt !== 'string') throw new Error('Invalid recovery response.');
+  const saved = { ...persisted, pendingRecovery: { ...requestData, id: data.id, expiresAt: data.expiresAt, approvalPath: `/agents/connect/${data.id}`, approvalUrl: data.approvalUrl } };
+  writeProfile(profilePath, saved); config.profile = saved; config.token = undefined; config.workspaceId = undefined; config.url = url;
+  return { data: { status: data.status === 'approved' ? 'approved' : 'pending', id: data.id, targetAgentId, code: data.code, approvalUrl: data.approvalUrl, approvalPath: `/agents/connect/${data.id}`, expiresAt: data.expiresAt, interval: 5, instructions: 'Give your user the approval URL and code, then run agent poll with this profile every interval seconds until the status is active, denied or expired. Existing permissions and workspace access stay unchanged during recovery.' } };
+ });
+}
+async function callAgentProfileOperation(name, input, config, profilePath) {
+ const profile = readProfile(profilePath);
+ const url = validateUrl(config.url).toString().replace(/\/$/, '');
+ config.profile = profile;
+ if (name === 'agent_connect') {
+  if (profile.pendingAgent || profile.pendingRecovery) throw new Error('This profile already has an agent connection. Poll or cancel the pending connection before trying again.');
+  if (profile.agent) throw new Error(`This profile already belongs to Agent ${profile.agent.id}. Use audienti agent reconnect --agent-id ${profile.agent.id} to restore it, or use a separate profile to add a distinct Agent.`);
+  if (Object.keys(profile.tokens ?? {}).length) throw new Error('Use a new agent profile without user API tokens.');
+  // Prove that private persistence is possible before asking the server for secrets.
+  writeProfile(profilePath, { ...profile, url });
+  const data = await request(config, '/agent-connections', input);
+  if (!/^adc_[A-Za-z0-9_-]{43}$/.test(data.secret) || !/^agt_[A-Za-z0-9_-]{43}$/.test(data.credential) || !z.string().uuid().safeParse(data.id).success || !/^[A-F0-9]{4}-[A-F0-9]{4}$/.test(data.code)) throw new Error('Invalid connection response.');
+  writeProfile(profilePath, { ...profile, url, pendingAgent: { id: data.id, secret: data.secret, credential: data.credential, expiresAt: data.expiresAt } });
+  config.token = undefined; config.workspaceId = undefined;
+  return { data: { status: 'pending', id: data.id, code: data.code, approvalUrl: data.approvalUrl, approvalPath: `/agents/connect/${data.id}`, expiresAt: data.expiresAt, interval: 5, instructions: 'Give your user the approval URL and the code, then run agent poll with this profile every interval seconds, in this same turn and without waiting for them to reply, until the status is active, denied or expired.' } };
+ }
+ const secret = profile.pendingRecovery?.secret ?? profile.pendingAgent?.secret ?? profile.connectionSecret;
+ if (!secret) throw new Error('No connection in this profile.');
+ if (url !== profile.url) throw new Error('The pending connection belongs to a different API host.');
+ const data = await request(config, name === 'agent_poll' ? '/agent-connections/poll' : '/agent-connections/cancel', { secret });
+ if (data.status === 'active') {
+  const expectedId = profile.pendingRecovery?.targetAgentId ?? (profile.recoveryConnection ? profile.agent?.id : undefined);
+  if (expectedId && data.agent?.id !== expectedId) throw new Error('The server returned a different Agent ID. Refusing to update this profile.');
+  const credential = profile.pendingRecovery?.credential ?? profile.pendingAgent?.credential ?? profile.tokens?.['workspace:read'];
+  const recovering = Boolean(profile.pendingRecovery || profile.recoveryConnection || data.recovery);
+  writeProfile(profilePath, { ...profile, agent: data.agent, connectionSecret: secret, recoveryConnection: recovering, pendingRecovery: undefined, pendingAgent: undefined, tokens: recovering ? { ...profile.tokens, 'workspace:read': credential } : { 'workspace:read': credential } });
+  config.token = credential;
+ } else if (['denied', 'expired'].includes(data.status)) {
+  if (profile.pendingRecovery || profile.recoveryConnection) { writeProfile(profilePath, { ...profile, pendingRecovery: undefined, ...(profile.recoveryConnection ? { connectionSecret: undefined, recoveryConnection: undefined } : {}) }); config.token = profile.tokens?.['workspace:read']; }
+  else { writeProfile(profilePath, { ...profile, pendingAgent: undefined, agent: undefined, connectionSecret: undefined, tokens: undefined, workspaceId: undefined }); config.token = undefined; config.workspaceId = undefined; }
+ }
+ return { data };
 }
 export async function callAgent(name, args, config, profilePath) {
  const result = await callAgentData(name, args, config, profilePath);
@@ -94,29 +174,9 @@ async function callAgentData(name, args, config, profilePath) {
  if (name === 'agent_capabilities_set') return {data:await request(config, `/agents/${input.data.id}/approved-capabilities`, {capabilities:input.data.capabilities}, true)};
  if (name === 'agent_revoke') return { data: await request(config, `/agents/${input.data.id}/revoke`, {}, true) };
  if (!profilePath) throw new Error('Use a separate private --profile PATH for each agent.');
- const profile = readProfile(profilePath);
- const url = validateUrl(config.url).toString().replace(/\/$/, '');
- if (name === 'agent_connect') {
-  if (profile.pendingAgent || profile.agent) throw new Error('This profile already has an agent connection. Poll/cancel the pending connection or choose a new profile.');
-  if (Object.keys(profile.tokens ?? {}).length) throw new Error('Use a new agent profile without user API tokens.');
-  // Prove that private persistence is possible before asking the server for secrets.
-  writeProfile(profilePath, { ...profile, url });
-  const data = await request(config, '/agent-connections', input.data);
-  if (!/^adc_[A-Za-z0-9_-]{43}$/.test(data.secret) || !/^agt_[A-Za-z0-9_-]{43}$/.test(data.credential) || !z.string().uuid().safeParse(data.id).success || !/^[A-F0-9]{4}-[A-F0-9]{4}$/.test(data.code)) throw new Error('Invalid connection response.');
-  writeProfile(profilePath, { ...profile, url, pendingAgent: { id: data.id, secret: data.secret, credential: data.credential, expiresAt: data.expiresAt } });
-  config.token = undefined; config.workspaceId = undefined;
-  return { data: { status: 'pending', id: data.id, code: data.code, approvalUrl: data.approvalUrl, approvalPath: `/agents/connect/${data.id}`, expiresAt: data.expiresAt, interval: 5, instructions: 'Give your user the approval URL and the code, then run agent poll with this profile every interval seconds, in this same turn and without waiting for them to reply, until the status is active, denied or expired.' } };
- }
- const secret = profile.pendingAgent?.secret ?? profile.connectionSecret;
- if (!secret) throw new Error('No connection in this profile.');
- if (url !== profile.url) throw new Error('The pending connection belongs to a different API host.');
- const data = await request(config, name === 'agent_poll' ? '/agent-connections/poll' : '/agent-connections/cancel', { secret });
- if (data.status === 'active') {
-  const credential = profile.pendingAgent?.credential ?? profile.tokens?.['workspace:read'];
-  writeProfile(profilePath, { ...profile, agent: data.agent, connectionSecret: secret, pendingAgent: undefined, tokens: { 'workspace:read': credential } });
-  config.token = credential;
- } else if (['denied', 'expired'].includes(data.status)) { writeProfile(profilePath, { ...profile, pendingAgent: undefined, agent: undefined, connectionSecret: undefined, tokens: undefined, workspaceId: undefined }); config.token = undefined; config.workspaceId = undefined; }
- return { data };
+ if (name === 'agent_reconnect') return reconnectAgent(input.data, config, profilePath);
+ if (['agent_connect','agent_poll','agent_cancel'].includes(name)) return withProfileLock(profilePath, () => callAgentProfileOperation(name, input.data, config, profilePath));
+ throw new Error('Invalid agent command or arguments.');
 }
 export async function agentCli(args) {
  const flags = {}; const positions = []; let json = false;
@@ -125,12 +185,12 @@ export async function agentCli(args) {
   if (args[i].startsWith('--')) {
    const key = args[i].slice(2);
    if (key === 'write') { flags.write = true; continue; }
-   if (!['profile', 'name','capabilities','scope','file','id','provider','account','workspace','shared','authorized','set'].includes(key) || !args[i+1] || args[i+1].startsWith('--')) throw new Error('Unknown or incomplete agent option.');
+   if (!['profile', 'name','capabilities','scope','file','id','agent-id','provider','account','workspace','shared','authorized','set'].includes(key) || !args[i+1] || args[i+1].startsWith('--')) throw new Error('Unknown or incomplete agent option.');
    flags[key] = args[++i];
   } else positions.push(args[i]);
  }
  let name = `agent_${positions[1]}`;
- let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name, ...(flags.write ? { write: true } : {}), ...(flags.capabilities ? { capabilities: flags.capabilities.split(',').map(key => key.trim()).filter(Boolean) } : {}) } : positions[1] === 'revoke' ? { id: positions[2] } : {};
+ let input = positions[1] === 'permission' ? {id:positions[2],scope:flags.scope} : positions[1] === 'connect' ? { name: flags.name, ...(flags.write ? { write: true } : {}), ...(flags.capabilities ? { capabilities: flags.capabilities.split(',').map(key => key.trim()).filter(Boolean) } : {}) } : positions[1] === 'reconnect' ? { ...(flags['agent-id'] ? { agentId: flags['agent-id'] } : {}) } : positions[1] === 'revoke' ? { id: positions[2] } : {};
  if(positions[1]==='accounts') {
   if(positions[2]==='show') {name=flags.id ? 'agent_account_authorizations_get' : 'agent_account_authorizations_show';input=flags.id ? {id:flags.id} : {};}
   else if(positions[2]==='authorize' && ['true','false'].includes(flags.authorized)) {name='agent_account_authorization_set';input={id:flags.id,provider:flags.provider,accountRef:flags.account,authorized:flags.authorized==='true'};}

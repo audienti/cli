@@ -1,5 +1,5 @@
 import {z} from 'zod';
-const fileType=z.string().max(127).refine(t=>['image/jpeg','image/png','application/pdf','video/quicktime','video/mp4'].includes(t)||/^text\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(t));
+const fileType=z.string().max(127).refine(t=>!/^text\/(?:html|svg[+]xml)$/i.test(t)&&(['image/jpeg','image/png','application/pdf','video/quicktime','video/mp4'].includes(t)||/^text\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(t)));
 const fields={fileType,fileName:z.string().min(1).max(255)},key=z.string().min(1).max(1024);
 const authority='Personal account files only. Verified human workspace:access credential required; agent credentials are rejected. No workspace selection.';
 export const fileOperations={

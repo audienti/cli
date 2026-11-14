@@ -49,6 +49,14 @@ answers, and show five fits.
   numbers or claims. Mark anything you inferred as inferred.
 - **Draft, never send.** Everything you create is a draft. Nothing goes to a prospect.
   The user activates a campaign in Audienti.
+- **Routine research is bounded and free-first.** For discovery, enrichment and
+  verification, try suitable available free methods first. If they cannot complete
+  the required facts, use a supported paid method with existing workspace credits,
+  within configured budgets, limits and access; do not ask for per-task spending
+  approval, buy credits or retry an unsuitable free method endlessly. Report a
+  concrete permission, credit, cap or missing-source blocker, and keep qualification
+  evidence intact. This does not activate a campaign, send outreach or prove that a
+  prospect is contactable.
 - **Never include secrets.** No passwords, API keys, tokens or session cookies in any
   report, message or field.
 - **Read-only does not stop you.** Run this skill right after connecting, without
@@ -72,7 +80,7 @@ cloud schedule, a Codex automation, or cron. Tell your user the schedule is set,
 it, when you introduce yourself. If your host cannot wake you, say plainly that it cannot
 wake you, so you only check when they message you.
 
-1. Confirm your connection: `audienti workspace list --workspace WORKSPACE_ID --profile AGENT_PROFILE`, then select
+1. Reuse a valid saved agent profile; do not reconnect or create a duplicate while it remains active. If recovery is needed, follow the stable-agent reconnect guidance in the main guide. Confirm your connection: `audienti workspace list --workspace WORKSPACE_ID --profile AGENT_PROFILE`, then select
    the workspace the user approved (`audienti workspace use ID --profile AGENT_PROFILE`;
    over MCP, `workspace_select`).
 2. List every tool, connector, plugin and integration you can call now: your runtime's
@@ -92,11 +100,7 @@ wake you, so you only check when they message you.
 5. Check what Audienti counts for you: `audienti agent capabilities --profile
    AGENT_PROFILE` (over MCP, `agent_capabilities_list`): the rows that work now and the
    ones that work with Audienti's hosted tools in this workspace.
-6. Install the skills you will use: `audienti skills list --compact`, then `audienti
-   skills read ID SKILL.md` and only the references the task needs (over MCP,
-   `skills_list` with `compact: true` and `skills_read`). The `audienti` skill covers
-   prospect finding and profile research; planning, writing and cadence skills are in
-   the `audienti/plugins` marketplace, installed with your runtime's plugin installer.
+6. Discover and read the skills you need before improvising: run `audienti skills list --compact`, then `audienti skills show ID` or `audienti skills read ID SKILL.md`, followed by the relevant references. For research choose `marketplace:signal-prospect-research`; for planning, writing and cadence choose `marketplace:prospect-planning`, `marketplace:prospect-writing` and `marketplace:prospect-cadence` respectively. These four marketplace skills are available through the CLI without a host installer. The bundled `audienti` skill covers Audienti operations and saving results. Bundled skills are also available over MCP with `skills_list` and `skills_read`. If the marketplace is unavailable, the CLI reports that separately and bundled skills remain available.
 
 Email goes out from your user's own mailbox through your own email connector (Gmail or
 Outlook, through Composio, a Claude connector or similar). If you have none, tell your user
@@ -151,8 +155,10 @@ would send it, so the user can check the voice; every rule that cannot say exact
 the user asked for, with what you used instead (company size bands cannot express 200 to
 2,000 employees); a missing sending account for the playbook's first channel; at most two
 questions the user can answer on the same card; and that nothing is sent without their
-approval. Finding the five fits in section 3 costs credits, so ask for that OK on the
-same card: `--option "Approve, find 5 people for up to 20 credits" --option "Change it"`.
+approval. Try suitable available free methods first to find the five fits; when they
+cannot complete the required facts, use existing workspace credits within owner-set
+limits. Do not ask for per-task spending permission. Campaign choices use
+`--option "Approve campaign" --option "Change it"`.
 A note the user types on the card comes with the option they pick. Give every cost in
 credits, never dollars. Name
 things the way the user sees them; never put IDs (campaign, signal, revision) in the
@@ -175,8 +181,7 @@ When the user answers (a **Read your user's answer** task in your queue):
    until the user starts it. Then save the pace: `audienti campaign pace ID --per-day N`
    with the user's number, or `--per-day derived` to use the default of 25 new people a day (over MCP,
    `campaign_pace_set`). Only `campaign pace` takes `--per-day`; `campaign create` and
-   `update` refuse it. When the user approved a spend for finding, such as "find 5 people
-   for up to 20 credits", save the cap too: `audienti campaign pace ID --max-credits 20`.
+   `update` refuse it. Only when the owner explicitly sets a daily finding limit, save it with: `audienti campaign pace ID --max-credits 20`.
    Each day's find task carries it; pass it to `audienti campaign find` and never raise it.
 3. Run `audienti audience summary --audience ID` and name five people or companies
    that fit, with one line on why each fits and a link to the evidence. If you have no

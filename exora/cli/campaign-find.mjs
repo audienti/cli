@@ -68,6 +68,16 @@ export async function findCampaignProspects(call,{workspaceId,campaignId,count,m
  const {data:campaign}=await call('campaign_get',{workspaceId,campaignId});
  const fields=campaign.revision.fields;
  if(!['Draft','Preparing','Active'].includes(campaign.campaign.state))throw new Error('This campaign is not finding prospects. Pick a Draft, Preparing or Active campaign.');
+ // Without a per-run limit, use existing credits within the owner's daily limit.
+ let exhausted='credit_cap';
+ if(maxCredits===undefined){
+  const {data:balance}=await call('tools_balance',{workspaceId});
+  if(!numeric(balance.balance))throw new Error('Could not read available workspace credits.');
+  maxCredits=BigInt(balance.balance);exhausted='no_credits';
+  const {data:pace}=await call('campaign_pace_get',{workspaceId,campaignId});
+  if(pace.creditsLeft!==null&&pace.creditsLeft!==undefined){const left=parseCredits(String(pace.creditsLeft));if(left<maxCredits){maxCredits=left;exhausted='credit_cap';}}
+  if(maxCredits===0n)return {campaignId,state:campaign.campaign.state,target:count,maxCredits:'0',spentCredits:'0',spent:'0',searches:0,checked:0,fit:0,held:0,notFit:0,alreadyFound:0,failed:0,stoppedBecause:exhausted,fits:[],heldPeople:[]};
+ }
  const {data:audience}=await call('audience_get',{workspaceId,audienceId:fields.audienceId,revision:fields.audienceRevision});
  // #322: the search cannot apply an older audience's industry group, so it would pay to check people in any
  // industry. Refuse before any paid call; named industries are searched.
@@ -89,7 +99,7 @@ export async function findCampaignProspects(call,{workspaceId,campaignId,count,m
  for(const input of searches){
   for(let page=1;page&&page<=MAX_PAGES;){
    if(report.fit>=count)return finish('count_reached');
-   if(spent+searchPrice>maxCredits)return finish('credit_cap');
+   if(spent+searchPrice>maxCredits)return finish(exhausted);
    // Search results are not saved as People; only a person the check fetches joins People.
    // Nothing else pays until this search has settled: a search still running, uncertain or with a charge not
    // yet final is retried with the same request ID, and if it never settles the run stops and names it.
@@ -113,7 +123,7 @@ export async function findCampaignProspects(call,{workspaceId,campaignId,count,m
    for(const item of items){
     seen.add(item.url);
     if(report.fit>=count)return finish('count_reached');
-    if(spent>=maxCredits)return finish('credit_cap');
+    if(spent>=maxCredits)return finish(exhausted);
     // Nothing else pays until this check has a definite answer. The same request ID replays the stored
     // outcome and charge; if no definite answer comes, the run stops and names the check to recover.
     const args={workspaceId,campaignId,url:item.url,requestId:randomUUID(),maxCharge:(maxCredits-spent).toString()};

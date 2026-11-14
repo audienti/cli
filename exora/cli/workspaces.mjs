@@ -13,6 +13,7 @@ import {fileOperations,uploadFileContent} from './file-operations.mjs';
 import {playbookOperations} from './playbook-operations.mjs';
 import {connectionRegistryOperations} from './connection-registry-operations.mjs';
 import { budgetOperations } from './budget-operations.mjs';
+import { signupDispositionOperations } from './signup-disposition-operations.mjs';
 import { secretOperations } from './secret-operations.mjs';
 import { hostedToolOperations, paidToolByName, isPaidToolOperation, paidToolResult } from './tools-operations.mjs';
 import { workspaceExecutionOperations, managedAccountOperations } from './work-execution-operations.mjs';
@@ -34,11 +35,13 @@ import { assignmentOperations } from './assignment-operations.mjs';
 import {discoveryOperations} from './discovery-operations.mjs';
 import {campaignOperations} from './campaign-operations.mjs';
 import {audienceOperations} from './audience-operations.mjs';
-import { readFileSync, writeFileSync, renameSync, mkdirSync, statSync, lstatSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, mkdirSync, statSync, lstatSync, realpathSync, linkSync, unlinkSync } from 'node:fs';
 import { dirname, resolve, relative, isAbsolute } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import {offerOperations} from './offer-operations.mjs';
+import {artifactOperations} from './artifact-operations.mjs';
+import {shortLinkOperations} from './short-link-operations.mjs';
 import {readJsonFile} from './json-file.mjs';
 const uuid = z.string().uuid();
 const workspace = { workspaceId: uuid.optional() };
@@ -56,6 +59,7 @@ export const operations = {
  ...playbookOperations,
  ...connectionRegistryOperations,
  ...budgetOperations,
+ ...signupDispositionOperations,
  ...secretOperations,
  ...hostedToolOperations,
  ...workOperations,
@@ -77,6 +81,8 @@ export const operations = {
  ...assignmentOperations,
  ...discoveryOperations,
  ...offerOperations,
+ ...artifactOperations,
+ ...shortLinkOperations,
  ...audienceOperations,
  ...campaignOperations,
  workspace_sending_settings_get: {schema:z.object({...workspace,userId:uuid.optional()}).strict(),method:'GET',path:a=>`/workspaces/${a.workspaceId}/sending-settings${a.userId?'?userId='+encodeURIComponent(a.userId):''}`,scoped:true,description:'Read workspace sending defaults, or own member effective hours, ramp and activity limits with userId. A workspace Admin may read another member. External activities remain agent-managed; these values do not authorize sending.'},
@@ -129,16 +135,78 @@ export function writeProfile(path, profile) {
  const target=profilePath(path); const temporary=`${target}.${process.pid}.tmp`;
  writeFileSync(temporary,JSON.stringify(profile)+'\n',{mode:0o600,flag:'wx'}); renameSync(temporary,target);
 }
+/** Serialize profile read/modify/write sequences without weakening the profile's private-file checks. */
+export async function withProfileLock(path, work, options = {}) {
+ if (!path) throw new Error('Supply --profile PATH outside the repository.');
+ const target=profilePath(path); const lock=`${target}.lock`; const reclaim=`${lock}.reclaim`; let ownedStat;
+ const timeoutMs=options.timeoutMs ?? 10000;
+ const sameLock = (a,b) => a.ino === b.ino && a.mtimeMs === b.mtimeMs && a.size === b.size;
+ const privateFile = file => {
+  const stat=lstatSync(file);
+  if (stat.isSymbolicLink()) throw new Error('CLI profile locks must not be symbolic links.');
+  if ((stat.mode & 0o077) !== 0 || stat.uid !== process.getuid?.()) throw new Error('CLI profile lock is not owned by you and private.');
+  return stat;
+ };
+ const metadata = (file, message) => {
+  try { return JSON.parse(readFileSync(file,'utf8')); }
+  catch { throw new Error(message); }
+ };
+ const dead = pid => {
+  try { process.kill(pid,0); return false; }
+  catch(error) { return error.code === 'ESRCH'; }
+ };
+ const createMetadataLink = (file, value) => {
+  const candidate=`${file}.candidate.${process.pid}.${randomUUID()}`;
+  writeFileSync(candidate,JSON.stringify(value)+'\n',{mode:0o600,flag:'wx'});
+  try { linkSync(candidate,file); return true; }
+  catch(error) { if (error.code === 'EEXIST') return false; throw error; }
+  finally { try { unlinkSync(candidate); } catch(error) { if (error.code !== 'ENOENT') throw error; } }
+ };
+ const started=Date.now(); let reclaimBlocked=false;
+ const removeStaleLock = () => {
+  let stat;
+  try { stat=privateFile(lock); } catch(error) { if (error.code === 'ENOENT') return true; throw error; }
+  const owner=metadata(lock,'CLI profile lock metadata is incomplete. Confirm no Audienti process is using this profile, then remove the lock and retry the same profile.');
+  if (!Number.isInteger(owner?.pid) || !Number.isFinite(owner?.createdAt) || Date.now()-owner.createdAt < 5000 || !dead(owner.pid)) return false;
+  if (!createMetadataLink(reclaim,{pid:process.pid,createdAt:Date.now(),lock:{ino:stat.ino,mtimeMs:stat.mtimeMs,size:stat.size}})) {
+   reclaimBlocked=true;
+   return false;
+  }
+  try {
+   let current;
+   try { current=privateFile(lock); } catch(error) { if (error.code === 'ENOENT') return true; throw error; }
+   if (!sameLock(current,stat)) return false;
+   const currentOwner=metadata(lock,'CLI profile lock metadata is incomplete. Confirm no Audienti process is using this profile, then remove the lock and retry the same profile.');
+   if (!Number.isInteger(currentOwner?.pid) || !Number.isFinite(currentOwner?.createdAt) || Date.now()-currentOwner.createdAt < 5000 || !dead(currentOwner.pid)) return false;
+   unlinkSync(lock); return true;
+  } finally { try { unlinkSync(reclaim); } catch(error) { if (error.code !== 'ENOENT') throw error; } }
+ };
+ for (;;) {
+  try {
+   if (createMetadataLink(lock,{pid:process.pid,createdAt:Date.now()})) { ownedStat=privateFile(lock); break; }
+  } catch(error) {
+   if (error.code !== 'EEXIST') throw new Error('Could not acquire the private CLI profile lock.');
+  }
+  if (Date.now()-started >= timeoutMs) throw new Error(reclaimBlocked ? `Profile recovery is already being reclaimed. Confirm no Audienti process is reclaiming this same profile, then remove ${reclaim} only if no such process remains and retry the same profile; do not create a new registration.` : 'Could not acquire the private CLI profile lock. Retry this same command with the same profile after confirming no Audienti process is still running; do not create a new registration.');
+  try { removeStaleLock(); } catch(error) { throw error; }
+  await new Promise(resolve => setTimeout(resolve,25));
+ }
+ try {
+  return await work();
+ } finally {
+  try { const current=privateFile(lock); if (sameLock(current,ownedStat)) unlinkSync(lock); } catch(error) { if (error.code !== 'ENOENT') throw error; }
+ }
+}
 /** The profile path: --profile wins, then AUDIENTI_PROFILE (the variable the MCP server reads), else none (#448). */
 export const profileFrom = flag => flag ?? (process.env.AUDIENTI_PROFILE || undefined);
 // The server words a next step with CLI commands. An MCP caller has tools, not commands, so the same step is said with the tool names (#507).
-const MCP_WORDING = [['audienti playbook actions','playbook_actions_list'],['playbook draft show','playbook_draft_get'],['playbook draft save','playbook_draft_save'],['playbook draft discard','playbook_draft_discard'],['playbook draft publish','playbook_draft_publish'],['playbook rules show','playbook_rules_get'],['playbook rules save','playbook_rules_save'],['playbook show','playbook_get'],['playbook save','playbook_save'],['audienti playbook save --help','the playbook_save tool description'],['--workspace ID','workspaceId']];
+const MCP_WORDING = [['audienti playbook actions','playbook_actions_list'],['playbook draft show','playbook_draft_get'],['playbook draft save','playbook_draft_save'],['playbook draft discard','playbook_draft_discard'],['playbook draft publish','playbook_draft_publish'],['playbook rules show','playbook_rules_get'],['playbook rules save','playbook_rules_save'],['playbook show','playbook_get'],['playbook save','playbook_save'],['audienti playbook save --help','the playbook_save tool description'],['audienti agent reconnect','agent_reconnect'],['--agent-id ID','agentId'],['--workspace ID','workspaceId']];
 export const surfaceWording = (text, config) => config?.interface === 'mcp' && typeof text === 'string' ? MCP_WORDING.reduce((out, [cli, tool]) => out.replaceAll(cli, tool), text) : text;
 export const profileHint = 'Pass --profile PATH, or set AUDIENTI_PROFILE to the profile file.';
 export function configuration(path, scope='workspace:access') {
  path=profileFrom(path);
  const profile=readProfile(path);
- const agentProfile = Boolean(profile.agent || profile.pendingAgent || profile.connectionSecret);
+ const agentProfile = Boolean(profile.agent || profile.pendingAgent || profile.pendingRecovery || profile.connectionSecret);
  return { profilePath: path ? profilePath(path) : undefined, url:agentProfile ? profile.url : process.env.AUDIENTI_API_URL ?? profile.url, token:agentProfile ? (scope === 'workspace:access' ? profile.tokens?.['workspace:read'] : undefined) : process.env.AUDIENTI_API_TOKEN ?? (scope === 'workspace:access' ? profile.tokens?.['workspace:access'] ?? profile.tokens?.['workspace:read'] : profile.tokens?.[scope]), workspaceId:profile.workspaceId, profile };
 }
 export function validateUrl(value) {
@@ -208,6 +276,7 @@ export async function callWorkspace(name, args, config) {
  if(operation.localUpload)return uploadFileContent(input,(operationName,fields)=>callWorkspace(operationName,fields,config));
  // #333: an agent's own queue covers all its workspaces; a user's reads the selected workspace, as before.
  if(operation.scoped || (operation.agentWide && !/^agt_/.test(config.token ?? ''))) { input.workspaceId ??= config.workspaceId;if(!uuid.safeParse(input.workspaceId).success) throw new Error(config.interface==='mcp'?`Pass workspaceId in the tool input, or call workspace_select once. Find the ID in Settings > Workspace (the Workspace ID row), or call workspace_list. ${config.profile&&Object.keys(config.profile).length?'':profileHint}`.trim():`Select a workspace or supply --workspace ID. Find the ID in Settings > Workspace (the Workspace ID row), or run workspace list. ${config.profile&&Object.keys(config.profile).length?'Run workspace use WORKSPACE_ID once for this profile.':`${profileHint}${/^aud_/.test(config.token ?? '') ? '' : ' An agent that is not connected yet runs agent connect first; then run workspace use WORKSPACE_ID once.'}`}`); }
+ if(name==='agent_queue_list'&&input.history!==undefined&&!input.workspaceId)throw new InvalidArguments('Queue history requires a workspace. Pass workspaceId or --workspace ID.');
  const url=validateUrl(config.url); if(!config.token) throw new Error(`A workspace token is required: workspace:access to read and change, or workspace:read to only read. ${profileHint} Or set AUDIENTI_API_URL and AUDIENTI_API_TOKEN.`);
  const target=new URL(`/api/v1${operation.path(input)}`,url);
  let response;try {response=await fetch(target,{method:operation.method,headers:{...clientHeaders(config),Authorization:`Bearer ${config.token}`,Accept:'application/json','Content-Type':'application/json',...((operation.traced||name.startsWith('tools_'))?{'X-Audienti-Interface':config.interface==='mcp'?'mcp':'cli'}:{})},...(['POST','PUT','PATCH'].includes(operation.method)?{body:JSON.stringify(operation.body?.(input)??{})}:{}),redirect:'error',signal:AbortSignal.timeout(operation.timeoutMs ?? 10000)});}catch(error){if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,['TimeoutError','AbortError'].includes(error?.name)?'timeout':'transport_failure');throw new Error('Could not reach the API. Redirects are not followed.');}
@@ -234,7 +303,7 @@ export async function callWorkspace(name, args, config) {
  }
  if(!result || !Object.hasOwn(result,'data')) {if(isPaidToolOperation(name,input)||operation.recoverable)throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);throw new Error('The API returned an invalid response.');}
  const paidResult = paidToolResult(name, result?.data, input);
- if(isPaidToolOperation(name,input)&&(!uuid.safeParse(paidResult?.operationId).success||paidResult.requestId!==input.requestId||!['running','succeeded','failed','uncertain','rejected'].includes(paidResult.status)))throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);
+ if(isPaidToolOperation(name,input)&&(!uuid.safeParse(paidResult?.operationId).success||paidResult.requestId!==input.requestId||!(name==='tools_call'&&['audienti.models.ask','models.ask'].includes(input.tool)?['pending','completed','requires_tool_results','failed','uncertain']:['running','succeeded','failed','uncertain','rejected']).includes(paidResult.status)))throw new HostedResponseUnknown(input.requestId,'invalid_response',requestTraceId);
  if(name==='workspace_select') config.workspaceId=input.workspaceId;
  return {data:operation.transform?operation.transform(result.data,input):result.data,...(result.client?{client:result.client}:{}),...(requestTraceId?{requestTraceId}:{})};
 }
@@ -248,7 +317,7 @@ export async function workspaceCli(args) {
  if(position[0]==='profile' && position[1]==='save') {
   if(!['account:read','workspace:read','workspace:access','agents:manage'].includes(flags.scope)) throw new Error('Specify --scope account:read, workspace:read, workspace:access or agents:manage.');
   const url=validateUrl(process.env.AUDIENTI_API_URL).toString().replace(/\/$/,'');const token=process.env.AUDIENTI_API_TOKEN;if(!token) throw new Error('Set AUDIENTI_API_TOKEN.');
-  const profile=readProfile(profileFrom(flags.profile));if(profile.agent || profile.pendingAgent || profile.connectionSecret) throw new Error('Use a separate user profile; agent profiles cannot store user API tokens.');writeProfile(profileFrom(flags.profile),{...profile,url,tokens:{...profile.tokens,[flags.scope]:token}});console.log('Profile saved.');return;
+  const profilePath=profileFrom(flags.profile);await withProfileLock(profilePath,async()=>{const profile=readProfile(profilePath);if(profile.agent || profile.pendingAgent || profile.pendingRecovery || profile.connectionSecret || profile.recoveryConnection) throw new Error('Use a separate user profile; agent profiles cannot store user API tokens.');writeProfile(profilePath,{...profile,url,tokens:{...profile.tokens,[flags.scope]:token}});});console.log('Profile saved.');return;
  }
  const config=configuration(flags.profile);const command=position.slice(1).join(' ');
  // token show works with any saved user token, so it also tries the other slots when there is no workspace token.
@@ -280,8 +349,10 @@ export async function workspaceCli(args) {
   input={id:position[3],...(['retry','cancel'].includes(action)?{workspaceId:flags.workspace}:{generation:Number(flags.generation)})};
  }
  if(!name) throw new Error('Unknown workspace command. Use audienti --help.');
- const result=await callWorkspace(name,input,config);
-
- if(name==='workspace_select') writeProfile(profileFrom(flags.profile),{...config.profile,workspaceId:config.workspaceId});
+ const profilePath=profileFrom(flags.profile);
+ const result=name==='workspace_select'&&profilePath
+  ? await withProfileLock(profilePath,async()=>{const lockedConfig=configuration(profilePath);const selected=await callWorkspace(name,input,lockedConfig);writeProfile(profilePath,{...readProfile(profilePath),workspaceId:lockedConfig.workspaceId});return selected;})
+  : await callWorkspace(name,input,config);
+ if(name==='workspace_select'&&!profilePath) writeProfile(profilePath,{...config.profile,workspaceId:config.workspaceId});
  console.log(JSON.stringify(result));
 }

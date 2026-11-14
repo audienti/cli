@@ -94,12 +94,16 @@ employer. Role inboxes (investors@, press@) and switchboards are not personal co
 
 ## Find prospects for a campaign
 
-When the user asks for N prospects for a campaign, run
-`audienti campaign find CAMPAIGN_ID --count N --max-credits C`. Ask the user for the
-credit cap if they did not give one, and save the run size and the cap they approve on the
-campaign: `audienti campaign pace CAMPAIGN_ID --per-day N --max-credits C`. The next find
-task carries both. State every cost in credits, the unit Usage and Billing use; a dollar
-value may follow in brackets, never on its own. The command:
+When the user asks for N prospects for a campaign, first try suitable available free
+methods and saved evidence. When they cannot complete the required facts, run
+`audienti campaign find CAMPAIGN_ID --count N` as the supported fallback, using existing
+workspace credits within configured budgets, limits and access. Do not ask for per-task
+spending approval or invent a permission cap. Use a supported fallback rather than
+retrying an unsuitable free route endlessly.
+An explicit `--max-credits C` may reduce the budget for one run. Save a daily limit with
+`audienti campaign pace CAMPAIGN_ID --max-credits C` only when the owner actually sets one.
+Never raise an owner-set limit. If credits or a limit run out, report a plain paused status
+and the available billing or limit action, not a question. Report costs in credits. The command:
 
 - searches LinkedIn with the audience's titles, locations, industries and keyword, plus
   the campaign's topic signals. With no person location, it searches the company
@@ -186,7 +190,10 @@ they answer or approve it.
   fit criteria. Separate source facts from your interpretation and cite both.
   Include this skill's identity/version on supported evidence and assessment writes.
 - Profile research does not authorize a message, follow, contact purchase or change
-  to an approval. Use the customer's instructions and current server permissions.
+  to an approval. Routine discovery, enrichment and verification do not activate a
+  campaign, send outreach or prove that a prospect is contactable. Use the customer's
+  instructions and current server permissions; report a concrete credit, cap,
+  permission or required-source blocker when one stops the work.
 
 Return canonical records read back from the selected workspace, evidence collected,
 profiles matched or still unresolved, operation IDs for interrupted work, and the

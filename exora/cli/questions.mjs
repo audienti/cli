@@ -1,6 +1,6 @@
 import {callWorkspace,configuration} from './workspaces.mjs';
 const askHelp='Use ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID] [--topic KEY]. Pass --campaign ID --topic campaign:ID for a campaign decision (first_campaign only before it exists). The server derives the campaign topic when omitted; superseded lists the replaced question IDs.';
-const help='Use questions [list] [--state open|answered|withdrawn|superseded|all] | show ID | withdraw ID | answer ID --answer TEXT.';
+const help='Use questions [list] [--state open|answered|withdrawn|superseded|closed|all] [--limit N] [--cursor ID | --since ID] [--at ISO_DATETIME] | show ID | withdraw ID | answer ID --answer TEXT.';
 function parse(args,allowed,usage){
  const position=[],flags={},options=[];
  for(let i=1;i<args.length;i++){
@@ -20,10 +20,11 @@ export async function askCli(args){
  console.log(JSON.stringify((await callWorkspace('agent_question_ask',input,configuration(flags.profile))).data));
 }
 export async function questionsCli(args){
- const {position,flags}=parse(args,['profile','workspace','state','limit','answer'],help);
+ const {position,flags}=parse(args,['profile','workspace','state','limit','answer','cursor','since','at'],help);
  const command=position[0]??'list',id=position[1],config=configuration(flags.profile),workspaceId=flags.workspace;
+ if(command!=='list'&&['cursor','since','at'].some(key=>Object.hasOwn(flags,key)))throw new Error(help);
  const call=async(name,input)=>(await callWorkspace(name,{workspaceId,...input},config)).data;
- if(command==='list'){if(position.length>1)throw new Error(help);console.log(JSON.stringify(await call('agent_question_list',{...(flags.state?{state:flags.state}:{}),...(flags.limit?{limit:Number(flags.limit)}:{})})));return}
+ if(command==='list'){if(position.length>1)throw new Error(help);console.log(JSON.stringify(await call('agent_question_list',{...(flags.state?{state:flags.state}:{}),...(flags.limit?{limit:Number(flags.limit)}:{}),...Object.fromEntries(['cursor','since','at'].filter(key=>Object.hasOwn(flags,key)).map(key=>[key,flags[key]]))})));return}
  if(!id||position.length!==2)throw new Error(help);
  if(command==='show'){console.log(JSON.stringify(await call('agent_question_get',{questionId:id})));return}
  if(command==='withdraw'){console.log(JSON.stringify(await call('agent_question_withdraw',{questionId:id})));return}

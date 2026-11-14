@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { SKILL_VERSION, helperContracts } from '../skills/audienti/scripts/contracts.mjs';
 import { executeHelperFile } from '../skills/audienti/scripts/run.mjs';
+import { marketplaceCatalog, marketplaceResource } from './marketplace-skills.mjs';
 
 const bundles = {
   audienti: {
@@ -10,7 +11,7 @@ const bundles = {
     helpers: true,
   },
   'getting-started': {
-    version: '1.5.2',
+    version: '1.5.3',
     files: ['SKILL.md', 'references/capabilities.md', 'references/campaign-draft.md', 'references/audience.md', 'references/outcome-checks.md', 'references/replies.md', 'references/reply-checks.md', 'references/mailbox-check.md'],
     helpers: false,
   },
@@ -74,7 +75,7 @@ export function skillResource(id, path) {
   return { id: artifact.id, version: artifact.version, digest: artifact.digest, path, content: file ? file.content : JSON.stringify(helper) };
 }
 
-const usage = `Usage: audienti skills list [--compact] | show ${SKILL_IDS.join('|')} | read SKILL RESOURCE | helper NAME --file INPUT.json|- [--json]`;
+const usage = `Usage: audienti skills list [--compact] | show SKILL | read SKILL RESOURCE | helper NAME --file INPUT.json|- [--json]`;
 
 export function skillArtifact(id = 'audienti') {
   const { details, contents } = readSkill(id);
@@ -89,20 +90,30 @@ export async function skillsCli(argv) {
   const filtered = args.filter(value => value !== '--json');
   if (args.filter(value => value === '--json').length > 1) throw new Error('Invalid skills options.');
   if (filtered.length === 1 && ['--help', 'help'].includes(filtered[0])) {
-    process.stdout.write(`${usage}\nLocal skill instructions/helpers; no login, installation or provider calls.\n`); return;
+    process.stdout.write(`${usage}\nSKILL is a bundled ID or marketplace:ID[@REVISION]. Bundled IDs take precedence. Marketplace access requires GitHub. Reading resources, including executable text, never installs or executes them.\n`); return;
   }
   if (filtered[0] === 'list' && (filtered.length === 1 || (filtered.length === 2 && filtered[1] === '--compact'))) {
     const compact = filtered.length === 2, catalog = skillCatalog({ compact });
-    if (compact && !json) { process.stdout.write(catalog.skills.map(skill => `${skill.id}@${skill.version} — ${skill.description}\n${skill.resources.map(path => `  ${path}\n`).join('')}`).join('')); return; }
-    process.stdout.write(json ? `${JSON.stringify(catalog)}\n` : catalog.skills.map(skill => `${skill.id}@${skill.version} — ${skill.description}\n`).join('')); return;
+    catalog.skills = catalog.skills.map(skill => ({ ...skill, origin: 'bundled' }));
+    try { const entries = await marketplaceCatalog(); catalog.skills.push(...entries); catalog.marketplace = { status: entries.some(entry => entry.catalog.cached || entry.revisionObservation.cached) ? 'cached' : 'available' }; }
+    catch (error) { catalog.marketplace = { status: 'unavailable', message: error.message }; }
+    if (!json && catalog.marketplace.status === 'unavailable') process.stderr.write(`Marketplace unavailable: ${catalog.marketplace.message}\n`);
+    const provenance = skill => skill.catalog ? `; catalog ${skill.catalog.origin} blob ${skill.catalog.blob} observed ${skill.catalog.fetchedAt}${skill.catalog.cached ? ' (cached)' : ''}; revision observed ${skill.revisionObservation.fetchedAt}${skill.revisionObservation.cached ? ' (cached)' : ''}` : '';
+    if (compact && !json) { process.stdout.write(catalog.skills.map(skill => `${skill.id}@${skill.version} (${skill.origin}${skill.revision ? ` revision ${skill.revision}` : ''}${provenance(skill)}) — ${skill.description}\n${skill.resources.map(path => `  ${path}\n`).join('')}`).join('')); return; }
+    process.stdout.write(json ? `${JSON.stringify(catalog)}\n` : catalog.skills.map(skill => `${skill.id}@${skill.version} (${skill.origin}${skill.revision ? ` revision ${skill.revision}` : ''}${provenance(skill)}) — ${skill.description}\n`).join('')); return;
   }
   if (filtered[0] === 'show' && filtered.length === 2) {
+    if (!SKILL_IDS.includes(filtered[1])) {
+      const id = filtered[1].startsWith('marketplace:') ? filtered[1] : `marketplace:${filtered[1]}`;
+      const resource = await marketplaceResource(id, 'SKILL.md');
+      process.stdout.write(json ? `${JSON.stringify(resource)}\n` : `${resource.id}@${resource.version} (${resource.origin}, revision ${resource.revision}; catalog ${resource.catalog.origin} blob ${resource.catalog.blob} observed ${resource.catalog.fetchedAt}${resource.catalog.cached ? ' (cached)' : ''}; revision observed ${resource.revisionObservation.fetchedAt}${resource.revisionObservation.cached ? ' (cached)' : ''})\n\n${resource.content}\n`); return;
+    }
     const details = skillDetails(filtered[1]);
     process.stdout.write(json ? `${JSON.stringify(details)}\n` : `${details.instructions}\n${details.references.map(file => `\n--- ${file.path} ---\n${file.text}\n`).join('')}`); return;
   }
   if (filtered[0] === 'read' && filtered.length === 3) {
-    const resource = skillResource(filtered[1], filtered[2]);
-    process.stdout.write(json ? `${JSON.stringify(resource)}\n` : `${resource.content}\n`); return;
+    const resource = SKILL_IDS.includes(filtered[1]) ? skillResource(filtered[1], filtered[2]) : await marketplaceResource(filtered[1].startsWith('marketplace:') ? filtered[1] : `marketplace:${filtered[1]}`, filtered[2]);
+    process.stdout.write(json ? `${JSON.stringify(resource)}\n` : `${resource.catalog ? `${resource.id}@${resource.version} (${resource.origin}, revision ${resource.revision}; catalog ${resource.catalog.origin} blob ${resource.catalog.blob} observed ${resource.catalog.fetchedAt}${resource.catalog.cached ? ' (cached)' : ''}; revision observed ${resource.revisionObservation.fetchedAt}${resource.revisionObservation.cached ? ' (cached)' : ''})\n\n` : ''}${resource.content}\n`); return;
   }
   if (filtered[0] === 'helper' && filtered.length === 4 && filtered[2] === '--file') {
     try { process.stdout.write(`${JSON.stringify(executeHelperFile(filtered[1], filtered[3]))}\n`); }

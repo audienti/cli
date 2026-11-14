@@ -6,6 +6,7 @@ import { playbookHelp } from './playbook-help.mjs';
 // The CLI is an HTTP client. It has no database access or separate business rules.
 const args = process.argv.slice(2);
 const usage = `Workspace deletion: audienti workspace delete --workspace ID --confirm-name NAME
+Signup disposition: audienti signup-disposition show|recompute|set|clear --user ID (staff only; corrections need --reason TEXT --expected-revision N; set needs --value VALUE, optional --evidence-refs JSON)
 Profiles: audienti profiles list|search|get ID | match evaluate|apply SOURCE CANDIDATE | history RESOLUTION (saved workspace records)
 Skills: audienti skills list [--compact]|show SKILL|read SKILL RESOURCE|helper NAME --file INPUT.json|- [--json]
 Tools: audienti call TOOL ['JSON'] | tools search "WORDS"|get TOOL|list|runs|balance [--help]
@@ -16,6 +17,8 @@ Managed accounts: audienti sender managed list|connect [--provider linkedin|what
                   audienti sender managed post list [--account ID] [--state draft|approved|posting|published|rejected|failed|unknown]; post get POST_ID
                   audienti sender managed post approve POST_ID [--text TEXT]; post reject POST_ID [--reason TEXT]  (the account owner, a person, only)
 Prospecting: audienti prospecting settings show|save|accounts|account-show|account-save|history [--profile PATH]
+Artifacts: audienti artifact list|show ID|create|update ID|attach ID|detach ID|context|type TYPE|archive ID|write --file PATH [--workspace ID]
+Short links: audienti short-links list|create|clicks --workspace ID [--destination URL] [--type guide|offer|demo|other] [--sharing personal|shared] [--recipient-prospect ID] [--link ID]
 Usage: audienti whoami [--json]
        audienti workspace assignments list [--workspace ID]
        audienti workspace prospect assignment get/set --prospect-id ID [--file INPUT.json]
@@ -61,14 +64,14 @@ Audiences: audience options --kind industries|locations|sizes|types|seniorities|
            audience test ID --url LINKEDIN_URL --request-id UUID  (spends hosted credits unless the profile is saved)
 Files: file upload PATH --type MIME|list|prepare|register|download|delete ID (personal files, human token only)
 Operator Custom steps: hand-tasks [list [--state open|ready|done|skipped]]|show ID|done ID --outcome TEXT [--notes TEXT] [--result replied|meeting_booked]|skip ID --reason TEXT|event ID [--name TEXT]  (a person does a Custom step by hand and records what happened)
-Queue: audienti queue [list]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT [--reason-code CODE]|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
+Queue: audienti queue [list] [--history false]|next|claim ID [--note TEXT]|done ID [--note TEXT]|skip ID --note TEXT [--reason-code CODE]|release ID [--workspace ID]  (start here after you connect; without --workspace an agent reads every workspace its user approved it in; done or skip again with a new --note corrects the note of a finished task)
 Runs: audienti runs [list] [--workspace ID] [--agent ID] [--status all|running|done|failed] [--cursor-at ISO_DATE --cursor-id ID] (includes plain skip reasons and codes)
 Attachments: audienti attachments upload FILE [--duration SECONDS]  (store an image or voice note, get its id for content.attachments)
 Outcome checks: audienti outcomes report TASK_ID --file RESULTS.json  (results for the people an outcomes.check task lists)
 Saved posts: audienti posts list [--topic-id ID]|get ID  (savedByOperationId names the tool run that saved a post; read it with audienti tools runs get ID)
 Saved topics: audienti topics list|get ID|create --input FILE --request-id UUID
 Questions: audienti ask "QUESTION" [--context TEXT] [--option TEXT]... [--campaign ID] [--task ID]  (questions for your user go to Operator, not chat)
-           audienti questions [list] [--state open|answered|withdrawn|all] | show ID | withdraw ID | answer ID --answer TEXT
+           audienti questions [list] [--state open|answered|withdrawn|superseded|closed|all] [--limit N] [--cursor ID | --since ID] [--at ISO_DATETIME] | show ID | withdraw ID | answer ID --answer TEXT
 Rooms: audienti rooms directory|inbox|ack|send|thread|threads|create|list|read|retire|restore|redact|resume|pause|profile|hook|watch|wait (audienti rooms help)
 KV: audienti kv get KEY|set KEY VALUE [--json] [--nx] [--if-version N] [--ttl 7d|--expires-at TIME]|list [--prefix P]|search [--key TEXT] [--value TEXT]|delete KEY  (small state between runs; never credentials)
 Offers: offer list|show ID|create|update ID|archive ID|restore ID [--json]
@@ -76,7 +79,7 @@ Offer options: --file FIELDS.json --request-id UUID --expected-revision N --revi
   audienti prospects replies set|get|list PERSON --workspace ID [--evidence EVIDENCE] [--file INPUT.json]
 Account intake: prospects intake --workspace ID --file INPUT.json
                 prospects conversation append|list PERSON --workspace ID
-Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|citation create|evidence create
+Discovery: prospects list|get ID|timeline ID [--limit N]|preparation-context ID [--limit N] [--cursor CURSOR]|observation create|citation create|evidence create
            prospects contacts list|record PERSON [--file INPUT.json] [--request-id UUID] --workspace ID
            prospects contacts get|retire|whatsapp-check PERSON CONTACT [--file INPUT.json] --workspace ID
            prospects suppression get|set ID --workspace ID
@@ -104,14 +107,15 @@ Discovery: prospects list|get ID|timeline ID [--limit N]|observation create|cita
            audit list [--workspace ID] [--since 7d] [--actor agent|person] [--category NAME] [--format json|csv]
            budgets set --workspace ID [--agent ID --cap N|none] [--new-agent-cap N|none] [--at-limit pause|ask] [--alert80 on|off]  (alert80 covers Operator and email at 80%)
 Qualification: campaigns qualification submit --file INPUT.json
+Saved decision: campaign decision CAMPAIGN_ID --check CHECK_ID [--workspace ID]  (reads the original saved check without fetching or requalifying)
 Campaign summary: campaign summary [--workspace ID]  (campaign counts per state, and per campaign its audience, offer, playbook, goal stage, people, engaged and at-goal counts)
-Find prospects: campaign find CAMPAIGN_ID --count N --max-credits C  (searches with the audience filters, checks each person, admits only fits; stops at N fits or the credit cap and reports the spend)
+Find prospects: campaign find CAMPAIGN_ID --count N [--max-credits C]  (searches with the audience filters, checks each person, admits only fits; stops at N fits or the credit cap and reports the spend)
                 campaign check CAMPAIGN_ID --url LINKEDIN_URL [--request-id UUID] [--source-url URL --source-industry TEXT [--source-kind website|register|other] [--source-location TEXT] [--source-note TEXT]]  (checks one person the same way; reuse the request ID after an interruption; a source confirms a company with no LinkedIn page)
 Target companies: campaign targets CAMPAIGN_ID [--limit N --after CURSOR]  (reads the companies people must work at to join)
                   campaign targets CAMPAIGN_ID --add acme.com,linkedin.com/company/globex [--remove old.com] | --set FILE|-  (one company per line; saves a new revision)
 Playbooks: playbook list [--archived] [--limit N --cursor ID]|actions|show ID [--revision N]|save --file REQUEST.json|archive ID|restore ID|draft show ID|save ID --file REQUEST.json|discard ID [--expected-updated-at T]|publish ID [--request-id UUID]|rules show ID|rules save ID --file REQUEST.json|delete ID|progress PARTICIPATION_ID|resume PARTICIPATION_ID [--request-id UUID]|record --file REQUEST.json|event PARTICIPATION_ID --kind KIND --reason TEXT  (audienti playbook SUBCOMMAND --help for the request shape)
 Newer audience: campaign show CAMPAIGN_ID  (its audience says the revision it uses, the newest revision and the rules a move adds and removes)
-                campaign use-audience CAMPAIGN_ID [--expected-revision N]  (moves the campaign to the newest audience revision; people already in it stay; an audit event records it. Without --expected-revision it uses the campaign's current revision number. audienceSwitch.changed is false when it was already on the newest revision)
+                campaign use-audience CAMPAIGN_ID [--audience ID --audience-revision N] [--expected-revision N]  (moves the campaign to the newest audience revision; people already in it stay; an audit event records it. Without --expected-revision it uses the campaign's current revision number. audienceSwitch.changed is false when it was already on the newest revision)
 Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-version ID] [--format json|csv]
            analytics outbound [--workspace ID] [--days N | --from ISO --to ISO] [--by sender|action|day] [--format json|csv]
            analytics activity [--workspace ID] [--days N | --from ISO --to ISO] [--format json|csv]
@@ -119,7 +123,8 @@ Analytics: analytics show --from ISO --to ISO [--campaign ID] [--playbook-versio
            analytics aging [--workspace ID] [--threshold-days N] [filters] [--format json|csv]
            analytics filters [--workspace ID]  (lists campaign, owner, offer, audience and tag values)
            (filters: --campaign ID --owner ID --offer ID --audience ID --tag TAG; also accepted by analytics show)
-Pipeline: pipeline show [--campaign ID] [--playbook-version ID]
+Pipeline: pipeline show [--campaign ID] [--playbook-version ID] [--hide-waits true|false]
+  Opens on Ready work; --hide-waits false restores Everyone.
 Connections: connections list|register --file REQUEST.json|report --file REQUEST.json
 Discovery writes use --file INPUT.json, --workspace ID and stable --request-id UUID
 Workspace commands: workspace init|list|create|show|search|invite|invitations|use
@@ -195,8 +200,10 @@ async function main() {
   if(args[0]==='audit'){const {auditCli}=await import('./audit.mjs');await auditCli(args);return;}
   if(args[0]==='secret'||args[0]==='secrets'){const {secretsCli}=await import('./secrets.mjs');await secretsCli(args);return;}
   if(args[0]==='budgets'){const {budgetsCli}=await import('./budgets.mjs');await budgetsCli(args);return;}
+  if(args[0]==='signup-disposition'){const {signupDispositionCli}=await import('./signup-disposition.mjs');await signupDispositionCli(args);return;}
   if(args[0]==='guardrails'||args[0]==='dnc'){const {guardrailsCli}=await import('./guardrails.mjs');await guardrailsCli(args);return;}
   if(args[0]==='prospects'&&args[1]==='suppression'){const {suppressionCli}=await import('./suppression.mjs');await suppressionCli(args);return;}
+  if(args[0]==='short-links'){const {shortLinksCli}=await import('./short-links.mjs');await shortLinksCli(args);return;}
   if(args[0]==='prospects'&&(args[1]==='duplicates'||args[1]==='outreach-profile')){const {duplicatesCli}=await import('./duplicates.mjs');await duplicatesCli(args);return;}
   if(args[0]==='call'){const {callCli}=await import('./tools.mjs');await callCli(args);return;}
   if(args[0]==='tools'){const {toolsCli}=await import('./tools.mjs');await toolsCli(args);return;}
@@ -220,6 +227,7 @@ async function main() {
   if(args[0]==='rooms'){const {roomsCli}=await import('./rooms.mjs');await roomsCli(args);return;}
   if(args[0]==='kv'){const {kvCli}=await import('./kv.mjs');await kvCli(args);return;}
   if(args[0]==='offer'){const {offerCli}=await import('./offers.mjs');await offerCli(args);return;}
+  if(args[0]==='artifact'){const {artifactCli}=await import('./artifacts.mjs');await artifactCli(args);return;}
   if (args[0] === 'agent') { const { agentCli } = await import('./agents.mjs'); await agentCli(args); return; }
   if (isAssignmentCommand(args)) { await assignmentCli(args); return; }
   if (['workspace', 'profile', 'token'].includes(args[0])) { const { workspaceCli } = await import('./workspaces.mjs'); await workspaceCli(args); return; }

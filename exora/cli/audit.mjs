@@ -8,7 +8,11 @@ export function sinceToIso(value, now = Date.now()) {
  if (Number.isNaN(date.getTime())) throw Error('--since must look like 7d, 12h or an ISO date.');
  return date.toISOString();
 }
-const cell = value => /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+const cell = value => {
+ // Preserve the full cell as text, including whitespace/control prefixes.
+ const text = /^[\p{White_Space}\u0000-\u001f\u007f\ufeff]*[=+\-@\t\r\n]/u.test(value) ? "'" + value : value;
+ return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
 export function auditCsv(items) {
  const rows = items.map(item => [item.at, item.actor?.kind ?? '', item.actor?.name ?? '', item.category, item.action, item.summary, item.object?.label ?? '', item.object?.href ?? '']);
  return [['when', 'actor_kind', 'actor', 'category', 'action', 'summary', 'object', 'link'], ...rows].map(row => row.map(cell).join(',')).join('\n') + '\n';

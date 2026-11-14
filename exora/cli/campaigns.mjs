@@ -3,25 +3,33 @@ import {readJsonFile} from './json-file.mjs';
 export async function campaignCli(args){
  const position=[],flags={};for(let i=0;i<args.length;i++){
   if(!args[i].startsWith('--')){position.push(args[i]);continue}
-  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url','add','remove','set','source-url','source-kind','source-industry','source-location','source-note'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
+  const key=args[i].slice(2);if(!['profile','workspace','file','request-id','expected-revision','revision','archived','limit','after','q','state','operation','expected-state','reason','per-day','count','max-credits','url','add','remove','set','source-url','source-kind','source-industry','source-location','source-note','source-company','source-size-start','source-size-end','source-observed-at','audience','audience-revision','check'].includes(key)||!args[i+1]||args[i+1].startsWith('--')||Object.hasOwn(flags,key))throw new Error('Unknown or incomplete campaign option.');
   flags[key]=args[++i];
  }
  const command=position[1];
+ if(command==='decision'){
+  if(position.length!==3||!flags.check)throw new Error('Use campaign decision CAMPAIGN_ID --check CHECK_ID [--workspace ID].');
+  if(Object.keys(flags).some(key=>!['profile','workspace','check'].includes(key)))throw new Error('Only --check, --workspace and --profile apply to campaign decision.');
+  console.log(JSON.stringify(await callWorkspace('campaign_saved_decision_get',{workspaceId:flags.workspace,campaignId:position[2],checkId:flags.check},configuration(flags.profile))));return;
+ }
+ if(flags.check!==undefined)throw new Error('Use --check only with campaign decision CAMPAIGN_ID.');
  if(command==='find'){
-  if(position.length!==3)throw new Error('Use campaign find ID --count N --max-credits C.');
+  if(position.length!==3)throw new Error('Use campaign find ID --count N [--max-credits C].');
   if(!/^\d{1,3}$/.test(flags.count??'')||Number(flags.count)<1||Number(flags.count)>500)throw new Error('Set --count to how many fits to find, from 1 to 500.');
-  if(flags['max-credits']===undefined)throw new Error('Set --max-credits to the most credits this run may spend.');
+
   const {findCampaignProspects,parseCredits}=await import('./campaign-find.mjs');
   const config=configuration(flags.profile);
-  const report=await findCampaignProspects((operation,input)=>callWorkspace(operation,input,config),{workspaceId:flags.workspace,campaignId:position[2],count:Number(flags.count),maxCredits:parseCredits(flags['max-credits'])},{progress:step=>console.error(JSON.stringify(step))});
+  const report=await findCampaignProspects((operation,input)=>callWorkspace(operation,input,config),{workspaceId:flags.workspace,campaignId:position[2],count:Number(flags.count),maxCredits:flags['max-credits']===undefined?undefined:parseCredits(flags['max-credits'])},{progress:step=>console.error(JSON.stringify(step))});
   console.log(JSON.stringify({data:report}));return;
  }
  if(command==='check'){
   if(position.length!==3||!flags.url)throw new Error('Use campaign check ID --url LINKEDIN_URL [--request-id UUID] [--source-url URL [--source-kind website|register|other] --source-industry TEXT [--source-location TEXT] [--source-note TEXT]].');
-  const sourceFlags=['source-url','source-kind','source-industry','source-location','source-note'].filter(key=>flags[key]!==undefined);
-  const missing=[['source-url','--source-url URL'],['source-industry','--source-industry TEXT']].filter(([key])=>flags[key]===undefined).map(([,text])=>text);
-  if(sourceFlags.length&&missing.length)throw new Error(`A company source needs its web address and the industry it states. Add ${missing.join(' and ')}.`);
-  const companySource=sourceFlags.length?{kind:String(flags['source-kind']??'website').toLowerCase(),url:flags['source-url'],industry:flags['source-industry'],...(flags['source-location']!==undefined?{location:flags['source-location']}:{}),...(flags['source-note']!==undefined?{note:flags['source-note']}:{})}:undefined;
+  const sourceFlags=['source-url','source-kind','source-industry','source-location','source-note','source-company','source-size-start','source-size-end','source-observed-at'].filter(key=>flags[key]!==undefined);
+  const hasSize=flags['source-size-start']!==undefined||flags['source-size-end']!==undefined;
+  if(!hasSize&&(flags['source-company']!==undefined||flags['source-observed-at']!==undefined))throw new Error('Company identity and observation time require a stated employee range.');
+  const missing=[['source-url','--source-url URL'],...(hasSize?[['source-company','--source-company ID'],['source-size-start','--source-size-start N'],['source-size-end','--source-size-end N'],['source-observed-at','--source-observed-at ISO_TIME']]:[['source-industry','--source-industry TEXT']])].filter(([key])=>flags[key]===undefined).map(([,text])=>text);
+  if(sourceFlags.length&&missing.length)throw new Error(`A company source needs its web address and stated industry or bound size range with observation time. Add ${missing.join(' and ')}.`);
+  const companySource=sourceFlags.length?{kind:String(flags['source-kind']??'website').toLowerCase(),url:flags['source-url'],...(flags['source-industry']!==undefined?{industry:flags['source-industry']}:{}),...(hasSize?{companyProspectId:flags['source-company'],employeeCountRange:{start:Number(flags['source-size-start']),end:Number(flags['source-size-end'])},observedAt:flags['source-observed-at']}:{}),...(flags['source-location']!==undefined?{location:flags['source-location']}:{}),...(flags['source-note']!==undefined?{note:flags['source-note']}:{})}:undefined;
   const {randomUUID}=await import('node:crypto');
   console.log(JSON.stringify(await callWorkspace('campaign_prospect_check',{workspaceId:flags.workspace,campaignId:position[2],url:flags.url,requestId:flags['request-id']??randomUUID(),...(companySource?{companySource}:{})},configuration(flags.profile))));return;
  }
@@ -39,17 +47,18 @@ export async function campaignCli(args){
   console.log(JSON.stringify(await callWorkspace('campaign_targets_change',input,config)));return;
  }
  if(command==='use-audience'){
-  if(position.length!==3)throw new Error('Use campaign use-audience ID [--expected-revision N].');
+  if((flags.audience===undefined)!==(flags['audience-revision']===undefined))throw new Error('Use --audience and --audience-revision together.');
+  if(position.length!==3)throw new Error('Use campaign use-audience ID [--audience ID --audience-revision N] [--expected-revision N].');
   const config=configuration(flags.profile);
   const expectedRevision=flags['expected-revision']!==undefined?Number(flags['expected-revision']):(await callWorkspace('campaign_get',{workspaceId:flags.workspace,campaignId:position[2]},config)).data.campaign.currentRevision;
-  console.log(JSON.stringify(await callWorkspace('campaign_audience_use',{workspaceId:flags.workspace,campaignId:position[2],expectedRevision},config)));return;
+  console.log(JSON.stringify(await callWorkspace('campaign_audience_use',{workspaceId:flags.workspace,campaignId:position[2],expectedRevision,...(flags.audience?{audienceId:flags.audience,audienceRevision:Number(flags['audience-revision'])}:{})},config)));return;
  }
  if(command==='summary'){
   if(position.length!==2)throw new Error('Use campaign summary [--workspace ID].');
   console.log(JSON.stringify(await callWorkspace('campaign_summary',{workspaceId:flags.workspace},configuration(flags.profile))));return;
  }
  const name={list:'campaign_list',show:'campaign_get',create:'campaign_create',update:'campaign_update',transition:'campaign_transition',successor:'campaign_successor',events:'campaign_events',pace:flags['per-day']===undefined&&flags['max-credits']===undefined?'campaign_pace_get':'campaign_pace_set'}[command];
- if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|summary|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N --max-credits C|check ID --url URL|targets ID [--add|--remove|--set]|use-audience ID.');
+ if(!name||position.length!==(['list','create'].includes(command)?2:3))throw new Error('Use campaign list|summary|show ID|create|update ID|transition ID|successor ID|events ID|pace ID [--per-day N|derived] [--max-credits C|none]|find ID --count N [--max-credits C]|check ID --url URL|targets ID [--add|--remove|--set]|use-audience ID.');
  if(flags['per-day']!==undefined&&command!=='pace')throw new Error('Set the pace with campaign pace ID --per-day N|derived, after the campaign is saved.');
  const input={workspaceId:flags.workspace};
  if(position[2])input.campaignId=position[2];

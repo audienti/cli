@@ -5,10 +5,11 @@ import { readJsonFile } from './json-file.mjs';
 import { callWorkspace, configuration } from './workspaces.mjs';
 const help = `Usage:
   audienti call TOOL ['JSON_INPUT'] [--input FILE|-] [--request-id UUID] [--workspace UUID] [--json]
-  audienti tools search "WORDS" [--limit N] [--workspace UUID]   one server search over tools, audienti commands and skills; rows: id, kind, description, price
+  audienti tools search "WORDS" [--own-key] [--limit N] [--workspace UUID]   one server search over tools, audienti commands and skills; rows: id, kind, description, price
   audienti tools get TOOL [--workspace UUID]         one tool: inputs, price, availability, your 30-day success rate and speed
-  audienti tools list [--workspace UUID] [--json]    the whole catalog
+  audienti tools list [--own-key] [--workspace UUID] [--json]    the whole catalog
   audienti tools runs get UUID [--attempt-after ORDINAL] [--entry-after UUID] | list [--cursor UUID]
+  audienti tools models connections | list PROVIDER [--cursor OFFSET] | configure --input FILE|-
   audienti tools balance [--workspace UUID] [--json]   read-only balance; no credit or ledger changes
   audienti tools NAME --input FILE|- --request-id UUID [--workspace UUID] [--json]   same as call NAME; kept for existing scripts
   audienti tools proxy.sessions.close UUID [--workspace UUID]
@@ -67,7 +68,7 @@ export async function printPaid(name,args,values){
   throw error;
  }
 }
-const parseOptions={help:{type:'boolean',short:'h'},json:{type:'boolean'},input:{type:'string'},'request-id':{type:'string'},workspace:{type:'string'},profile:{type:'string'},cursor:{type:'string'},limit:{type:'string'},'attempt-after':{type:'string'},'entry-after':{type:'string'}};
+const parseOptions={'own-key':{type:'boolean'},help:{type:'boolean',short:'h'},json:{type:'boolean'},input:{type:'string'},'request-id':{type:'string'},workspace:{type:'string'},profile:{type:'string'},cursor:{type:'string'},limit:{type:'string'},'attempt-after':{type:'string'},'entry-after':{type:'string'}};
 /** audienti call TOOL ['JSON'] : one generic route for every catalog tool. */
 export async function callCli(argv) {
  const {positionals,values}=parseArgs({args:argv.slice(1),allowPositionals:true,strict:true,options:parseOptions});
@@ -85,7 +86,10 @@ export async function toolsCli(argv) {
  if(values.help||positionals.length===0){console.log(help);return;}
  const [verb,sub,id]=positionals;
  let name,args={workspaceId:values.workspace};
- if(verb==='list'&&positionals.length===1)name='tools_list';
+ if(verb==='models'&&sub==='connections')name='models_connections';
+ else if(verb==='models'&&sub==='list'){name='models_list';args.provider=id;if(values.cursor!==undefined)args.cursor=Number(values.cursor);}
+ else if(verb==='models'&&sub==='configure'){name='models_configure';if(!values.input)throw new Error('Use --input FILE|- for private connection settings.');args={...args,...(values.input==='-'?await readStdin():readJsonFile(values.input,32768,'Model settings'))};}
+ else if(verb==='list'&&positionals.length===1)name='tools_list';
  else if(verb==='search'&&positionals.length>=2){name='tools_search';args.query=positionals.slice(1).join(' ');if(values.limit!==undefined)args.limit=Number(values.limit);}
  else if((verb==='get'||verb==='describe')&&positionals.length===2){name='tools_get';args.tool=sub;}
  else if(verb==='balance'&&positionals.length===1)name='tools_balance';
@@ -96,5 +100,6 @@ export async function toolsCli(argv) {
   if(!values.input||!values['request-id'])throw new Error(`${verb} requires --input FILE|- and --request-id UUID. Keep the request ID for retries.`);
   name=paidToolByName[verb].name;args.requestId=values['request-id'];args.input=values.input==='-'?await readStdin():readJsonFile(values.input,32768,'Tool input');
  }else throw new Error('Unknown tools command. Use audienti tools --help.');
+ if(['tools_list','tools_search'].includes(name)&&values['own-key']!==undefined)args.ownKey=values['own-key'];
  await printPaid(name,args,values);
 }

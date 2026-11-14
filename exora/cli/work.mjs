@@ -1,6 +1,7 @@
 import { callWorkspace, configuration } from './workspaces.mjs';
 import { readJsonFile } from './json-file.mjs';
 const WORK_HELP = {
+ send: 'work send --file INPUT.json [--workspace ID] [--request-id UUID]  (human: create, approve and queue one message; all sending checks apply)',
  control: 'work control --prospect-id ID [--mode take_over|blocked|hand_back --request-id UUID] [--workspace ID]  (read marks, or a person changes control)',
  'plan save': 'work plan save --file INPUT.json [--workspace ID] [--request-id UUID]  (save the actions a campaign plan asks a person to approve)',
  list: 'work list [--workspace ID] [--order oldest|priority] [--queue review|blocked|activity] [--state STATE] [--review-status STATUS] [--search TEXT] [--limit N] [--cursor CURSOR]  (what Operator shows)',
@@ -27,7 +28,7 @@ export async function workCli(args) {
   if(!args[i].startsWith('--')){position.push(args[i]);continue;}
   const key=args[i].slice(2);if(!allowed.includes(key)||Object.hasOwn(flags,key)||args[i+1]===undefined||args[i+1].startsWith('--'))throw new Error('Unknown, repeated, or incomplete work option.');flags[key]=args[++i];
  }
- const names={'work control':flags.mode?'workspace_person_control_set':'workspace_person_control_get','work activity':'workspace_work_activity_list','work plan save':'workspace_work_action_plan_save','work list':'workspace_work_operator_list','work show':'workspace_work_operator_get','work approve':'workspace_work_action_approve','work withdraw-approval':'workspace_work_action_withdraw','work cancel':'workspace_work_action_cancel','work skip':'workspace_work_action_skip','work eligibility':'workspace_work_eligibility_get'};
+ const names={'work send':'workspace_message_send','work control':flags.mode?'workspace_person_control_set':'workspace_person_control_get','work activity':'workspace_work_activity_list','work plan save':'workspace_work_action_plan_save','work list':'workspace_work_operator_list','work show':'workspace_work_operator_get','work approve':'workspace_work_action_approve','work withdraw-approval':'workspace_work_action_withdraw','work cancel':'workspace_work_action_cancel','work skip':'workspace_work_action_skip','work eligibility':'workspace_work_eligibility_get'};
  const name=names[position.join(' ')];if(!name)throw new Error('Use work plan save, or work list, activity, show, approve, withdraw-approval, cancel, skip, or eligibility. Writes require --file INPUT.json.');
  const read=['workspace_person_control_get','workspace_work_activity_list','workspace_work_operator_list','workspace_work_operator_get','workspace_work_eligibility_get'].includes(name);
  const input=read||name==='workspace_person_control_set'?{}:readJsonFile(flags.file,65536,'Work input');
