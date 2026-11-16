@@ -68,6 +68,10 @@ export async function findCampaignProspects(call,{workspaceId,campaignId,count,m
  const {data:campaign}=await call('campaign_get',{workspaceId,campaignId});
  const fields=campaign.revision.fields;
  if(!['Draft','Preparing','Active'].includes(campaign.campaign.state))throw new Error('This campaign is not finding prospects. Pick a Draft, Preparing or Active campaign.');
+ // LinkedIn people search cannot filter by research or profile signals; those campaigns start from signals and use campaign check.
+ const hasNonTopicSignals=(fields.signals??[]).some(s=>s&&typeof s==='object'&&s.kind!=='topic');
+ const hasTargetCompanies=fields.targets?.kind==='companies'&&Array.isArray(fields.targets.values)&&fields.targets.values.length>0;
+ if(hasNonTopicSignals&&!hasTargetCompanies)throw new Error('This campaign finds prospects from research or profile signals, which LinkedIn people search cannot filter. Find companies or people showing the signal first, record the signal evidence (audienti prospects evidence create), then check matching people with audienti campaign check.');
  // Without a per-run limit, use existing credits within the owner's daily limit.
  let exhausted='credit_cap';
  if(maxCredits===undefined){
