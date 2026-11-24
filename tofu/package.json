@@ -1,6 +1,6 @@
 {
   "name": "@audienti/cli",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Official Audienti CLI (`audienti` / `tofu`) — agent & operator control plane for https://app.audienti.com.",
   "license": "MIT",
   "type": "commonjs",

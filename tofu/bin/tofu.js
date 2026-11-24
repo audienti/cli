@@ -26,7 +26,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/zod/v4/classic/external.js
+// app/node_modules/zod/v4/classic/external.js
 var external_exports = {};
 __export(external_exports, {
   $brand: () => $brand,
@@ -289,7 +289,7 @@ __export(external_exports, {
   xor: () => xor
 });
 
-// node_modules/zod/v4/core/index.js
+// app/node_modules/zod/v4/core/index.js
 var core_exports2 = {};
 __export(core_exports2, {
   $ZodAny: () => $ZodAny,
@@ -606,7 +606,7 @@ __export(core_exports2, {
   withParser: () => withParser
 });
 
-// node_modules/zod/v4/core/util.js
+// app/node_modules/zod/v4/core/util.js
 var util_exports = {};
 __export(util_exports, {
   BIGINT_FORMAT_RANGES: () => BIGINT_FORMAT_RANGES,
@@ -1462,7 +1462,7 @@ function constantCatch(value) {
   return fn;
 }
 
-// node_modules/zod/v4/core/core.js
+// app/node_modules/zod/v4/core/core.js
 var _a;
 var NEVER = /* @__PURE__ */ Object.freeze({
   status: "aborted"
@@ -1584,7 +1584,7 @@ function config(newConfig) {
   return globalConfig;
 }
 
-// node_modules/zod/v4/core/errors.js
+// app/node_modules/zod/v4/core/errors.js
 function _getMessage() {
   const internals = this._zod;
   internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
@@ -1776,7 +1776,7 @@ function prettifyError(error62) {
   return lines.join("\n");
 }
 
-// node_modules/zod/v4/core/parse.js
+// app/node_modules/zod/v4/core/parse.js
 function finalizeParams(callee, params) {
   return { callee: params?.callee ?? callee, Err: params?.Err };
 }
@@ -1936,7 +1936,7 @@ var _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
 };
 var safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync($ZodRealError);
 
-// node_modules/zod/v4/core/regexes.js
+// app/node_modules/zod/v4/core/regexes.js
 var regexes_exports = {};
 __export(regexes_exports, {
   anyString: () => anyString,
@@ -2108,7 +2108,7 @@ var sha512_hex = /^[0-9a-fA-F]{128}$/;
 var sha512_base64 = /* @__PURE__ */ fixedBase64(86, "==");
 var sha512_base64url = /* @__PURE__ */ fixedBase64url(86);
 
-// node_modules/zod/v4/core/checks.js
+// app/node_modules/zod/v4/core/checks.js
 var $ZodCheck = /* @__PURE__ */ $constructor("$ZodCheck", (inst, def) => {
   var _a3;
   inst._zod ?? (inst._zod = {});
@@ -2584,7 +2584,7 @@ var $ZodCheckOverwrite = /* @__PURE__ */ $constructor("$ZodCheckOverwrite", (ins
   };
 });
 
-// node_modules/zod/v4/core/doc.js
+// app/node_modules/zod/v4/core/doc.js
 var Doc = class {
   constructor(args = [], closed = {}) {
     this.content = [];
@@ -2625,14 +2625,14 @@ ${content.join("\n")}
   }
 };
 
-// node_modules/zod/v4/core/versions.js
+// app/node_modules/zod/v4/core/versions.js
 var version = {
   major: 4,
   minor: 6,
   patch: 7
 };
 
-// node_modules/zod/v4/core/schemas.js
+// app/node_modules/zod/v4/core/schemas.js
 var $ZodType = /* @__PURE__ */ $constructor("$ZodType", (inst, def) => {
   var _a3;
   inst ?? (inst = {});
@@ -5074,7 +5074,7 @@ function handleRefineResult(result, payload, input2, inst) {
   }
 }
 
-// node_modules/zod/v4/core/memoizer.js
+// app/node_modules/zod/v4/core/memoizer.js
 var $ZodCyclicError = class extends Error {
   constructor() {
     super(`Cannot parse a reference cycle that closes through a transform`);
@@ -5351,7 +5351,7 @@ function isBackEdge(ctx, value) {
   return backEdges !== void 0 && isRef(value) && backEdges.has(value);
 }
 
-// node_modules/zod/v4/locales/index.js
+// app/node_modules/zod/v4/locales/index.js
 var locales_exports = {};
 __export(locales_exports, {
   ar: () => ar_default,
@@ -5419,7 +5419,7 @@ __export(locales_exports, {
   zhTW: () => zh_TW_default
 });
 
-// node_modules/zod/v4/locales/ar.js
+// app/node_modules/zod/v4/locales/ar.js
 var error = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0641", verb: "\u0623\u0646 \u064A\u062D\u0648\u064A" },
@@ -5531,7 +5531,7 @@ function ar_default() {
   };
 }
 
-// node_modules/zod/v4/locales/az.js
+// app/node_modules/zod/v4/locales/az.js
 var error2 = () => {
   const Sizable = {
     string: { unit: "simvol", verb: "olmal\u0131d\u0131r" },
@@ -5642,7 +5642,7 @@ function az_default() {
   };
 }
 
-// node_modules/zod/v4/locales/be.js
+// app/node_modules/zod/v4/locales/be.js
 function getBelarusianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -5811,7 +5811,7 @@ function be_default() {
   };
 }
 
-// node_modules/zod/v4/locales/bg.js
+// app/node_modules/zod/v4/locales/bg.js
 var error4 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0430", verb: "\u0434\u0430 \u0441\u044A\u0434\u044A\u0440\u0436\u0430" },
@@ -5937,7 +5937,7 @@ function bg_default() {
   };
 }
 
-// node_modules/zod/v4/locales/bn.js
+// app/node_modules/zod/v4/locales/bn.js
 var error5 = () => {
   const Sizable = {
     string: { unit: "\u0985\u0995\u09CD\u09B7\u09B0", verb: "\u09A5\u09BE\u0995\u09A4\u09C7 \u09B9\u09AC\u09C7" },
@@ -6051,7 +6051,7 @@ function bn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ca.js
+// app/node_modules/zod/v4/locales/ca.js
 var error6 = () => {
   const Sizable = {
     string: { unit: "car\xE0cters", verb: "contenir" },
@@ -6165,7 +6165,7 @@ function ca_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ckb.js
+// app/node_modules/zod/v4/locales/ckb.js
 var error7 = () => {
   const Sizable = {
     string: { unit: "\u067E\u06CC\u062A", verb: "\u0628\u06CE\u062A" },
@@ -6298,7 +6298,7 @@ function ckb_default() {
   };
 }
 
-// node_modules/zod/v4/locales/cs.js
+// app/node_modules/zod/v4/locales/cs.js
 var error8 = () => {
   const Sizable = {
     string: { unit: "znak\u016F", verb: "m\xEDt" },
@@ -6415,7 +6415,7 @@ function cs_default() {
   };
 }
 
-// node_modules/zod/v4/locales/da.js
+// app/node_modules/zod/v4/locales/da.js
 var error9 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "havde" },
@@ -6536,7 +6536,7 @@ function da_default() {
   };
 }
 
-// node_modules/zod/v4/locales/de.js
+// app/node_modules/zod/v4/locales/de.js
 var error10 = () => {
   const Sizable = {
     string: { unit: "Zeichen", verb: "zu haben" },
@@ -6650,7 +6650,7 @@ function de_default() {
   };
 }
 
-// node_modules/zod/v4/locales/el.js
+// app/node_modules/zod/v4/locales/el.js
 var error11 = () => {
   const Sizable = {
     string: { unit: "\u03C7\u03B1\u03C1\u03B1\u03BA\u03C4\u03AE\u03C1\u03B5\u03C2", verb: "\u03BD\u03B1 \u03AD\u03C7\u03B5\u03B9" },
@@ -6763,7 +6763,7 @@ function el_default() {
   };
 }
 
-// node_modules/zod/v4/locales/en.js
+// app/node_modules/zod/v4/locales/en.js
 var error12 = () => {
   const Sizable = {
     string: { unit: "characters", verb: "to have" },
@@ -6888,7 +6888,7 @@ function en_default() {
   };
 }
 
-// node_modules/zod/v4/locales/eo.js
+// app/node_modules/zod/v4/locales/eo.js
 var error13 = () => {
   const Sizable = {
     string: { unit: "karaktrojn", verb: "havi" },
@@ -7003,7 +7003,7 @@ function eo_default() {
   };
 }
 
-// node_modules/zod/v4/locales/es.js
+// app/node_modules/zod/v4/locales/es.js
 var error14 = () => {
   const Sizable = {
     string: { unit: "caracteres", verb: "tener" },
@@ -7140,7 +7140,7 @@ function es_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fa.js
+// app/node_modules/zod/v4/locales/fa.js
 var error15 = () => {
   const Sizable = {
     string: { unit: "\u06A9\u0627\u0631\u0627\u06A9\u062A\u0631", verb: "\u062F\u0627\u0634\u062A\u0647 \u0628\u0627\u0634\u062F" },
@@ -7260,7 +7260,7 @@ function fa_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fi.js
+// app/node_modules/zod/v4/locales/fi.js
 var error16 = () => {
   const Sizable = {
     string: { unit: "merkki\xE4", subject: "merkkijonon" },
@@ -7378,7 +7378,7 @@ function fi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fr.js
+// app/node_modules/zod/v4/locales/fr.js
 var error17 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -7508,7 +7508,7 @@ function fr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/fr-CA.js
+// app/node_modules/zod/v4/locales/fr-CA.js
 var error18 = () => {
   const Sizable = {
     string: { unit: "caract\xE8res", verb: "avoir" },
@@ -7621,7 +7621,7 @@ function fr_CA_default() {
   };
 }
 
-// node_modules/zod/v4/locales/gu.js
+// app/node_modules/zod/v4/locales/gu.js
 var error19 = () => {
   const Sizable = {
     string: { unit: "\u0A85\u0A95\u0ACD\u0AB7\u0AB0", verb: "\u0AB9\u0ACB\u0AB5\u0ABE \u0A9C\u0ACB\u0A88\u0A8F" },
@@ -7735,7 +7735,7 @@ function gu_default() {
   };
 }
 
-// node_modules/zod/v4/locales/he.js
+// app/node_modules/zod/v4/locales/he.js
 var error20 = () => {
   const TypeNames = {
     string: { label: "\u05DE\u05D7\u05E8\u05D5\u05D6\u05EA", gender: "f" },
@@ -7937,7 +7937,7 @@ function he_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hi.js
+// app/node_modules/zod/v4/locales/hi.js
 var error21 = () => {
   const Sizable = {
     string: { unit: "\u0905\u0915\u094D\u0937\u0930", verb: "\u0930\u0916\u0928\u0947 \u0915\u0947 \u0932\u093F\u090F" },
@@ -8049,7 +8049,7 @@ function hi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hr.js
+// app/node_modules/zod/v4/locales/hr.js
 var error22 = () => {
   const Sizable = {
     string: { unit: "znakova", verb: "imati" },
@@ -8176,7 +8176,7 @@ function hr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hu.js
+// app/node_modules/zod/v4/locales/hu.js
 var error23 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "legyen" },
@@ -8290,7 +8290,7 @@ function hu_default() {
   };
 }
 
-// node_modules/zod/v4/locales/hy.js
+// app/node_modules/zod/v4/locales/hy.js
 function getArmenianPlural(count, one, many) {
   return Math.abs(count) === 1 ? one : many;
 }
@@ -8449,7 +8449,7 @@ function hy_default() {
   };
 }
 
-// node_modules/zod/v4/locales/id.js
+// app/node_modules/zod/v4/locales/id.js
 var error25 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "memiliki" },
@@ -8561,7 +8561,7 @@ function id_default() {
   };
 }
 
-// node_modules/zod/v4/locales/is.js
+// app/node_modules/zod/v4/locales/is.js
 var error26 = () => {
   const Sizable = {
     string: { unit: "stafi", verb: "a\xF0 hafa" },
@@ -8676,7 +8676,7 @@ function is_default() {
   };
 }
 
-// node_modules/zod/v4/locales/it.js
+// app/node_modules/zod/v4/locales/it.js
 var error27 = () => {
   const Sizable = {
     string: { unit: "caratteri", verb: "avere" },
@@ -8790,7 +8790,7 @@ function it_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ja.js
+// app/node_modules/zod/v4/locales/ja.js
 var error28 = () => {
   const Sizable = {
     string: { unit: "\u6587\u5B57", verb: "\u3067\u3042\u308B" },
@@ -8903,7 +8903,7 @@ function ja_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ka.js
+// app/node_modules/zod/v4/locales/ka.js
 var error29 = () => {
   const Sizable = {
     string: { unit: "\u10E1\u10D8\u10DB\u10D1\u10DD\u10DA\u10DD", verb: "\u10E3\u10DC\u10D3\u10D0 \u10E8\u10D4\u10D8\u10EA\u10D0\u10D5\u10D3\u10D4\u10E1" },
@@ -9021,7 +9021,7 @@ function ka_default() {
   };
 }
 
-// node_modules/zod/v4/locales/km.js
+// app/node_modules/zod/v4/locales/km.js
 var error30 = () => {
   const Sizable = {
     string: { unit: "\u178F\u17BD\u17A2\u1780\u17D2\u179F\u179A", verb: "\u1782\u17BD\u179A\u1798\u17B6\u1793" },
@@ -9137,12 +9137,12 @@ function km_default() {
   };
 }
 
-// node_modules/zod/v4/locales/kh.js
+// app/node_modules/zod/v4/locales/kh.js
 function kh_default() {
   return km_default();
 }
 
-// node_modules/zod/v4/locales/kn.js
+// app/node_modules/zod/v4/locales/kn.js
 var error31 = () => {
   const Sizable = {
     string: { unit: "\u0C85\u0C95\u0CCD\u0CB7\u0CB0\u0C97\u0CB3\u0CC1", verb: "\u0CB9\u0CCA\u0C82\u0CA6\u0CB2\u0CC1" },
@@ -9258,7 +9258,7 @@ function kn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ko.js
+// app/node_modules/zod/v4/locales/ko.js
 var error32 = () => {
   const Sizable = {
     string: { unit: "\uBB38\uC790", verb: "to have" },
@@ -9375,7 +9375,7 @@ function ko_default() {
   };
 }
 
-// node_modules/zod/v4/locales/lt.js
+// app/node_modules/zod/v4/locales/lt.js
 var capitalizeFirstCharacter = (text) => {
   return text.charAt(0).toUpperCase() + text.slice(1);
 };
@@ -9583,7 +9583,7 @@ function lt_default() {
   };
 }
 
-// node_modules/zod/v4/locales/mk.js
+// app/node_modules/zod/v4/locales/mk.js
 var error34 = () => {
   const Sizable = {
     string: { unit: "\u0437\u043D\u0430\u0446\u0438", verb: "\u0434\u0430 \u0438\u043C\u0430\u0430\u0442" },
@@ -9698,7 +9698,7 @@ function mk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ms.js
+// app/node_modules/zod/v4/locales/ms.js
 var error35 = () => {
   const Sizable = {
     string: { unit: "aksara", verb: "mempunyai" },
@@ -9811,7 +9811,7 @@ function ms_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ne.js
+// app/node_modules/zod/v4/locales/ne.js
 var error36 = () => {
   const Sizable = {
     string: { unit: "\u0905\u0915\u094D\u0937\u0930", verb: "\u0939\u0941\u0928\u0941\u092A\u0930\u094D\u091B" },
@@ -9923,7 +9923,7 @@ function ne_default() {
   };
 }
 
-// node_modules/zod/v4/locales/nl.js
+// app/node_modules/zod/v4/locales/nl.js
 var error37 = () => {
   const Sizable = {
     string: { unit: "tekens", verb: "heeft" },
@@ -10039,7 +10039,7 @@ function nl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/nn.js
+// app/node_modules/zod/v4/locales/nn.js
 var error38 = () => {
   const Sizable = {
     string: { unit: "teikn", verb: "\xE5 ha" },
@@ -10153,7 +10153,7 @@ function nn_default() {
   };
 }
 
-// node_modules/zod/v4/locales/no.js
+// app/node_modules/zod/v4/locales/no.js
 var error39 = () => {
   const Sizable = {
     string: { unit: "tegn", verb: "\xE5 ha" },
@@ -10267,7 +10267,7 @@ function no_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ota.js
+// app/node_modules/zod/v4/locales/ota.js
 var error40 = () => {
   const Sizable = {
     string: { unit: "harf", verb: "olmal\u0131d\u0131r" },
@@ -10382,7 +10382,7 @@ function ota_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ps.js
+// app/node_modules/zod/v4/locales/ps.js
 var error41 = () => {
   const Sizable = {
     string: { unit: "\u062A\u0648\u06A9\u064A", verb: "\u0648\u0644\u0631\u064A" },
@@ -10502,7 +10502,7 @@ function ps_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pl.js
+// app/node_modules/zod/v4/locales/pl.js
 var error42 = () => {
   const Sizable = {
     string: { unit: "znak\xF3w", verb: "mie\u0107" },
@@ -10617,7 +10617,7 @@ function pl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pt.js
+// app/node_modules/zod/v4/locales/pt.js
 var error43 = () => {
   const Sizable = {
     string: { unit: "caracteres" },
@@ -10761,7 +10761,7 @@ function pt_default() {
   };
 }
 
-// node_modules/zod/v4/locales/pt-BR.js
+// app/node_modules/zod/v4/locales/pt-BR.js
 var error44 = () => {
   const Sizable = {
     string: { unit: "caracteres" },
@@ -10906,7 +10906,7 @@ function pt_BR_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ro.js
+// app/node_modules/zod/v4/locales/ro.js
 var error45 = () => {
   const Sizable = {
     string: { unit: "caractere", verb: "s\u0103 aib\u0103" },
@@ -11029,7 +11029,7 @@ function ro_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ru.js
+// app/node_modules/zod/v4/locales/ru.js
 function getRussianPlural(count, one, few, many) {
   const absCount = Math.abs(count);
   const lastDigit = absCount % 10;
@@ -11198,7 +11198,7 @@ function ru_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sk.js
+// app/node_modules/zod/v4/locales/sk.js
 var error47 = () => {
   const Sizable = {
     string: { unit: "znakov", verb: "ma\u0165" },
@@ -11315,7 +11315,7 @@ function sk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sl.js
+// app/node_modules/zod/v4/locales/sl.js
 var error48 = () => {
   const Sizable = {
     string: { unit: "znakov", verb: "imeti" },
@@ -11430,7 +11430,7 @@ function sl_default() {
   };
 }
 
-// node_modules/zod/v4/locales/sv.js
+// app/node_modules/zod/v4/locales/sv.js
 var error49 = () => {
   const Sizable = {
     string: { unit: "tecken", verb: "att ha" },
@@ -11546,7 +11546,7 @@ function sv_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ta.js
+// app/node_modules/zod/v4/locales/ta.js
 var error50 = () => {
   const Sizable = {
     string: { unit: "\u0B8E\u0BB4\u0BC1\u0BA4\u0BCD\u0BA4\u0BC1\u0B95\u0BCD\u0B95\u0BB3\u0BCD", verb: "\u0B95\u0BCA\u0BA3\u0BCD\u0B9F\u0BBF\u0BB0\u0BC1\u0B95\u0BCD\u0B95 \u0BB5\u0BC7\u0BA3\u0BCD\u0B9F\u0BC1\u0BAE\u0BCD" },
@@ -11662,7 +11662,7 @@ function ta_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tg.js
+// app/node_modules/zod/v4/locales/tg.js
 var error51 = () => {
   const Sizable = {
     string: { unit: "\u0430\u043B\u043E\u043C\u0430\u0442", verb: "\u0434\u043E\u0448\u0442\u0430 \u0431\u043E\u0448\u0430\u0434" },
@@ -11779,7 +11779,7 @@ function tg_default() {
   };
 }
 
-// node_modules/zod/v4/locales/th.js
+// app/node_modules/zod/v4/locales/th.js
 var error52 = () => {
   const Sizable = {
     string: { unit: "\u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23", verb: "\u0E04\u0E27\u0E23\u0E21\u0E35" },
@@ -11895,7 +11895,7 @@ function th_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tk.js
+// app/node_modules/zod/v4/locales/tk.js
 var error53 = () => {
   const Sizable = {
     string: { unit: "simwol", verb: "bolmaly" },
@@ -12003,7 +12003,7 @@ function tk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/tr.js
+// app/node_modules/zod/v4/locales/tr.js
 var error54 = () => {
   const Sizable = {
     string: { unit: "karakter", verb: "olmal\u0131" },
@@ -12114,7 +12114,7 @@ function tr_default() {
   };
 }
 
-// node_modules/zod/v4/locales/uk.js
+// app/node_modules/zod/v4/locales/uk.js
 var error55 = () => {
   const Sizable = {
     string: { unit: "\u0441\u0438\u043C\u0432\u043E\u043B\u0456\u0432", verb: "\u043C\u0430\u0442\u0438\u043C\u0435" },
@@ -12228,12 +12228,12 @@ function uk_default() {
   };
 }
 
-// node_modules/zod/v4/locales/ua.js
+// app/node_modules/zod/v4/locales/ua.js
 function ua_default() {
   return uk_default();
 }
 
-// node_modules/zod/v4/locales/ur.js
+// app/node_modules/zod/v4/locales/ur.js
 var error56 = () => {
   const Sizable = {
     string: { unit: "\u062D\u0631\u0648\u0641", verb: "\u06C1\u0648\u0646\u0627" },
@@ -12349,7 +12349,7 @@ function ur_default() {
   };
 }
 
-// node_modules/zod/v4/locales/uz.js
+// app/node_modules/zod/v4/locales/uz.js
 var error57 = () => {
   const Sizable = {
     string: { unit: "belgi", verb: "bo\u2018lishi kerak" },
@@ -12463,7 +12463,7 @@ function uz_default() {
   };
 }
 
-// node_modules/zod/v4/locales/vi.js
+// app/node_modules/zod/v4/locales/vi.js
 var error58 = () => {
   const Sizable = {
     string: { unit: "k\xFD t\u1EF1", verb: "c\xF3" },
@@ -12577,7 +12577,7 @@ function vi_default() {
   };
 }
 
-// node_modules/zod/v4/locales/zh-CN.js
+// app/node_modules/zod/v4/locales/zh-CN.js
 var error59 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u7B26", verb: "\u5305\u542B" },
@@ -12692,7 +12692,7 @@ function zh_CN_default() {
   };
 }
 
-// node_modules/zod/v4/locales/zh-TW.js
+// app/node_modules/zod/v4/locales/zh-TW.js
 var error60 = () => {
   const Sizable = {
     string: { unit: "\u5B57\u5143", verb: "\u64C1\u6709" },
@@ -12805,7 +12805,7 @@ function zh_TW_default() {
   };
 }
 
-// node_modules/zod/v4/locales/yo.js
+// app/node_modules/zod/v4/locales/yo.js
 var error61 = () => {
   const Sizable = {
     string: { unit: "\xE0mi", verb: "n\xED" },
@@ -12918,7 +12918,7 @@ function yo_default() {
   };
 }
 
-// node_modules/zod/v4/core/registries.js
+// app/node_modules/zod/v4/core/registries.js
 var _a2;
 var $output = /* @__PURE__ */ Symbol("ZodOutput");
 var $input = /* @__PURE__ */ Symbol("ZodInput");
@@ -12968,7 +12968,7 @@ function registry() {
 (_a2 = globalThis).__zod_globalRegistry ?? (_a2.__zod_globalRegistry = registry());
 var globalRegistry = globalThis.__zod_globalRegistry;
 
-// node_modules/zod/v4/core/compile.js
+// app/node_modules/zod/v4/core/compile.js
 var INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
 var FALLBACK_FLAG = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
 var ZodCompileAsyncError = class extends Error {
@@ -14578,7 +14578,7 @@ function generateTransformCheck(doc, ctx, schema, accessor) {
   return accessor;
 }
 
-// node_modules/zod/v4/core/api.js
+// app/node_modules/zod/v4/core/api.js
 function snapshotChecks(def) {
   if (def.checks)
     def.checks = [...def.checks];
@@ -15637,7 +15637,7 @@ function _stringFormat(Class2, format, fnOrRegex, _params = {}) {
   return inst;
 }
 
-// node_modules/zod/v4/core/to-json-schema.js
+// app/node_modules/zod/v4/core/to-json-schema.js
 function assignProps(target, ...sources) {
   for (const source of sources) {
     for (const key of Reflect.ownKeys(source)) {
@@ -16167,7 +16167,7 @@ var createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) =
   return finalize(ctx, schema);
 };
 
-// node_modules/zod/v4/core/json-schema-processors.js
+// app/node_modules/zod/v4/core/json-schema-processors.js
 var narrowMin = (agg, key, value) => {
   if (agg[key] === void 0 || value > agg[key])
     agg[key] = value;
@@ -16915,7 +16915,7 @@ function toJSONSchema(input2, params) {
   return finalize(ctx, input2);
 }
 
-// node_modules/zod/v4/core/json-schema-generator.js
+// app/node_modules/zod/v4/core/json-schema-generator.js
 var JSONSchemaGenerator = class {
   /** @deprecated Access via ctx instead */
   get metadataRegistry() {
@@ -16993,10 +16993,10 @@ var JSONSchemaGenerator = class {
   }
 };
 
-// node_modules/zod/v4/core/json-schema.js
+// app/node_modules/zod/v4/core/json-schema.js
 var json_schema_exports = {};
 
-// node_modules/zod/v4/classic/schemas.js
+// app/node_modules/zod/v4/classic/schemas.js
 var schemas_exports2 = {};
 __export(schemas_exports2, {
   ZodAny: () => ZodAny,
@@ -17177,7 +17177,7 @@ __export(schemas_exports2, {
   xor: () => xor
 });
 
-// node_modules/zod/v4/classic/checks.js
+// app/node_modules/zod/v4/classic/checks.js
 var checks_exports2 = {};
 __export(checks_exports2, {
   endsWith: () => _endsWith,
@@ -17212,7 +17212,7 @@ __export(checks_exports2, {
   uppercase: () => _uppercase
 });
 
-// node_modules/zod/v4/classic/errors.js
+// app/node_modules/zod/v4/classic/errors.js
 var _installedErrorProtos = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
 function _lazyMethod(proto, key, make) {
   Object.defineProperty(proto, key, {
@@ -17258,7 +17258,7 @@ var ZodRealError = /* @__PURE__ */ $constructor("ZodError", initializer2, void 0
   Parent: Error
 });
 
-// node_modules/zod/v4/classic/parse.js
+// app/node_modules/zod/v4/classic/parse.js
 var parse2 = /* @__PURE__ */ _parse(ZodRealError);
 var parseAsync2 = /* @__PURE__ */ _parseAsync(ZodRealError);
 var safeParse2 = /* @__PURE__ */ _safeParse(ZodRealError);
@@ -17272,7 +17272,7 @@ var safeDecode2 = /* @__PURE__ */ _safeDecode(ZodRealError);
 var safeEncodeAsync2 = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 var safeDecodeAsync2 = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-// node_modules/zod/v4/classic/schemas.js
+// app/node_modules/zod/v4/classic/schemas.js
 function _ensureDefaultLocale() {
   if (!globalConfig.localeError)
     config(en_default());
@@ -18737,7 +18737,7 @@ function preprocess(fn, schema) {
   });
 }
 
-// node_modules/zod/v4/classic/compat.js
+// app/node_modules/zod/v4/classic/compat.js
 var ZodIssueCode = {
   invalid_type: "invalid_type",
   too_big: "too_big",
@@ -18763,7 +18763,7 @@ var ZodFirstPartyTypeKind;
 /* @__PURE__ */ (function(ZodFirstPartyTypeKind2) {
 })(ZodFirstPartyTypeKind || (ZodFirstPartyTypeKind = {}));
 
-// node_modules/zod/v4/classic/iso.js
+// app/node_modules/zod/v4/classic/iso.js
 var iso_exports = {};
 __export(iso_exports, {
   ZodISODate: () => ZodISODate,
@@ -18788,7 +18788,7 @@ function duration2(params) {
   return _isoDuration(ZodISODuration, params);
 }
 
-// node_modules/zod/v4/classic/from-json-schema.js
+// app/node_modules/zod/v4/classic/from-json-schema.js
 var z = {
   ...schemas_exports2,
   ...checks_exports2,
@@ -19521,7 +19521,7 @@ function fromJSONSchema(schema, params) {
   return convertSchema(normalized, ctx);
 }
 
-// node_modules/zod/v4/core/visit.js
+// app/node_modules/zod/v4/core/visit.js
 var RESOLVING = /* @__PURE__ */ Symbol("z.visit/resolving");
 function visit(schema, fnOrHandlers) {
   const fn = typeof fnOrHandlers === "function" ? fnOrHandlers : (node2, rewritten) => {
@@ -19676,7 +19676,7 @@ function visit(schema, fnOrHandlers) {
   return run(schema);
 }
 
-// node_modules/zod/v4/classic/deep-partial.js
+// app/node_modules/zod/v4/classic/deep-partial.js
 function deepPartial(schema) {
   return visit(schema, {
     object: (s) => s.partial(),
@@ -19688,7 +19688,7 @@ function deepPartial(schema) {
   });
 }
 
-// node_modules/zod/v4/classic/in-out.js
+// app/node_modules/zod/v4/classic/in-out.js
 function withChecks(side, checks) {
   if (!checks?.length)
     return side;
@@ -19718,7 +19718,7 @@ function output(schema) {
   });
 }
 
-// node_modules/zod/v4/classic/coerce.js
+// app/node_modules/zod/v4/classic/coerce.js
 var coerce_exports = {};
 __export(coerce_exports, {
   bigint: () => bigint3,
@@ -19743,7 +19743,7 @@ function date4(params) {
   return _coercedDate(ZodDate, params);
 }
 
-// src/foundation/validation/storable-string.ts
+// app/src/foundation/validation/storable-string.ts
 var UNSTORABLE_TEXT_REASON = "unstorable_text";
 function isStorableString(text) {
   return !text.includes("\0") && text.isWellFormed();
@@ -19755,7 +19755,7 @@ function storableString(base = external_exports.string()) {
   });
 }
 
-// src/surfaces/cli/args.ts
+// app/src/surfaces/cli/args.ts
 var GLOBAL_SWITCHES = ["help", "json", "version"];
 var GLOBAL_AND_COMMAND_SWITCHES = /* @__PURE__ */ new Set([
   ...GLOBAL_SWITCHES,
@@ -19875,7 +19875,7 @@ function jsonObjectFlag(args, key) {
   return parsed;
 }
 
-// src/surfaces/cli/config.ts
+// app/src/surfaces/cli/config.ts
 var import_node_fs = require("node:fs");
 var import_node_os = require("node:os");
 var import_node_path = __toESM(require("node:path"), 1);
@@ -19886,6 +19886,9 @@ function defaultAgentFile() {
 }
 function defaultPendingFile() {
   return import_node_path.default.join((0, import_node_os.homedir)(), ".audienti", "exo-pending.json");
+}
+function childProcessEnv(extra) {
+  return { ...process.env, ...extra };
 }
 function defaultWakeStateFile() {
   return import_node_path.default.join((0, import_node_os.homedir)(), ".audienti", "exo-peek-state.json");
@@ -19969,7 +19972,7 @@ function resolveConfig(args) {
   return { apiUrl, token, output: args.flags["json"] !== void 0 ? "json" : "table" };
 }
 
-// src/surfaces/cli/files.ts
+// app/src/surfaces/cli/files.ts
 var import_node_fs2 = require("node:fs");
 var import_node_path2 = __toESM(require("node:path"), 1);
 var MAX_JSON_FILE_BYTES = 1024 * 1024;
@@ -20021,7 +20024,7 @@ function readJsonObjectFile(flag, filePath) {
   return parsed;
 }
 
-// src/application/contracts/envelope.ts
+// app/src/application/contracts/envelope.ts
 var jsonObject = external_exports.record(external_exports.string(), external_exports.unknown());
 var okEnvelope = (data) => external_exports.object({ ok: external_exports.literal(true), data }).strict();
 var errorEnvelope = external_exports.object({
@@ -20042,10 +20045,11 @@ var errorEnvelope = external_exports.object({
   })
 }).strict();
 
-// src/domain/cli-version.ts
-var LATEST_CLI_VERSION = "0.3.2";
+// app/src/domain/cli-version.ts
+var LATEST_CLI_VERSION = "0.3.3";
+var LLMS_TXT_VERSION = "2026-11-24.2";
 
-// src/surfaces/cli/http-client.ts
+// app/src/surfaces/cli/http-client.ts
 var HUMAN_ONLY = "This command needs a person's token; a token bound to an agent cannot run it.";
 var responseEnvelope = external_exports.discriminatedUnion("ok", [okEnvelope(external_exports.json()), errorEnvelope]);
 var ApiTransportError = class extends Error {
@@ -20111,11 +20115,11 @@ async function apiRequest(config2, request) {
   return unwrapEnvelope(res);
 }
 
-// src/domain/tools/kinds.ts
+// app/src/domain/tools/kinds.ts
 var TOOL_CALL_STATUSES = ["running", "succeeded", "failed"];
 var TOOL_RUNS_ON = ["own_key", "credits"];
 
-// src/domain/queues/inbox-kinds.ts
+// app/src/domain/queues/inbox-kinds.ts
 var INBOX_KINDS = [
   "approval",
   "reply",
@@ -20129,7 +20133,97 @@ var INBOX_KINDS = [
 ];
 var INBOX_STATUSES = ["waiting", "answered", "dismissed"];
 
-// src/domain/queues/outbox-kinds.ts
+// app/src/domain/capabilities/catalog.ts
+var MINUTES = 60;
+var OPERATOR_LEASE = 60 * MINUTES;
+var both = ["email", "linkedin"];
+var linkedin = ["linkedin"];
+var email3 = ["email"];
+var web = ["web"];
+function read(providers, leaseUnitSeconds) {
+  return { access: "read", providers, leaseUnitSeconds };
+}
+function write(providers, leaseUnitSeconds) {
+  return { access: "write", providers, leaseUnitSeconds };
+}
+function send(providers, leaseUnitSeconds) {
+  return { access: "send", providers, leaseUnitSeconds };
+}
+function agent(id, reach, summary) {
+  const row = { id, actor: "agent", summary, ...reach };
+  return row;
+}
+function tool(row, vendor) {
+  const via = "audienti";
+  return { ...row, via, vendor };
+}
+function operator(id, summary) {
+  const row = { id, actor: "operator", providers: [], summary, leaseUnitSeconds: OPERATOR_LEASE };
+  return row;
+}
+var CAPABILITY_CATALOG = [
+  agent("people.search", read(both, 30), "Find people from audience filters or a question"),
+  agent("people.discover", read(both, 30), "Find look-alikes from a seed person or company"),
+  agent("person.profiles.discover", read(both, 30), "Expand one person into their other profiles"),
+  agent("companies.search", read(linkedin, 30), "Find companies from filters"),
+  agent("company.enrich", read(linkedin, 30), "Fill size, industry, location, site"),
+  agent("company.posts.list", read(linkedin, 30), "What a company page has posted"),
+  agent("profile.read", read(linkedin, 30), "Fetch one profile by URL or handle"),
+  agent("profile.enrich", read(both, 30), "Fill title, company, location, history from one handle"),
+  agent("profile.find", read(email3, 30), "Find a person's handle on this provider"),
+  agent("profile.verify", read(email3, 30), "Check the handle is live and deliverable"),
+  tool(agent("prospect.enrich", read(both, 30), "Fill in a person's headline, location, title and jobs"), "prospeo"),
+  tool(agent("email.verify", read(email3, 30), "Check an email address can receive mail"), "zerobounce"),
+  tool(agent("email.find", read(both, 30), "Find a person's work email"), "prospeo"),
+  tool(agent("mobile.find", read(both, 30), "Find a person's mobile number"), "prospeo"),
+  agent("profile.posts.list", read(linkedin, 30), "What this profile has posted"),
+  agent("profile.comments.list", read(linkedin, 30), "Comments this profile wrote on others' posts"),
+  agent("profile.reactions.list", read(linkedin, 30), "Reactions this profile gave"),
+  agent("profile.message.send", send(both, 5 * MINUTES), "Send an approved message"),
+  agent("profile.inbox.read", read(both, 60), "Watch the user's inbox for replies"),
+  agent("profile.message.draft", write(both, 5 * MINUTES), "Write a message for the user to approve before it goes"),
+  agent("profile.reply.classify", read(both, 60), "Sort a reply by what the person said"),
+  agent(
+    "profile.invitations.read",
+    read(linkedin, 60),
+    "Read the user's sent invitations, to see which were accepted or closed"
+  ),
+  agent("profile.invitations.received", read(linkedin, 60), "Read the invitations people sent to the user"),
+  agent("profile.inmail.send", send(linkedin, 5 * MINUTES), "Send an approved InMail"),
+  agent("profile.connection.request", send(linkedin, 5 * MINUTES), "Send an approved connection request"),
+  agent("profile.connection.accept", send(linkedin, 2 * MINUTES), "Accept a received connection request"),
+  agent("profile.connection.withdraw", send(linkedin, 2 * MINUTES), "Withdraw a pending request"),
+  agent("profile.follow", send(linkedin, 2 * MINUTES), "Follow a person or company"),
+  agent("profile.unfollow", send(linkedin, 2 * MINUTES), "Unfollow"),
+  agent("profile.visit", read(linkedin, 2 * MINUTES), "Visit a profile as a person would"),
+  agent("profile.views.read", read(linkedin, 60), "Read who viewed the user's profile"),
+  agent("topic.track", read(linkedin, 30), "Track a topic for signals"),
+  agent("posts.search", read(linkedin, 30), "Find posts about a topic"),
+  tool(agent("location.find", read(linkedin, 15), "Find a LinkedIn location"), "harvest"),
+  agent("post.read", read(linkedin, 30), "Fetch one post with its type"),
+  agent("post.comments.list", read(linkedin, 30), "Who commented, and what they said"),
+  agent("post.reactions.list", read(linkedin, 30), "Who reacted"),
+  agent("post.comment", send(linkedin, 5 * MINUTES), "Comment as the user"),
+  agent("post.react", send(linkedin, 2 * MINUTES), "React as the user"),
+  agent("post.publish", send(linkedin, 10 * MINUTES), "Publish a post as the user"),
+  tool(agent("web.search", read(web, 15), "Search the web"), "serper"),
+  agent("web.page.read", read(web, 30), "Read one page"),
+  agent("provider.call", read(web, 20), "Call a provider tool"),
+  agent("owner.notify", send(email3, 60), "Reach the user on their own channel"),
+  agent(
+    "handtask.prepare",
+    write(both, 10 * MINUTES),
+    "Prepare a step a person does by hand: script, note text, outline, gift choice"
+  ),
+  operator("action.approve", "Approve a prepared action, as is or edited"),
+  operator("action.reject", "Reject a prepared action"),
+  operator("question.answer", "Answer a question from an agent or a playbook"),
+  operator("account.reconnect", "Sign a connected account back in"),
+  operator("agent.check", "Look at an agent that stopped answering"),
+  operator("capability.cover", "Connect an agent that covers a capability nobody covers")
+];
+
+// app/src/domain/queues/outbox-kinds.ts
 var OUTBOX_KINDS = [
   "research_prospect",
   "draft_outreach",
@@ -20146,8 +20240,13 @@ var DEFAULT_FAILURE_POLICY = {
   deadlineMs: 24 * 60 * 60 * 1e3
 };
 var DEFAULT_LEASE_UNIT_MS = 5 * 60 * 1e3;
+var OUTREACH_CAPABILITIES = /* @__PURE__ */ new Set([
+  "profile.message.draft",
+  "skill.prospect-writing",
+  ...CAPABILITY_CATALOG.filter((entry) => entry.actor === "agent" && entry.access === "send").map((entry) => entry.id)
+]);
 
-// src/surfaces/cli/enum-flags.ts
+// app/src/surfaces/cli/enum-flags.ts
 var PLAYBOOK_STATUS_SET = { draft: true, active: true, archived: true };
 var CAMPAIGN_STATUS_SET = {
   draft: true,
@@ -20216,7 +20315,7 @@ var SIGNAL_KIND_FLAGS = Object.keys(SIGNAL_KIND_SET);
 var SIGNAL_QUALIFICATION_STATUS_FLAGS = Object.keys(SIGNAL_QUALIFICATION_STATUS_SET);
 var PUBLIC_INBOX_KINDS = INBOX_KINDS.filter((kind) => !RUNNER_ONLY_INBOX_KINDS.has(kind));
 
-// src/surfaces/cli/output.ts
+// app/src/surfaces/cli/output.ts
 var TOKEN_SOURCE = [
   "Use a variable scoped to this one invocation, filled from the PARA encrypted store through Meta/bin/secrets get:",
   'EXO_API_TOKEN="$(../../para/Meta/bin/secrets get ../../para/Meta/exo.env.enc EXO_API_TOKEN)" ./bin/exo <command>,',
@@ -20232,7 +20331,7 @@ var HELP_TEXT = [
   `  (token: ${TOKEN_SOURCE})`,
   "  tofu status [--api-url <url>] [--json]",
   "  tofu connect --name <name> [--capabilities <list>] [--no-workspace-changes] [--no-wait] [--poll] [--json]",
-  "  tofu wake --cmd <shell-cmd> [--work-start 8] [--work-end 19] [--heartbeat] [--force] [--json]",
+  "  tofu wake [--cmd <shell-cmd>] [--webhook-url <url> [--webhook-secret-file <path>]] [--work-start 08:00] [--work-end 19:45] [--include-weekends] [--heartbeat] [--force] [--json]",
   "  tofu config set-api-url <url>   (saves the base URL only; tokens are never saved)",
   "  tofu whoami [--json]",
   "  tofu workspaces list [--json]",
@@ -20248,6 +20347,7 @@ var HELP_TEXT = [
   "  exo outbox list [--status <queued|claimed|completed|failed|cancelled>] [--json]",
   "  exo outbox enqueue --kind <kind> --title <title> [--capability <cap>] [--agent <id>] [--dedupe-key <key>] [--payload <json>] [--json]",
   "  exo outbox claim [--agent <agent-id>] [--json]",
+  "  exo outbox validate <outbox-id> --result <json> [--json]   (dry-run check without dropping your claim)",
   "  exo outbox complete <outbox-id> [--agent <agent-id>] --attempt <n> [--result <json>] [--json]",
   "  exo outbox fail <outbox-id> [--agent <agent-id>] --attempt <n> --class <rate_limited|transient|permanent> --message <text> [--retry-after <ms>] [--json]",
   "  exo outbox heartbeat <outbox-id> [--agent <agent-id>] --attempt <n> [--json]   (extends the lease)",
@@ -20270,6 +20370,7 @@ var HELP_TEXT = [
   "  tofu campaign status <campaign-id> [--json]",
   `  tofu campaign edit <campaign-id> [--name <name>] [--offer <offer>] [--automation <mode>] [--json]   ${PERSON}`,
   `  tofu campaign audience <campaign-id> <audience-id-or-name> [--json]   ${PERSON}`,
+  "  tofu campaign prepare <campaign-id> [--json]   (agents may prepare finding_only campaigns)",
   `  exo campaign start|pause|resume|complete|archive <campaign-id> [--json]   ${PERSON}`,
   "  exo campaign enroll <campaign-id> --participants <participants.json> [--json]",
   `  exo participation list --campaign <campaign-id> [--state <${PARTICIPATION_STATE_FILTERS.join("|")}>] [--json]`,
@@ -20323,12 +20424,30 @@ function printHelp() {
 }
 var figureCount = external_exports.number().int().nonnegative();
 var campaignStatusOutput = external_exports.object({
+  campaign: external_exports.object({
+    name: storableString(),
+    status: storableString(),
+    automationMode: storableString()
+  }).optional(),
   summary: storableString(),
   readiness: external_exports.array(external_exports.object({
     label: storableString(),
     ready: external_exports.boolean(),
     help: storableString().exactOptional()
   })),
+  audience: external_exports.object({
+    name: storableString(),
+    revision: external_exports.number().int(),
+    approximateSize: external_exports.number().int().nullable()
+  }).nullable().optional(),
+  signals: external_exports.object({
+    total: figureCount,
+    active: figureCount
+  }).optional(),
+  discovery: external_exports.object({
+    schedule: storableString(),
+    running: external_exports.boolean()
+  }).optional(),
   figures: external_exports.object({
     people: figureCount,
     engaged: figureCount.nullable(),
@@ -20341,8 +20460,20 @@ var campaignStatusOutput = external_exports.object({
 function printCampaignStatus(data) {
   const parsed = campaignStatusOutput.safeParse(data);
   if (!parsed.success) throw new UsageError("The API returned an invalid campaign status.");
-  const { summary, readiness, figures, stages, activity } = parsed.data;
+  const { campaign, summary, readiness, audience, signals, discovery, figures, stages, activity } = parsed.data;
+  if (campaign) console.log(`${campaign.name} (${campaign.status} \xB7 ${campaign.automationMode})`);
   console.log(summary);
+  if (audience) {
+    const reach = audience.approximateSize === null ? "unsized" : `${audience.approximateSize.toLocaleString()} reach`;
+    console.log(`Audience: ${audience.name} rev ${audience.revision} (${reach})`);
+  }
+  if (signals || discovery) {
+    const parts = [
+      signals ? `Signals ${signals.active}/${signals.total} active` : null,
+      discovery ? `Discovery ${discovery.running ? "running" : discovery.schedule}` : null
+    ].filter(Boolean);
+    if (parts.length > 0) console.log(parts.join(" \xB7 "));
+  }
   for (const { label, ready, help } of readiness) {
     const mark = ready ? "Ready" : "Missing";
     const detail = !ready && help ? `. ${help}` : "";
@@ -20376,7 +20507,7 @@ function printOutput(data, format) {
   console.log(JSON.stringify(data, null, 2));
 }
 
-// src/surfaces/cli/shapes.ts
+// app/src/surfaces/cli/shapes.ts
 var SHAPES = {
   status: { maxPositionals: 1 },
   connect: {
@@ -20385,7 +20516,7 @@ var SHAPES = {
     maxPositionals: 1
   },
   wake: {
-    values: ["cmd", "work-start", "work-end", "state-file", "agent"],
+    values: ["cmd", "webhook-url", "webhook-secret-file", "work-start", "work-end", "state-file", "agent"],
     switches: ["heartbeat", "force", "include-weekends"],
     maxPositionals: 1
   },
@@ -20398,6 +20529,7 @@ var SHAPES = {
   "outbox list": { values: ["status"], maxPositionals: 2 },
   "outbox enqueue": { values: ["kind", "title", "capability", "agent", "dedupe-key", "payload"], maxPositionals: 2 },
   "outbox claim": { values: ["agent"], maxPositionals: 2 },
+  "outbox validate": { values: ["result"], maxPositionals: 3 },
   "outbox complete": { values: ["agent", "attempt", "result"], maxPositionals: 3 },
   "outbox fail": { values: ["agent", "attempt", "class", "message", "retry-after"], maxPositionals: 3 },
   "outbox heartbeat": { values: ["agent", "attempt"], maxPositionals: 3 },
@@ -20529,7 +20661,7 @@ function missingPositional(positionals) {
   return `Missing ${placeholder}: exo ${selected.name} ${placeholder}`;
 }
 
-// src/surfaces/cli/commands/agents.ts
+// app/src/surfaces/cli/commands/agents.ts
 function capabilitiesFrom(args) {
   const filePath = flagText(args, "capabilities-file");
   const listed = flagText(args, "capabilities");
@@ -20577,7 +20709,7 @@ async function runAgentsCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/audiences.ts
+// app/src/surfaces/cli/commands/audiences.ts
 var audiencePath = (id) => `/api/v1/audiences/${encodeURIComponent(id)}`;
 async function currentRevision(config2, id) {
   const detail = await apiRequest(config2, { pathname: audiencePath(id) });
@@ -20634,7 +20766,7 @@ async function runAudiencesCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/engagement.ts
+// app/src/surfaces/cli/commands/engagement.ts
 async function runConversations(args, config2, [action, arg1]) {
   if (action === void 0 || action === "list") {
     assertFlags(args, "conversations list", COMMAND_SHAPES["conversations list"]);
@@ -20684,7 +20816,7 @@ async function runEngagementCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/governance.ts
+// app/src/surfaces/cli/commands/governance.ts
 var SUPPRESSION_SCOPE_SET = /* @__PURE__ */ new Set(["person", "company", "domain"]);
 function checkScope(raw) {
   if (!SUPPRESSION_SCOPE_SET.has(raw)) {
@@ -20756,7 +20888,7 @@ async function runGovernanceCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/domain/tools/cause-text.ts
+// app/src/domain/tools/cause-text.ts
 var CAUSE_TEXT = /* @__PURE__ */ new Map([
   ["no_match", "No results found"],
   ["own_key", "Your own key did not get an answer from the vendor"],
@@ -20768,7 +20900,7 @@ function causeText(cause) {
   return CAUSE_TEXT.get(cause) ?? "The call did not finish";
 }
 
-// src/surfaces/cli/call-line.ts
+// app/src/surfaces/cli/call-line.ts
 var EXAMPLE = `tofu call audienti.web.search '{"query":"best crm for small agencies"}'`;
 function callRequestBody(positionals) {
   const [, toolId, raw] = positionals;
@@ -20802,7 +20934,7 @@ function callOutcomeLine(call) {
   return found(call) ? `${head} answered` : `${head} nothing found`;
 }
 
-// src/surfaces/cli/commands/call.ts
+// app/src/surfaces/cli/commands/call.ts
 async function runCallCommand(args, config2, [group]) {
   if (group !== "call") return false;
   assertFlags(args, "call", COMMAND_SHAPES.call);
@@ -20814,7 +20946,7 @@ async function runCallCommand(args, config2, [group]) {
   return true;
 }
 
-// src/surfaces/cli/commands/campaign.ts
+// app/src/surfaces/cli/commands/campaign.ts
 var LIFECYCLE_ACTIONS = ["prepare", "start", "pause", "resume", "complete", "archive"];
 var audienceIdentities = external_exports.object({ rows: external_exports.array(external_exports.object({ id: storableString(), name: storableString() })) });
 var audienceUuid = external_exports.uuid();
@@ -20955,7 +21087,7 @@ async function runCampaignCommand(args, config2, [group, action, arg1]) {
   return arg1 ? runOnCampaign(args, config2, [action, arg1]) : false;
 }
 
-// src/surfaces/cli/commands/connect.ts
+// app/src/surfaces/cli/commands/connect.ts
 var import_node_fs3 = require("node:fs");
 var import_node_path3 = __toESM(require("node:path"), 1);
 var import_promises = require("node:timers/promises");
@@ -21068,7 +21200,7 @@ async function runConnectCommand(args, config2, [group]) {
   return true;
 }
 
-// src/domain/queues/inbox-decisions.ts
+// app/src/domain/queues/inbox-decisions.ts
 var OPERATOR_ACTIONS = [
   "action.approve",
   "action.reject",
@@ -21079,7 +21211,7 @@ var OPERATOR_ACTIONS = [
 ];
 var INBOX_DECISIONS = [...OPERATOR_ACTIONS, "dismiss"];
 
-// src/surfaces/cli/commands/inbox.ts
+// app/src/surfaces/cli/commands/inbox.ts
 function createBody2(args) {
   const consequence = flagText(args, "consequence");
   const createdByAgentId = flagText(args, "agent");
@@ -21135,7 +21267,7 @@ async function runInboxCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/offers.ts
+// app/src/surfaces/cli/commands/offers.ts
 var offerPath = (id) => `/api/v1/offers/${encodeURIComponent(id)}`;
 function buildOfferBody(args, requireName) {
   const name = requireName ? nonEmptyFlag(args, "name") : flagText(args, "name") === void 0 ? void 0 : nonEmptyFlag(args, "name");
@@ -21204,7 +21336,7 @@ async function runOffersCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/outbox.ts
+// app/src/surfaces/cli/commands/outbox.ts
 function actingAgent(args) {
   const agentId = flagText(args, "agent");
   return agentId === void 0 ? {} : { agentId };
@@ -21290,6 +21422,15 @@ async function runOutboxCommand(args, config2, [group, action, arg1]) {
     printOutput(data, config2.output);
     return true;
   }
+  if (action === "validate" && arg1) {
+    assertFlags(args, "outbox validate", COMMAND_SHAPES["outbox validate"]);
+    const pathname = `/api/v1/outbox/${encodeURIComponent(arg1)}/validate`;
+    const body = { result: jsonObjectFlag(args, "result") };
+    const data = await apiRequest(config2, { method: "POST", pathname, body });
+    printOutput(data, config2.output);
+    if (typeof data === "object" && data !== null && Reflect.get(data, "valid") === false) process.exitCode = 1;
+    return true;
+  }
   if ((action === "complete" || action === "fail" || action === "heartbeat") && arg1) {
     printOutput(await report(args, config2, { action, outboxId: arg1 }), config2.output);
     return true;
@@ -21301,7 +21442,7 @@ async function runOutboxCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/participation.ts
+// app/src/surfaces/cli/commands/participation.ts
 async function postToParticipation(config2, participationId, step) {
   const [segment, body] = step;
   const pathname = `/api/v1/participations/${encodeURIComponent(participationId)}/${segment}`;
@@ -21337,7 +21478,7 @@ async function runParticipationCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/playbook.ts
+// app/src/surfaces/cli/commands/playbook.ts
 function versionQuery(args) {
   const version2 = optionalIntegerFlag(args, "version", { min: 1 });
   return version2 === void 0 ? "" : `?version=${String(version2)}`;
@@ -21379,7 +21520,7 @@ async function runPlaybookCommand(args, config2, [group, action, arg1]) {
   return arg1 ? runOnPlaybook(args, config2, [action, arg1]) : false;
 }
 
-// src/surfaces/cli/commands/platform.ts
+// app/src/surfaces/cli/commands/platform.ts
 var ACCESS_VALUES = ["read", "write", "send"];
 function parsePositiveInt(args, name) {
   const raw = nonEmptyFlag(args, name);
@@ -21448,7 +21589,7 @@ async function runPlatformCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/prospects.ts
+// app/src/surfaces/cli/commands/prospects.ts
 var import_node_path4 = __toESM(require("node:path"), 1);
 function queryString(entries) {
   const params = new URLSearchParams();
@@ -21507,7 +21648,7 @@ async function runProspectsCommand(args, config2, [group, action, arg1]) {
   return arg1 ? runOnProspect(args, config2, [action, arg1]) : false;
 }
 
-// src/surfaces/cli/commands/signals.ts
+// app/src/surfaces/cli/commands/signals.ts
 var campaignPath = (id) => `/api/v1/campaigns/${encodeURIComponent(id)}`;
 async function runSignalsCommand(args, config2, [group, action, arg1]) {
   if (group !== "signals" || !arg1) return false;
@@ -21556,7 +21697,7 @@ async function runSignalsCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/skills.ts
+// app/src/surfaces/cli/commands/skills.ts
 var UnknownSkillError = class extends Error {
   name = "UnknownSkillError";
 };
@@ -21588,7 +21729,7 @@ async function runSkillsCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/tool-calls.ts
+// app/src/surfaces/cli/commands/tool-calls.ts
 function listQuery(args) {
   const params = new URLSearchParams();
   const status = optionalEnumFlag(args, "status", TOOL_CALL_STATUSES);
@@ -21614,7 +21755,7 @@ async function runToolCallsCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/tools.ts
+// app/src/surfaces/cli/commands/tools.ts
 async function runToolsCommand(args, config2, [group, action]) {
   if (group !== "tools") return false;
   if (action === void 0 || action === "list") {
@@ -21636,7 +21777,7 @@ async function runToolsCommand(args, config2, [group, action]) {
   return true;
 }
 
-// src/surfaces/cli/commands/identity.ts
+// app/src/surfaces/cli/commands/identity.ts
 async function runIdentityCommand(args, config2, [group, action, arg1]) {
   if (group === "auth") {
     throw new UsageError(`The CLI never stores a token. ${TOKEN_SOURCE}`);
@@ -21652,7 +21793,16 @@ async function runIdentityCommand(args, config2, [group, action, arg1]) {
     assertFlags(args, "status", COMMAND_SHAPES.status);
     const health = await apiRequest(config2, { pathname: "/api/v1/health", auth: false });
     const whoami = config2.token ? await apiRequest(config2, { pathname: "/api/v1/whoami" }) : null;
-    printOutput({ health, authenticated: Boolean(whoami), context: whoami }, config2.output);
+    printOutput(
+      {
+        cliVersion: LATEST_CLI_VERSION,
+        docsVersion: LLMS_TXT_VERSION,
+        health,
+        authenticated: Boolean(whoami),
+        context: whoami
+      },
+      config2.output
+    );
     return true;
   }
   if (group === "whoami") {
@@ -21663,7 +21813,7 @@ async function runIdentityCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
-// src/surfaces/cli/commands/wake.ts
+// app/src/surfaces/cli/commands/wake.ts
 var import_node_child_process = require("node:child_process");
 var import_node_fs4 = require("node:fs");
 var import_node_path5 = __toESM(require("node:path"), 1);
@@ -21672,6 +21822,7 @@ var OFF_HOURS_BACKOFF_MINUTES = [1, 2, 4, 16, 60];
 var DEFAULT_WORK_START_MINUTES = 8 * 60;
 var DEFAULT_WORK_END_MINUTES = 19 * 60;
 var TIME_PATTERN = /^(\d{1,2})(?::(\d{2}))?$/u;
+var WEBHOOK_TIMEOUT_MS = 15e3;
 function parseTimeOfDayMinutes(raw, fallback, name) {
   if (raw === void 0) return fallback;
   const match = TIME_PATTERN.exec(raw.trim());
@@ -21693,6 +21844,36 @@ function nextWakeDelayMinutes(input2) {
   const delayMinutes = steps[step] ?? steps[steps.length - 1];
   return { step, delayMinutes };
 }
+function peekItemEnv(peek) {
+  const parsed = parsePeek(peek);
+  if (!parsed.nextItem) return { AUDIENTI_WORK_COUNT: String(parsed.queuedCount) };
+  return {
+    AUDIENTI_WORK_COUNT: String(parsed.queuedCount),
+    AUDIENTI_ITEM_ID: parsed.nextItem.id,
+    AUDIENTI_ITEM_KIND: parsed.nextItem.kind,
+    AUDIENTI_ITEM_TITLE: parsed.nextItem.title,
+    AUDIENTI_ITEM_CAPABILITY: parsed.nextItem.requiredCapability,
+    AUDIENTI_ITEM_TOUCHES_PEOPLE: parsed.nextItem.touchesPeople ? "true" : "false"
+  };
+}
+function parsePeek(raw) {
+  if (!isRecord(raw)) return { hasWork: false, queuedCount: 0, nextItem: null };
+  const hasWork = raw["hasWork"] === true;
+  const queuedCount = typeof raw["queuedCount"] === "number" ? raw["queuedCount"] : hasWork ? 1 : 0;
+  const item = raw["nextItem"];
+  if (!isRecord(item) || typeof item["id"] !== "string") return { hasWork, queuedCount, nextItem: null };
+  return {
+    hasWork,
+    queuedCount,
+    nextItem: {
+      id: item["id"],
+      kind: typeof item["kind"] === "string" ? item["kind"] : "",
+      title: typeof item["title"] === "string" ? item["title"] : "",
+      requiredCapability: typeof item["requiredCapability"] === "string" ? item["requiredCapability"] : "",
+      touchesPeople: item["touchesPeople"] === true
+    }
+  };
+}
 function readWakeState(stateFile) {
   if (!(0, import_node_fs4.existsSync)(stateFile)) return { step: -1, nextAt: 0 };
   let parsed;
@@ -21705,17 +21886,100 @@ function readWakeState(stateFile) {
   if (!isRecord(parsed)) return { step: -1, nextAt: 0 };
   const step = typeof parsed["step"] === "number" && Number.isInteger(parsed["step"]) ? parsed["step"] : -1;
   const nextAt = typeof parsed["nextAt"] === "number" && Number.isFinite(parsed["nextAt"]) ? parsed["nextAt"] : 0;
-  return { step, nextAt };
+  const lastFailed = parsed["lastFailed"] === true;
+  return lastFailed ? { step, nextAt, lastFailed: true } : { step, nextAt };
 }
 function writeWakeState(stateFile, state) {
   (0, import_node_fs4.mkdirSync)(import_node_path5.default.dirname(stateFile), { recursive: true, mode: 448 });
   (0, import_node_fs4.writeFileSync)(stateFile, `${JSON.stringify(state)}
 `, { mode: 384 });
 }
-function runCommandShell(command) {
-  const result = (0, import_node_child_process.spawnSync)("sh", ["-c", command], { stdio: "inherit" });
+function runCommandShell(command, env) {
+  const result = (0, import_node_child_process.spawnSync)("sh", ["-c", command], { stdio: "inherit", env: childProcessEnv(env) });
   if (result.error) throw result.error;
   return result.status ?? 0;
+}
+function readWebhookConfig(args) {
+  const url2 = flagText(args, "webhook-url");
+  const secretFile = flagText(args, "webhook-secret-file");
+  if (!url2) {
+    if (secretFile) throw new UsageError("--webhook-secret-file requires --webhook-url.");
+    return null;
+  }
+  if (!/^https?:\/\/.+/u.test(url2)) throw new UsageError("--webhook-url must be an http:// or https:// URL.");
+  if (!secretFile) return { url: url2, secret: null };
+  let secret;
+  try {
+    secret = (0, import_node_fs4.readFileSync)(secretFile, "utf8").trim();
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new UsageError(`Cannot read --webhook-secret-file ${secretFile}: ${message}`, { cause });
+  }
+  if (!secret) throw new UsageError(`--webhook-secret-file ${secretFile} is empty.`);
+  return { url: url2, secret };
+}
+async function postWakeWebhook(webhook, payload) {
+  const headers = {
+    "Content-Type": "application/json",
+    "User-Agent": `audienti-cli/${LATEST_CLI_VERSION}`
+  };
+  if (webhook.secret) {
+    headers["Authorization"] = `Bearer ${webhook.secret}`;
+    headers["X-Audienti-Webhook-Secret"] = webhook.secret;
+  }
+  const res = await fetch(webhook.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS)
+  });
+  if (!res.ok) throw new Error(`Wake webhook responded with HTTP ${String(res.status)}`);
+}
+async function notifyFailure(input2) {
+  const message = input2.error instanceof Error ? input2.error.message : String(input2.error);
+  if (input2.webhook && !input2.prev.lastFailed) {
+    await postWakeWebhook(input2.webhook, {
+      event: "wake.failed",
+      error: message,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    }).catch(() => void 0);
+  }
+  writeWakeState(input2.stateFile, {
+    step: Math.max(input2.prev.step, 0),
+    nextAt: Date.now() + 6e4,
+    lastFailed: true
+  });
+}
+async function dispatchWakeWork(input2) {
+  const { args, config: config2, stateFile, webhook, rawPeek, peek, nextDelayMinutes } = input2;
+  const cmd = flagText(args, "cmd");
+  if (peek.hasWork && webhook) {
+    await postWakeWebhook(webhook, {
+      event: "work.available",
+      queuedCount: peek.queuedCount,
+      nextItem: peek.nextItem,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    writeWakeState(stateFile, { step: 0, nextAt: Date.now() + 6e4 });
+  }
+  if (peek.hasWork && cmd) {
+    const code = runCommandShell(cmd, peekItemEnv(rawPeek));
+    writeWakeState(stateFile, { step: 0, nextAt: Date.now() + 6e4 });
+    if (code !== 0) process.exitCode = code;
+    return;
+  }
+  if (config2.output === "json") {
+    printOutput(
+      {
+        checked: true,
+        hasWork: peek.hasWork,
+        queuedCount: peek.queuedCount,
+        nextItem: peek.nextItem,
+        nextDelayMinutes
+      },
+      "json"
+    );
+  }
 }
 async function runWakeCommand(args, config2, [group]) {
   if (group !== "wake") return false;
@@ -21727,6 +21991,7 @@ async function runWakeCommand(args, config2, [group]) {
     "work-start"
   );
   const workEndMinutes = parseTimeOfDayMinutes(flagText(args, "work-end"), DEFAULT_WORK_END_MINUTES, "work-end");
+  const webhook = readWebhookConfig(args);
   const now = Date.now();
   const prev = readWakeState(stateFile);
   if (args.flags["force"] === void 0 && now < prev.nextAt) {
@@ -21735,14 +22000,29 @@ async function runWakeCommand(args, config2, [group]) {
   }
   const agentId = flagText(args, "agent") || loadAgentCredentials()?.agentId;
   const query = flagText(args, "agent") ? `?agentId=${encodeURIComponent(flagText(args, "agent") ?? "")}` : "";
-  const peek = await apiRequest(config2, { pathname: `/api/v1/outbox/peek${query}` });
-  const hasWork = isRecord(peek) && peek["hasWork"] === true;
-  if (args.flags["heartbeat"] !== void 0 && agentId) {
-    await apiRequest(config2, { method: "POST", pathname: `/api/v1/agents/${encodeURIComponent(agentId)}/heartbeat` });
+  let rawPeek;
+  try {
+    rawPeek = await apiRequest(config2, { pathname: `/api/v1/outbox/peek${query}` });
+    if (args.flags["heartbeat"] !== void 0 && agentId) {
+      await apiRequest(config2, { method: "POST", pathname: `/api/v1/agents/${encodeURIComponent(agentId)}/heartbeat` });
+    }
+  } catch (error62) {
+    await notifyFailure({ webhook, stateFile, prev, error: error62 });
+    throw error62;
+  }
+  const peek = parsePeek(rawPeek);
+  if (prev.lastFailed && webhook) {
+    await postWakeWebhook(webhook, {
+      event: "wake.recovered",
+      hasWork: peek.hasWork,
+      queuedCount: peek.queuedCount,
+      nextItem: peek.nextItem,
+      timestamp: (/* @__PURE__ */ new Date()).toISOString()
+    });
   }
   const nowDate = new Date(now);
   const next = nextWakeDelayMinutes({
-    hasWork,
+    hasWork: peek.hasWork,
     previousStep: prev.step,
     minutesOfDay: nowDate.getHours() * 60 + nowDate.getMinutes(),
     dayOfWeek: nowDate.getDay(),
@@ -21751,18 +22031,11 @@ async function runWakeCommand(args, config2, [group]) {
     workEndMinutes
   });
   writeWakeState(stateFile, { step: next.step, nextAt: now + next.delayMinutes * 6e4 });
-  const cmd = flagText(args, "cmd");
-  if (hasWork && cmd) {
-    const code = runCommandShell(cmd);
-    writeWakeState(stateFile, { step: 0, nextAt: Date.now() + 6e4 });
-    if (code !== 0) process.exitCode = code;
-    return true;
-  }
-  if (config2.output === "json") printOutput({ checked: true, hasWork, nextDelayMinutes: next.delayMinutes }, "json");
+  await dispatchWakeWork({ args, config: config2, stateFile, webhook, rawPeek, peek, nextDelayMinutes: next.delayMinutes });
   return true;
 }
 
-// src/surfaces/cli/commands/workspaces.ts
+// app/src/surfaces/cli/commands/workspaces.ts
 async function runWorkspacesCommand(args, config2, [group, action]) {
   if (group !== "workspaces" || action !== void 0 && action !== "list") return false;
   assertFlags(args, "workspaces list", COMMAND_SHAPES["workspaces list"]);
@@ -21770,7 +22043,7 @@ async function runWorkspacesCommand(args, config2, [group, action]) {
   return true;
 }
 
-// src/surfaces/cli/main.ts
+// app/src/surfaces/cli/main.ts
 async function main(argv) {
   const args = parseCliArgs(argv);
   if (args.flags["version"] !== void 0 && args.positionals.length === 0) {

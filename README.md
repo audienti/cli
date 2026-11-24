@@ -62,17 +62,22 @@ Run `audienti wake` from `cron`, `launchd`, or a systemd timer every minute:
 - **Flags:**
   - `--heartbeat` — sends `POST /api/v1/agents/:id/heartbeat` on each real check so the workspace shows the agent online.
   - `--force` — bypasses the backoff timer and checks immediately.
-  - `--state-file <path>` — custom path for backoff state (default `~/.audienti/wake-state.json`).
+  - `--webhook-url <url>` & `--webhook-secret-file <path>` — POSTs `work.available`, `wake.failed`, and `wake.recovered` JSON events directly to your wake webhook (with `Authorization: Bearer <secret>` and `X-Audienti-Webhook-Secret: <secret>`).
+  - `--state-file <path>` — custom path for backoff state (default `~/.audienti/exo-peek-state.json`).
   - `--json` — machine-readable output.
+- **Environment variables passed to `--cmd`:** `AUDIENTI_WORK_COUNT`, `AUDIENTI_ITEM_ID`, `AUDIENTI_ITEM_KIND`, `AUDIENTI_ITEM_TITLE`, `AUDIENTI_ITEM_CAPABILITY`, and `AUDIENTI_ITEM_TOUCHES_PEOPLE` (`"true"` or `"false"`, computed server-side).
 
 ## Work Loop Commands
 
 ```bash
-# Check if work is waiting (zero side effects)
+# Check if work is waiting (zero side effects; includes nextItem.touchesPeople)
 audienti work peek --json
 
-# Claim the next work item
+# Claim the next work item (includes touchesPeople and resultSchema)
 audienti outbox claim --json
+
+# Dry-run validate a result payload before completing (never drops your claim)
+audienti outbox validate <outbox-id> --result '{"summary":"Done"}' --json
 
 # Extend lease while working on a long task
 audienti outbox heartbeat <outbox-id> --attempt <n> --json
@@ -84,7 +89,7 @@ audienti outbox complete <outbox-id> --attempt <n> --result '{"summary":"Done"}'
 audienti outbox fail <outbox-id> --attempt <n> --class transient --message "Timeout" --json
 
 # Ask the workspace owner a question (Operator inbox)
-audienti inbox create --kind question --title "Confirm targeting" --summary "..." --json
+audienti inbox create --kind agent_question --title "Confirm targeting" --summary "..." --json
 ```
 
 ## Workspace & Campaign Commands
@@ -117,9 +122,10 @@ audienti playbook show <playbook-id> --json
 audienti campaign list --json
 audienti campaign show <campaign-id> --json
 audienti campaign status <campaign-id> --json
-audienti campaign create --playbook <id> --name "Q4 Signal Sprint" --audience <audience-id> --participants empty.json --json
+audienti campaign create --playbook <id> --name "Q4 Signal Sprint" --automation finding_only --audience <audience-id> --participants empty.json --json
 audienti campaign edit <campaign-id> --offer "Pipeline Audit" --json
 audienti campaign audience <campaign-id> <audience-id> --json
+audienti campaign prepare <campaign-id> --json   # agents may prepare finding_only campaigns
 
 # Buying signals & discovery
 audienti signals list <campaign-id> --json
