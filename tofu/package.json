@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "description": "Audienti CLI (tofu) — agent & operator control plane for https://app.audienti.com.",
   "license": "MIT",
+  "type": "commonjs",
   "bin": {
-    "tofu": "./bin/tofu.cjs"
+    "tofu": "bin/tofu.js"
   },
   "files": [
-    "bin/tofu.cjs",
+    "bin/tofu.js",
     "README.md"
   ],
   "engines": {
