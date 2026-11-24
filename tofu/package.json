@@ -1,0 +1,24 @@
+{
+  "name": "@audienti/tofu",
+  "version": "0.1.0",
+  "description": "Audienti CLI (tofu) — agent & operator control plane for https://app.audienti.com.",
+  "license": "MIT",
+  "bin": {
+    "tofu": "./bin/tofu.cjs"
+  },
+  "files": [
+    "bin/tofu.cjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/audienti/cli.git"
+  },
+  "homepage": "https://app.audienti.com/llms.txt",
+  "publishConfig": {
+    "access": "public"
+  }
+}

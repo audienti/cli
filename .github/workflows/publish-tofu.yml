@@ -1,0 +1,50 @@
+name: Publish Tofu CLI (@audienti/tofu)
+on:
+  push:
+    branches: [main]
+    paths: ['tofu/**', '.github/workflows/publish-tofu.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    if: github.repository == 'audienti/cli' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tofu
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Smoke-test package tarball
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          PKG_VER="$(node -p 'require("./package.json").version')"
+          npm install --ignore-scripts --prefix "$RUNNER_TEMP/smoke" "$RUNNER_TEMP/audienti-tofu-${PKG_VER}.tgz"
+          "$RUNNER_TEMP/smoke/node_modules/.bin/tofu" --help
+          "$RUNNER_TEMP/smoke/node_modules/.bin/tofu" connect --help
+          "$RUNNER_TEMP/smoke/node_modules/.bin/tofu" wake --help
+      - name: Publish @audienti/tofu
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: |
+          set +e
+          PKG_VER="$(node -p 'require("./package.json").version')"
+          npm view "@audienti/tofu@${PKG_VER}" version --json > "$RUNNER_TEMP/tofu-version.json" 2> "$RUNNER_TEMP/tofu-version.err"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Version already published; no mutation.'
+          elif grep -q E404 "$RUNNER_TEMP/tofu-version.err"; then
+            if [ -z "$NODE_AUTH_TOKEN" ]; then
+              echo "NPM_PUBLISH_TOKEN is required to publish @audienti/tofu." >&2
+              exit 1
+            fi
+            npm publish --access public
+          else
+            cat "$RUNNER_TEMP/tofu-version.err" >&2
+            exit "$status"
+          fi
