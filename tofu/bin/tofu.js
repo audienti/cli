@@ -19765,6 +19765,7 @@ var GLOBAL_AND_COMMAND_SWITCHES = /* @__PURE__ */ new Set([
   "heartbeat",
   "force",
   "include-weekends",
+  "no-linkedin",
   "no-workspace-changes",
   "no-wait",
   "poll"
@@ -19794,7 +19795,8 @@ function parseCliArgs(argv) {
     const eq = body.indexOf("=");
     const key = eq === -1 ? body : body.slice(0, eq);
     if (key === "") throw new UsageError(`A flag needs a name: ${token}`);
-    if (GLOBAL_AND_COMMAND_SWITCHES.has(key)) {
+    const bareVersionSwitch = key === "version" && positionals.length === 0 && eq === -1;
+    if (bareVersionSwitch || key !== "version" && GLOBAL_AND_COMMAND_SWITCHES.has(key)) {
       if (eq !== -1) throw new UsageError(`--${key} takes no value`);
       set2(key, true);
       continue;
@@ -20046,8 +20048,8 @@ var errorEnvelope = external_exports.object({
 }).strict();
 
 // app/src/domain/cli-version.ts
-var LATEST_CLI_VERSION = "0.3.3";
-var LLMS_TXT_VERSION = "2026-11-24.2";
+var LATEST_CLI_VERSION = "0.3.7";
+var LLMS_TXT_VERSION = "2026-11-27.1";
 
 // app/src/surfaces/cli/http-client.ts
 var HUMAN_ONLY = "This command needs a person's token; a token bound to an agent cannot run it.";
@@ -20190,7 +20192,8 @@ var CAPABILITY_CATALOG = [
   ),
   agent("profile.invitations.received", read(linkedin, 60), "Read the invitations people sent to the user"),
   agent("profile.inmail.send", send(linkedin, 5 * MINUTES), "Send an approved InMail"),
-  agent("profile.connection.request", send(linkedin, 5 * MINUTES), "Send an approved connection request"),
+  agent("profile.connection.request", send(linkedin, 5 * MINUTES), "Send a connection request without a note"),
+  agent("profile.connection.request_with_note", send(linkedin, 5 * MINUTES), "Send a connection request with a note"),
   agent("profile.connection.accept", send(linkedin, 2 * MINUTES), "Accept a received connection request"),
   agent("profile.connection.withdraw", send(linkedin, 2 * MINUTES), "Withdraw a pending request"),
   agent("profile.follow", send(linkedin, 2 * MINUTES), "Follow a person or company"),
@@ -20243,6 +20246,7 @@ var DEFAULT_LEASE_UNIT_MS = 5 * 60 * 1e3;
 var OUTREACH_CAPABILITIES = /* @__PURE__ */ new Set([
   "profile.message.draft",
   "skill.prospect-writing",
+  "skill.prospect-action",
   ...CAPABILITY_CATALOG.filter((entry) => entry.actor === "agent" && entry.access === "send").map((entry) => entry.id)
 ]);
 
@@ -20313,7 +20317,31 @@ var SIGNAL_QUALIFICATION_STATUS_SET = {
 var DISCOVERY_SCHEDULE_FLAGS = Object.keys(DISCOVERY_SCHEDULE_SET);
 var SIGNAL_KIND_FLAGS = Object.keys(SIGNAL_KIND_SET);
 var SIGNAL_QUALIFICATION_STATUS_FLAGS = Object.keys(SIGNAL_QUALIFICATION_STATUS_SET);
+var PROFILE_NETWORK_SET = {
+  linkedin_person: true,
+  linkedin_company: true,
+  website: true,
+  email: true,
+  phone: true,
+  x: true,
+  instagram: true,
+  facebook: true,
+  whatsapp: true
+};
+var PROFILE_NETWORK_FLAGS = Object.keys(PROFILE_NETWORK_SET);
 var PUBLIC_INBOX_KINDS = INBOX_KINDS.filter((kind) => !RUNNER_ONLY_INBOX_KINDS.has(kind));
+var SIMULATION_EMAIL_TYPE_SET = {
+  work: true,
+  personal: true,
+  none: true
+};
+var SIMULATION_SCENARIO_SET = {
+  no_response: true,
+  accepts_connection: true,
+  connects_early: true
+};
+var SIMULATION_EMAIL_TYPE_FLAGS = Object.keys(SIMULATION_EMAIL_TYPE_SET);
+var SIMULATION_SCENARIO_FLAGS = Object.keys(SIMULATION_SCENARIO_SET);
 
 // app/src/surfaces/cli/output.ts
 var TOKEN_SOURCE = [
@@ -20323,99 +20351,108 @@ var TOKEN_SOURCE = [
 ].join(" ");
 var PERSON = "(needs a person's token; a token bound to an agent gets 403 human_only)";
 var HELP_TEXT = [
-  "tofu CLI \u2014 API-first agent & operator control plane",
+  "audienti CLI \u2014 API-first agent & operator control plane",
   "",
   "Usage:",
   "  (a flag value is --key value or --key=value; use --key=value for text that starts with --)",
   "  (an unknown flag, a blank value, or an extra argument is a usage error and exits 2)",
   `  (token: ${TOKEN_SOURCE})`,
-  "  tofu status [--api-url <url>] [--json]",
-  "  tofu connect --name <name> [--capabilities <list>] [--no-workspace-changes] [--no-wait] [--poll] [--json]",
-  "  tofu wake [--cmd <shell-cmd>] [--webhook-url <url> [--webhook-secret-file <path>]] [--work-start 08:00] [--work-end 19:45] [--include-weekends] [--heartbeat] [--force] [--json]",
-  "  tofu config set-api-url <url>   (saves the base URL only; tokens are never saved)",
-  "  tofu whoami [--json]",
-  "  tofu workspaces list [--json]",
-  "  tofu agent connect --name <name> [--kind <kind>] [--capabilities people.search,web.search] [--json]",
+  "  audienti status [--api-url <url>] [--json]",
+  "  audienti connect --name <name> [--capabilities <list>] [--no-workspace-changes] [--no-wait] [--poll] [--json]",
+  "  audienti wake [--cmd <shell-cmd>] [--webhook-url <url> [--webhook-secret-file <path>]] [--work-start 08:00] [--work-end 19:45] [--include-weekends] [--heartbeat] [--force] [--json]",
+  "  audienti config set-api-url <url>   (saves the base URL only; tokens are never saved)",
+  "  audienti whoami [--json]",
+  "  audienti workspaces list [--json]",
+  "  audienti agent connect --name <name> [--kind <kind>] [--capabilities people.search,web.search] [--json]",
   '      (or --capabilities-file <file.json> holding {"capabilities": [{"id", "provider", "access", ...}]}; custom.<name> needs a description)',
-  "  tofu agent list [--json]",
-  "  tofu agent heartbeat <agent-id> [--json]",
-  "  tofu work peek [--agent <agent-id>] [--json]   (zero-LLM check for queued claimable work)",
-  "  tofu work request-child <parent-id> --attempt <n> --idempotency-key <key> --capability <cap> --access <read|write|send> --title <text> [--payload <json>] [--json]",
-  "  tofu proxy list [--status <status>] [--json]",
-  "  tofu proxy start [--account <connected-account-id>] [--country <cc>] [--json]",
-  "  tofu proxy close <proxy-lease-id> [--json]",
-  "  exo outbox list [--status <queued|claimed|completed|failed|cancelled>] [--json]",
-  "  exo outbox enqueue --kind <kind> --title <title> [--capability <cap>] [--agent <id>] [--dedupe-key <key>] [--payload <json>] [--json]",
-  "  exo outbox claim [--agent <agent-id>] [--json]",
-  "  exo outbox validate <outbox-id> --result <json> [--json]   (dry-run check without dropping your claim)",
-  "  exo outbox complete <outbox-id> [--agent <agent-id>] --attempt <n> [--result <json>] [--json]",
-  "  exo outbox fail <outbox-id> [--agent <agent-id>] --attempt <n> --class <rate_limited|transient|permanent> --message <text> [--retry-after <ms>] [--json]",
-  "  exo outbox heartbeat <outbox-id> [--agent <agent-id>] --attempt <n> [--json]   (extends the lease)",
-  "  exo outbox skip <outbox-id> [--reason <text>] [--json]   (a person skips the work item)",
+  "  audienti agent list [--json]",
+  "  audienti agent heartbeat <agent-id> [--json]",
+  "  audienti work peek [--agent <agent-id>] [--json]   (zero-LLM check for queued claimable work)",
+  "  audienti work request-child <parent-id> --attempt <n> --idempotency-key <key> --capability <cap> --access <read|write|send> --title <text> [--payload <json>] [--json]",
+  "  audienti proxy list [--status <status>] [--json]",
+  "  audienti proxy start [--account <connected-account-id>] [--country <cc>] [--json]",
+  "  audienti proxy close <proxy-lease-id> [--json]",
+  "  audienti outbox list [--status <queued|claimed|completed|failed|cancelled>] [--json]",
+  "  audienti outbox enqueue --kind <kind> --title <title> [--capability <cap>] [--agent <id>] [--dedupe-key <key>] [--payload <json>] [--json]",
+  "  audienti outbox claim [--agent <agent-id>] [--json]",
+  "  audienti outbox validate <outbox-id> --result <json> [--json]   (dry-run check without dropping your claim)",
+  "  audienti outbox complete <outbox-id> [--agent <agent-id>] --attempt <n> [--result <json>] [--json]",
+  "  audienti outbox fail <outbox-id> [--agent <agent-id>] --attempt <n> --class <rate_limited|transient|permanent> --message <text> [--retry-after <ms>] [--json]",
+  "  audienti outbox heartbeat <outbox-id> [--agent <agent-id>] --attempt <n> [--json]   (extends the lease)",
+  "  audienti outbox skip <outbox-id> [--reason <text>] [--json]   (a person skips the work item)",
   "      (--attempt is the attemptCount the claim returned; a stale attempt gets CONFLICT)",
   "      (--agent may be left out when the token is bound to an agent; an unbound token must send it)",
-  "  exo inbox list [--status <waiting|answered|dismissed>] [--json]",
-  "  exo inbox create --kind <kind> --title <title> --summary <summary> [--consequence <text>] [--agent <id>] [--payload <json>] [--json]",
-  `  exo inbox resolve <inbox-id> --decision <action.approve|action.reject|question.answer|account.reconnect|agent.check|capability.cover|dismiss> [--note <text>] [--data <json>] [--json]   ${PERSON}`,
-  "  exo inbox show <inbox-id> [--json]   (the item, its decision JSON Schemas, and who resolved it)",
-  `  exo playbook create --file <playbook.json> [--json]   (the file is the request body; at most 1 MiB) ${PERSON}`,
-  `  exo playbook list [--status <${PLAYBOOK_STATUS_FILTERS.join("|")}>] [--json]`,
-  "  exo playbook show <playbook-id> [--version <n>] [--json]",
-  `  exo playbook publish <playbook-id> --file <definition.json> [--json]   (the file is {"definition": {...}}) ${PERSON}`,
-  `  exo playbook archive|restore <playbook-id> [--json]   ${PERSON}`,
-  `  exo campaign create --playbook <playbook-id> --name <name> --participants <participants.json> [--version <n>] [--offer <text>] [--automation <${CAMPAIGN_AUTOMATION_FLAGS.join("|")}>] [--audience <id or name>] [--json]`,
+  "  audienti inbox list [--status <waiting|answered|dismissed>] [--json]",
+  "  audienti inbox create --kind <kind> --title <title> --summary <summary> [--consequence <text>] [--agent <id>] [--payload <json>] [--json]",
+  `  audienti inbox resolve <inbox-id> --decision <action.approve|action.reject|question.answer|account.reconnect|agent.check|capability.cover|dismiss> [--note <text>] [--data <json>] [--json]   ${PERSON}`,
+  "  audienti inbox show <inbox-id> [--json]   (the item, its decision JSON Schemas, and who resolved it)",
+  "  audienti playbook create --file <playbook.json> [--json]   (the file is the request body; at most 1 MiB)",
+  `  audienti playbook list [--status <${PLAYBOOK_STATUS_FILTERS.join("|")}>] [--json]`,
+  "  audienti playbook show <playbook-id> [--version <n>] [--json]",
+  '  audienti playbook draft <playbook-id> --file <definition.json> [--json]   (the file is {"definition": {...}})',
+  '  audienti playbook publish <playbook-id> --file <definition.json> [--json]   (the file is {"definition": {...}})',
+  "  audienti playbook clone <playbook-id> --name <name> [--version <n>] [--json]",
+  "  audienti playbook simulate <playbook-id> [--version <n>] [--no-linkedin] [--email <work|personal|none>] [--scenario <no_response|accepts_connection|connects_early>] [--accept-day <n>] [--json]",
+  `  audienti playbook archive|restore <playbook-id> [--json]   ${PERSON}`,
+  `  audienti campaign create --playbook <playbook-id> --name <name> --participants <participants.json> [--version <n>] [--offer <text>] [--automation <${CAMPAIGN_AUTOMATION_FLAGS.join("|")}>] [--audience <id or name>] [--json]`,
   '      (participants.json is {"participants": [...]}; without --version the latest playbook version is pinned)',
-  `  exo campaign list [--status <${CAMPAIGN_STATUS_FILTERS.join("|")}>] [--json]`,
-  "  exo campaign show <campaign-id> [--json]",
-  "  tofu campaign status <campaign-id> [--json]",
-  `  tofu campaign edit <campaign-id> [--name <name>] [--offer <offer>] [--automation <mode>] [--json]   ${PERSON}`,
-  `  tofu campaign audience <campaign-id> <audience-id-or-name> [--json]   ${PERSON}`,
-  "  tofu campaign prepare <campaign-id> [--json]   (agents may prepare finding_only campaigns)",
-  `  exo campaign start|pause|resume|complete|archive <campaign-id> [--json]   ${PERSON}`,
-  "  exo campaign enroll <campaign-id> --participants <participants.json> [--json]",
-  `  exo participation list --campaign <campaign-id> [--state <${PARTICIPATION_STATE_FILTERS.join("|")}>] [--json]`,
-  "  exo participation show <participation-id> [--json]",
-  `  exo participation exit <participation-id> --reason <text> [--json]   ${PERSON}`,
-  "  exo participation signal <participation-id> --name <signal> [--json]   (wakes a run waiting on that name)",
-  `  exo prospects list [--filter <${PROSPECT_LIST_FILTER_VALUES.join("|")}>] [--limit <n>] [--after <cursor>] [--json]`,
-  "  exo prospects contactable [--limit <n>] [--after <cursor>] [--json]   (never returns a do not contact prospect; --after is the nextCursor of the page before)",
-  "  exo prospects show <prospect-id> [--json]   (the prospect, its participations, and its audit trail)",
-  "  exo prospects import --file <list.csv> [--source <text>] [--json]   (the source defaults to the file name)",
-  `  exo prospects block <prospect-id> [--json]   ${PERSON}`,
-  `  exo prospects unblock <prospect-id> --yes [--json]   ${PERSON}`,
-  "  exo prospects enrich <prospect-id> [--json]",
-  `  tofu prospects assign <prospect-id> --user <user-id|none> [--reason <text>] [--json]   ${PERSON}`,
-  "  tofu routing show [--json]   (current deterministic routing rules, warnings, and revision history)",
-  `  tofu routing save --file <rules.json> [--json]   (save a new immutable routing rule revision) ${PERSON}`,
-  "  tofu suppressions list [--scope <person|company|domain>] [--json]",
-  `  tofu suppressions add --scope <person|company|domain> --reason <text> [--prospect <id>] [--domain <domain>] [--expires-at <iso>] [--json]   ${PERSON}`,
-  `  tofu suppressions remove <suppression-id> [--json]   ${PERSON}`,
-  "  exo audiences list [--json]   (the workspace audiences, newest change first)",
-  "  exo audiences show <audience-id> [--json]   (the criteria, owner, campaigns and revisions)",
-  "  exo audiences create --file <fields.json> [--json]   (the file holds the whole audience fields)",
-  "  exo audiences edit <audience-id> --file <fields.json> [--base <n>] [--json]   (saves the next revision; --base defaults to the current one)",
-  `  exo audiences archive <audience-id> [--json]   ${PERSON}`,
-  `  exo audiences restore <audience-id> [--json]   ${PERSON}`,
-  '  exo audiences options <kind> ["<query>"] [--json]   (the values a rule may hold, best match first; a sizes query may be a range such as "100-1000")',
-  "  tofu offers list [--archived] [--json]",
-  "  tofu offers show <offer-id> [--json]",
-  "  tofu offers create --name <name> [--url <url>] [--description <text>] [--file <positioning.json>] [--json]",
-  "  tofu offers update <offer-id> [--name <name>] [--url <url>] [--description <text>] [--file <json>] [--json]",
-  `  tofu offers archive|restore <offer-id> [--json]   ${PERSON}`,
-  "  tofu offers attach <offer-id> --kind <kind> --title <title> [--url <url>] [--content <text>] [--json]",
-  "  tofu signals list <campaign-id> [--json]",
-  "  tofu signals create <campaign-id> --kind <topic|profile|question> --name <name> --file <config.json> [--abm <domains>] [--json]",
-  "  tofu signals run <campaign-id> [--json]",
-  "  tofu signals intake <campaign-id> --file <intake.json> [--json]",
-  "  tofu signals observations <campaign-id> [--json]",
-  "  tofu signals qualifications <campaign-id> [--status <status>] [--json]",
-  "  exo skills list [--json]",
-  "  exo skills show <skill-id> [--version <n>] [--json]   (without --version, the newest version)",
-  `  exo tool-calls list [--status <${TOOL_CALL_STATUSES.join("|")}>] [--runs-on <${TOOL_RUNS_ON.join("|")}>] [--json]`,
-  "  exo tool-calls show <tool-call-id> [--json]   (the call, its results, and each provider attempt)",
-  "  exo tools list [--json]   (every tool, its vendors, its price in dollars, and its use here)",
-  "  exo tools web-search --query <text> [--agent <agent-id>] [--work-item <work-item-id>] [--json]   (uses your key or your workspace balance; --work-item names the work item for the search)",
-  "  tofu call <tool-id> '<json>' [--json]   (runs any tool with its input, as on the tool page; prints the call and whether it answered; --json prints the whole result)",
+  `  audienti campaign list [--status <${CAMPAIGN_STATUS_FILTERS.join("|")}>] [--json]`,
+  "  audienti campaign show <campaign-id> [--json]",
+  "  audienti campaign status <campaign-id> [--json]",
+  "  audienti campaign edit <campaign-id> [--name <name>] [--offer <offer>] [--automation <mode>] [--json]",
+  "  audienti campaign audience <campaign-id> <audience-id-or-name> [--json]",
+  "  audienti campaign prepare <campaign-id> [--json]   (agents may prepare finding_only campaigns)",
+  "  audienti campaign run-discovery <campaign-id> [--json]   (alias for `signals run <campaign-id>`)",
+  `  audienti campaign start|pause|resume|complete|archive <campaign-id> [--json]   ${PERSON}`,
+  "  audienti campaign enroll <campaign-id> --participants <participants.json> [--json]",
+  `  audienti participation list --campaign <campaign-id> [--state <${PARTICIPATION_STATE_FILTERS.join("|")}>] [--json]`,
+  "  audienti participation show <participation-id> [--json]",
+  `  audienti participation exit <participation-id> --reason <text> [--json]   ${PERSON}`,
+  "  audienti participation signal <participation-id> --name <signal> [--json]   (wakes a run waiting on that name)",
+  `  audienti prospects list [--filter <${PROSPECT_LIST_FILTER_VALUES.join("|")}>] [--limit <n>] [--after <cursor>] [--json]`,
+  "  audienti prospects contactable [--limit <n>] [--after <cursor>] [--json]   (never returns a do not contact prospect; --after is the nextCursor of the page before)",
+  "  audienti prospects show <prospect-id> [--json]   (the prospect, its participations, and its audit trail)",
+  "  audienti prospects import --file <list.csv> [--source <text>] [--json]   (the source defaults to the file name)",
+  `  audienti prospects block <prospect-id> [--json]   ${PERSON}`,
+  `  audienti prospects unblock <prospect-id> --yes [--json]   ${PERSON}`,
+  `  audienti prospects enrich <prospect-id> [--json]   ${PERSON}`,
+  `  audienti prospects lock|unlock <prospect-id> [--json]   ${PERSON}`,
+  `  audienti prospects assign <prospect-id> --user <user-id|none> [--reason <text>] [--json]   ${PERSON}`,
+  "  audienti profiles lookup --network <linkedin_company|website|linkedin_person|email|...> --value <value> [--json]   ($0 workspace cache check before re-enriching)",
+  "  audienti profiles list <prospect-id> [--json]",
+  "  audienti routing show [--json]   (current deterministic routing rules, warnings, and revision history)",
+  `  audienti routing save --file <rules.json> [--json]   (save a new immutable routing rule revision) ${PERSON}`,
+  "  audienti suppressions list [--scope <person|company|domain>] [--json]",
+  `  audienti suppressions add --scope <person|company|domain> --reason <text> [--prospect <id>] [--domain <domain>] [--expires-at <iso>] [--json]   ${PERSON}`,
+  `  audienti suppressions remove <suppression-id> [--json]   ${PERSON}`,
+  "  audienti audiences list [--json]   (the workspace audiences, newest change first)",
+  "  audienti audiences show <audience-id> [--json]   (the criteria, owner, campaigns and revisions)",
+  "  audienti audiences create --file <fields.json> [--json]   (the file holds the whole audience fields)",
+  "  audienti audiences edit <audience-id> --file <fields.json> [--base <n>] [--json]   (saves the next revision; --base defaults to the current one)",
+  `  audienti audiences archive <audience-id> [--json]   ${PERSON}`,
+  `  audienti audiences restore <audience-id> [--json]   ${PERSON}`,
+  '  audienti audiences options <kind> ["<query>"] [--json]   (the values a rule may hold, best match first; a sizes query may be a range such as "100-1000")',
+  "  audienti offers list [--archived] [--json]",
+  "  audienti offers show <offer-id> [--json]",
+  "  audienti offers create --name <name> [--url <url>] [--description <text>] [--file <positioning.json>] [--json]",
+  "  audienti offers update <offer-id> [--name <name>] [--url <url>] [--description <text>] [--file <json>] [--json]",
+  `  audienti offers archive|restore <offer-id> [--json]   ${PERSON}`,
+  "  audienti offers attach <offer-id> --kind <kind> --title <title> [--url <url>] [--content <text>] [--json]",
+  "  audienti signals list <campaign-id> [--json]",
+  "  audienti signals create <campaign-id> --kind <topic|profile|question> --name <name> --file <config.json> [--abm <domains>] [--json]",
+  "  audienti signals update <campaign-id> <signal-id> [--name <name>] [--active <true|false>] [--file <config.json>] [--abm <domains>] [--json]",
+  "  audienti signals run <campaign-id> [--json]",
+  "  audienti signals intake <campaign-id> (--body '<json>' | --file <intake.json>) [--json]",
+  "  audienti signals settle <qualification-id> --decision <admit|fail> [--reason <text>] [--json]",
+  "  audienti signals observations <campaign-id> [--json]",
+  "  audienti signals qualifications <campaign-id> [--status <status>] [--json]",
+  "  audienti skills list [--json]",
+  "  audienti skills show <skill-id> [--version <n>] [--json]   (without --version, the newest version)",
+  `  audienti tool-calls list [--status <${TOOL_CALL_STATUSES.join("|")}>] [--runs-on <${TOOL_RUNS_ON.join("|")}>] [--json]`,
+  "  audienti tool-calls show <tool-call-id> [--json]   (the call, its results, and each provider attempt)",
+  "  audienti tools list [--json]   (every tool, its vendors, its price in dollars, and its use here)",
+  "  audienti tools web-search --query <text> [--agent <agent-id>] [--work-item <work-item-id>] [--json]   (uses your key or your workspace balance; --work-item names the work item for the search)",
+  "  audienti call <tool-id> '<json>' [--json]   (runs any tool with its input, as on the tool page; prints the call and whether it answered; --json prints the whole result)",
   "      (payload, result, and data are checked against the kind's contract; see docs/architecture/agent-outbox-and-inbox.md)",
   ""
 ].join("\n");
@@ -20541,7 +20578,14 @@ var SHAPES = {
   "playbook create": { values: ["file"], maxPositionals: 2 },
   "playbook list": { values: ["status"], maxPositionals: 2 },
   "playbook show": { values: ["version"], maxPositionals: 3 },
+  "playbook draft": { values: ["file"], maxPositionals: 3 },
   "playbook publish": { values: ["file"], maxPositionals: 3 },
+  "playbook clone": { values: ["name", "version"], maxPositionals: 3 },
+  "playbook simulate": {
+    values: ["version", "email", "scenario", "accept-day"],
+    switches: ["no-linkedin"],
+    maxPositionals: 3
+  },
   "playbook archive": { maxPositionals: 3 },
   "playbook restore": { maxPositionals: 3 },
   "campaign create": {
@@ -20554,6 +20598,7 @@ var SHAPES = {
   "campaign edit": { values: ["name", "offer", "offer-id", "automation", "schedule"], maxPositionals: 3 },
   "campaign audience": { maxPositionals: 4 },
   "campaign prepare": { maxPositionals: 3 },
+  "campaign run-discovery": { maxPositionals: 3 },
   "campaign start": { maxPositionals: 3 },
   "campaign pause": { maxPositionals: 3 },
   "campaign resume": { maxPositionals: 3 },
@@ -20571,7 +20616,11 @@ var SHAPES = {
   "prospects block": { maxPositionals: 3 },
   "prospects unblock": { switches: ["yes"], maxPositionals: 3 },
   "prospects enrich": { maxPositionals: 3 },
+  "prospects lock": { maxPositionals: 3 },
+  "prospects unlock": { maxPositionals: 3 },
   "prospects assign": { values: ["user", "reason"], maxPositionals: 3 },
+  "profiles lookup": { values: ["network", "value"], maxPositionals: 2 },
+  "profiles list": { maxPositionals: 3 },
   "routing list": { maxPositionals: 2 },
   "routing show": { maxPositionals: 2 },
   "routing save": { values: ["file"], maxPositionals: 2 },
@@ -20600,8 +20649,10 @@ var SHAPES = {
   "offers attach": { values: ["kind", "title", "url", "content"], maxPositionals: 3 },
   "signals list": { maxPositionals: 3 },
   "signals create": { values: ["kind", "name", "file", "abm"], maxPositionals: 3 },
+  "signals update": { values: ["name", "active", "file", "abm"], maxPositionals: 4 },
   "signals run": { maxPositionals: 3 },
-  "signals intake": { values: ["file"], maxPositionals: 3 },
+  "signals intake": { values: ["file", "body"], maxPositionals: 3 },
+  "signals settle": { values: ["decision", "reason"], maxPositionals: 3 },
   "signals observations": { maxPositionals: 3 },
   "signals qualifications": { values: ["status"], maxPositionals: 3 },
   "work peek": { values: ["agent"], maxPositionals: 2 },
@@ -20617,7 +20668,7 @@ var SHAPES = {
   "conversations reply": { values: ["text", "subject", "idempotency-key"], maxPositionals: 3 },
   "dispatches list": { values: ["status"], maxPositionals: 2 },
   "dispatches reconcile": { switches: ["escalate"], maxPositionals: 3 },
-  call: { maxPositionals: 3 }
+  call: { values: ["outbox-item", "work-item"], maxPositionals: 3 }
 };
 var COMMAND_SHAPES = SHAPES;
 var SINGLE_WORD = /* @__PURE__ */ new Set(["status", "whoami", "call", "connect", "wake"]);
@@ -20938,7 +20989,9 @@ function callOutcomeLine(call) {
 async function runCallCommand(args, config2, [group]) {
   if (group !== "call") return false;
   assertFlags(args, "call", COMMAND_SHAPES.call);
-  const body = callRequestBody(args.positionals);
+  const outboxItemId = flagText(args, "outbox-item") ?? flagText(args, "work-item");
+  const base = callRequestBody(args.positionals);
+  const body = outboxItemId ? { ...base, outboxItemId } : base;
   const data = await apiRequest(config2, { method: "POST", pathname: "/api/v1/tool-calls", body });
   const line = config2.output === "json" ? null : callOutcomeLine(data);
   if (line === null) printOutput(data, config2.output);
@@ -21062,6 +21115,11 @@ async function runOnCampaign(args, config2, target) {
     const body = { participants: participantsFrom(args) };
     const data = await apiRequest(config2, { method: "POST", pathname: `${pathname}/participations`, body });
     printOutput(data, config2.output);
+    return true;
+  }
+  if (action === "run-discovery") {
+    assertFlags(args, "campaign run-discovery", COMMAND_SHAPES["campaign run-discovery"]);
+    printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/signals/run` }), config2.output);
     return true;
   }
   if (!isLifecycleAction(action)) return false;
@@ -21491,10 +21549,40 @@ async function runOnPlaybook(args, config2, target) {
     printOutput(await apiRequest(config2, { pathname: `${pathname}${versionQuery(args)}` }), config2.output);
     return true;
   }
+  if (action === "draft") {
+    assertFlags(args, "playbook draft", COMMAND_SHAPES["playbook draft"]);
+    const body = readJsonObjectFile("file", nonEmptyFlag(args, "file"));
+    printOutput(await apiRequest(config2, { method: "PUT", pathname: `${pathname}/draft`, body }), config2.output);
+    return true;
+  }
   if (action === "publish") {
     assertFlags(args, "playbook publish", COMMAND_SHAPES["playbook publish"]);
     const body = readJsonObjectFile("file", nonEmptyFlag(args, "file"));
     printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/versions`, body }), config2.output);
+    return true;
+  }
+  if (action === "clone") {
+    assertFlags(args, "playbook clone", COMMAND_SHAPES["playbook clone"]);
+    const name = nonEmptyFlag(args, "name");
+    const version2 = optionalIntegerFlag(args, "version", { min: 1 });
+    const body = { name, ...version2 === void 0 ? {} : { version: version2 } };
+    printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/clone`, body }), config2.output);
+    return true;
+  }
+  if (action === "simulate") {
+    assertFlags(args, "playbook simulate", COMMAND_SHAPES["playbook simulate"]);
+    const version2 = optionalIntegerFlag(args, "version", { min: 1 });
+    const emailType = optionalEnumFlag(args, "email", SIMULATION_EMAIL_TYPE_FLAGS);
+    const scenario = optionalEnumFlag(args, "scenario", SIMULATION_SCENARIO_FLAGS);
+    const acceptDay = optionalIntegerFlag(args, "accept-day", { min: 1 });
+    const body = {
+      hasLinkedin: args.flags["no-linkedin"] !== true,
+      ...version2 === void 0 ? {} : { version: version2 },
+      ...emailType === void 0 ? {} : { emailType },
+      ...scenario === void 0 ? {} : { scenario },
+      ...acceptDay === void 0 ? {} : { connectionAcceptedAfterDays: acceptDay }
+    };
+    printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/simulate`, body }), config2.output);
     return true;
   }
   if (action !== "archive" && action !== "restore") return false;
@@ -21589,6 +21677,26 @@ async function runPlatformCommand(args, config2, [group, action, arg1]) {
   return false;
 }
 
+// app/src/surfaces/cli/commands/profiles.ts
+async function runProfilesCommand(args, config2, [group, action, arg1]) {
+  if (group !== "profiles") return false;
+  if (action === "lookup") {
+    assertFlags(args, "profiles lookup", COMMAND_SHAPES["profiles lookup"]);
+    const network = enumFlag(args, "network", PROFILE_NETWORK_FLAGS);
+    const value = nonEmptyFlag(args, "value");
+    const qs = `?network=${encodeURIComponent(network)}&value=${encodeURIComponent(value)}`;
+    printOutput(await apiRequest(config2, { pathname: `/api/v1/profiles/lookup${qs}` }), config2.output);
+    return true;
+  }
+  if (action === "list" && arg1) {
+    assertFlags(args, "profiles list", COMMAND_SHAPES["profiles list"]);
+    const pathname = `/api/v1/prospects/${encodeURIComponent(arg1)}/profiles`;
+    printOutput(await apiRequest(config2, { pathname }), config2.output);
+    return true;
+  }
+  return false;
+}
+
 // app/src/surfaces/cli/commands/prospects.ts
 var import_node_path4 = __toESM(require("node:path"), 1);
 function queryString(entries) {
@@ -21616,7 +21724,7 @@ async function runOnProspect(args, config2, target) {
     printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/unblock`, body }), config2.output);
     return true;
   }
-  if (action !== "block" && action !== "enrich") return false;
+  if (action !== "block" && action !== "enrich" && action !== "lock" && action !== "unlock") return false;
   assertFlags(args, `prospects ${action}`, COMMAND_SHAPES[`prospects ${action}`]);
   printOutput(await apiRequest(config2, { method: "POST", pathname: `${pathname}/${action}` }), config2.output);
   return true;
@@ -21650,7 +21758,37 @@ async function runProspectsCommand(args, config2, [group, action, arg1]) {
 
 // app/src/surfaces/cli/commands/signals.ts
 var campaignPath = (id) => `/api/v1/campaigns/${encodeURIComponent(id)}`;
-async function runSignalsCommand(args, config2, [group, action, arg1]) {
+var SETTLE_DECISIONS = ["admit", "fail"];
+var ACTIVE_FLAGS = ["true", "false"];
+function parseAbmDomains(args) {
+  const abmRaw = flagText(args, "abm");
+  return abmRaw === void 0 ? void 0 : abmRaw.split(",").map((item) => item.trim()).filter(Boolean);
+}
+function updateSignalBody(args) {
+  const name = flagText(args, "name");
+  const activeFlag = optionalEnumFlag(args, "active", ACTIVE_FLAGS);
+  const file2 = flagText(args, "file");
+  const abmTargetDomains = parseAbmDomains(args);
+  const body = {
+    ...name !== void 0 ? { name: nonEmptyFlag(args, "name") } : {},
+    ...activeFlag !== void 0 ? { active: activeFlag === "true" } : {},
+    ...file2 !== void 0 ? { config: readJsonObjectFile("file", nonEmptyFlag(args, "file")) } : {},
+    ...abmTargetDomains !== void 0 ? { abmTargetDomains } : {}
+  };
+  if (Object.keys(body).length === 0) {
+    throw new UsageError("signals update requires at least one of --name, --active, --file, or --abm.");
+  }
+  return body;
+}
+function intakeBody(args) {
+  const hasFile = flagText(args, "file") !== void 0;
+  const hasBody = flagText(args, "body") !== void 0;
+  if (hasFile && hasBody) throw new UsageError("Pass either --body or --file to signals intake, not both.");
+  if (hasBody) return jsonObjectFlag(args, "body");
+  if (hasFile) return readJsonObjectFile("file", nonEmptyFlag(args, "file"));
+  throw new UsageError("signals intake requires --body '<json>' or --file <intake.json>.");
+}
+async function runSignalsCommand(args, config2, [group, action, arg1, arg2]) {
   if (group !== "signals" || !arg1) return false;
   if (action === "list") {
     assertFlags(args, "signals list", COMMAND_SHAPES["signals list"]);
@@ -21662,10 +21800,17 @@ async function runSignalsCommand(args, config2, [group, action, arg1]) {
     const kind = optionalEnumFlag(args, "kind", SIGNAL_KIND_FLAGS) ?? nonEmptyFlag(args, "kind");
     const name = nonEmptyFlag(args, "name");
     const cfg = readJsonObjectFile("file", nonEmptyFlag(args, "file"));
-    const abmRaw = flagText(args, "abm");
-    const abmTargetDomains = abmRaw ? abmRaw.split(",").map((item) => item.trim()).filter(Boolean) : void 0;
+    const abmTargetDomains = parseAbmDomains(args);
     const body = { kind, name, config: cfg, ...abmTargetDomains ? { abmTargetDomains } : {} };
     const res = await apiRequest(config2, { method: "POST", pathname: `${campaignPath(arg1)}/signals`, body });
+    printOutput(res, config2.output);
+    return true;
+  }
+  if (action === "update") {
+    if (!arg2) throw new UsageError("Missing <signal-id>: audienti signals update <campaign-id> <signal-id>");
+    assertFlags(args, "signals update", COMMAND_SHAPES["signals update"]);
+    const pathname = `${campaignPath(arg1)}/signals/${encodeURIComponent(arg2)}`;
+    const res = await apiRequest(config2, { method: "PATCH", pathname, body: updateSignalBody(args) });
     printOutput(res, config2.output);
     return true;
   }
@@ -21677,8 +21822,18 @@ async function runSignalsCommand(args, config2, [group, action, arg1]) {
   }
   if (action === "intake") {
     assertFlags(args, "signals intake", COMMAND_SHAPES["signals intake"]);
-    const body = readJsonObjectFile("file", nonEmptyFlag(args, "file"));
+    const body = intakeBody(args);
     const res = await apiRequest(config2, { method: "POST", pathname: `${campaignPath(arg1)}/signals/intake`, body });
+    printOutput(res, config2.output);
+    return true;
+  }
+  if (action === "settle") {
+    assertFlags(args, "signals settle", COMMAND_SHAPES["signals settle"]);
+    const decision = enumFlag(args, "decision", SETTLE_DECISIONS);
+    const reason = flagText(args, "reason");
+    const body = { decision, ...reason !== void 0 ? { reason: nonEmptyFlag(args, "reason") } : {} };
+    const pathname = `/api/v1/qualifications/${encodeURIComponent(arg1)}/settle`;
+    const res = await apiRequest(config2, { method: "POST", pathname, body });
     printOutput(res, config2.output);
     return true;
   }
@@ -22075,7 +22230,7 @@ async function main(argv) {
   if (missing !== void 0) throw new UsageError(missing);
   const config2 = resolveConfig(args);
   const command = [group, action, arg1];
-  const handled = await runConnectCommand(args, config2, command) || await runWakeCommand(args, config2, command) || await runIdentityCommand(args, config2, command) || await runWorkspacesCommand(args, config2, command) || await runAgentsCommand(args, config2, command) || await runOutboxCommand(args, config2, command) || await runInboxCommand(args, config2, command) || await runPlaybookCommand(args, config2, command) || await runCampaignCommand(args, config2, command) || await runParticipationCommand(args, config2, command) || await runProspectsCommand(args, config2, command) || await runEngagementCommand(args, config2, command) || await runGovernanceCommand(args, config2, command) || await runAudiencesCommand(args, config2, command) || await runOffersCommand(args, config2, command) || await runSignalsCommand(args, config2, command) || await runSkillsCommand(args, config2, command) || await runToolCallsCommand(args, config2, command) || await runToolsCommand(args, config2, command) || await runPlatformCommand(args, config2, command) || await runCallCommand(args, config2, command);
+  const handled = await runConnectCommand(args, config2, command) || await runWakeCommand(args, config2, command) || await runIdentityCommand(args, config2, command) || await runWorkspacesCommand(args, config2, command) || await runAgentsCommand(args, config2, command) || await runOutboxCommand(args, config2, command) || await runInboxCommand(args, config2, command) || await runPlaybookCommand(args, config2, command) || await runCampaignCommand(args, config2, command) || await runParticipationCommand(args, config2, command) || await runProfilesCommand(args, config2, command) || await runProspectsCommand(args, config2, command) || await runEngagementCommand(args, config2, command) || await runGovernanceCommand(args, config2, command) || await runAudiencesCommand(args, config2, command) || await runOffersCommand(args, config2, command) || await runSignalsCommand(args, config2, command) || await runSkillsCommand(args, config2, command) || await runToolCallsCommand(args, config2, command) || await runToolsCommand(args, config2, command) || await runPlatformCommand(args, config2, command) || await runCallCommand(args, config2, command);
   if (handled) return 0;
   printHelp();
   throw new UsageError(`Unknown command: ${[group, action].filter(Boolean).join(" ")}`);
